@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: sentinelasm
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinelpass
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    restart: always
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: ./backend
+    command: celery -A workers.celery_app worker
+    depends_on:
+      - redis
+      - postgres
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
