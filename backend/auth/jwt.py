@@ -1,14 +1,25 @@
+from datetime import datetime, timedelta
+
 from jose import jwt
 
-SECRET="secret"
+SECRET = "CHANGE_ME"
 
-ALGORITHM="HS256"
+ALGORITHM = "HS256"
 
 
-def create_token(data):
+def create_access_token(data: dict):
+
+    payload = data.copy()
+
+    payload["exp"] = (
+        datetime.utcnow() + timedelta(minutes=30)
+    )
 
     return jwt.encode(
-        data,
+        payload,
         SECRET,
         algorithm=ALGORITHM
     )
+
+
+
