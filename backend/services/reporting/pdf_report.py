@@ -32,4 +32,3 @@ def generate_pdf(
             )
         )
 
-    doc.build(content)
