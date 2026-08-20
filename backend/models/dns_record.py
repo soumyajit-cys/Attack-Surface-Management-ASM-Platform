@@ -8,6 +8,8 @@ from sqlalchemy import (
 
 from sqlalchemy.sql import func
 
+from sqlalchemy.orm import relationship
+
 from models.base import Base
 
 
@@ -19,7 +21,9 @@ class DNSRecord(Base):
 
     domain_id = Column(
         Integer,
-        ForeignKey("domains.id")
+        ForeignKey("domains.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
     )
 
     record_type = Column(String)
@@ -29,4 +33,15 @@ class DNSRecord(Base):
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    domain = relationship(
+        "Domain",
+        back_populates="dns_records"
     )
