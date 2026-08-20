@@ -27,11 +27,10 @@ class TokenStore:
         jti = payload.get("jti")
         if not jti:
             return
-        ttl = token_service.token_expiry(payload) - payload["iat"]
         self.client.set(
             REFRESH_KEY.format(jti=jti),
             user_id,
-            ex=max(int(ttl.total_seconds()), 1),
+            ex=_ttl_seconds(payload),
         )
 
     def refresh_valid(self, token: str, user_id: int) -> bool:
@@ -52,11 +51,10 @@ class TokenStore:
         old_payload = token_service.decode_token(old_token)
         old_jti = old_payload.get("jti")
         if old_jti:
-            ttl = token_service.token_expiry(old_payload) - old_payload["iat"]
             self.client.set(
                 REVOKED_KEY.format(jti=old_jti),
                 user_id,
-                ex=max(int(ttl.total_seconds()), 1),
+                ex=_ttl_seconds(old_payload),
             )
             self.client.delete(REFRESH_KEY.format(jti=old_jti))
         self.store_refresh(new_token, user_id)
@@ -66,11 +64,10 @@ class TokenStore:
         jti = payload.get("jti")
         if not jti:
             return
-        ttl = token_service.token_expiry(payload) - payload["iat"]
         self.client.set(
             REVOKED_KEY.format(jti=jti),
             1,
-            ex=max(int(ttl.total_seconds()), 1),
+            ex=_ttl_seconds(payload),
         )
 
     def is_revoked(self, token: str) -> bool:
@@ -85,11 +82,10 @@ class TokenStore:
         jti = payload.get("jti")
         if not jti:
             return
-        ttl = token_service.token_expiry(payload) - payload["iat"]
         self.client.set(
             RESET_USED_KEY.format(jti=jti),
             1,
-            ex=max(int(ttl.total_seconds()), 1),
+            ex=_ttl_seconds(payload),
         )
 
     def reset_used(self, token: str) -> bool:
