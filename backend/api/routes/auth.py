@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auth import jwt as token_service
@@ -59,7 +60,14 @@ async def register(
 
     org = Organization(name=data.organization)
     db.add(org)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Organization name already taken",
+        )
 
     user = User(
         organization_id=org.id,
