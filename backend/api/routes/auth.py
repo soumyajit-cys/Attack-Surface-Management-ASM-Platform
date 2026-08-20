@@ -150,6 +150,11 @@ async def logout(
     if payload:
         token_store.revoke(data.refresh_token)
 
+    if data.access_token:
+        access_payload = token_service.decode_token(data.access_token)
+        if access_payload:
+            token_store.revoke(data.access_token)
+
     return {"message": "logged out"}
 
 
