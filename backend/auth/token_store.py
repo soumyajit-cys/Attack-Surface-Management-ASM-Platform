@@ -1,6 +1,6 @@
 import redis
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from auth import jwt as token_service
 from config import settings
@@ -9,6 +9,12 @@ from utils.redis_client import get_redis
 REFRESH_KEY = "refresh:{jti}"
 REVOKED_KEY = "revoked:{jti}"
 RESET_USED_KEY = "reset_used:{jti}"
+
+
+def _ttl_seconds(payload: dict) -> int:
+    expiry = token_service.token_expiry(payload)
+    remaining = expiry - datetime.now(timezone.utc)
+    return max(int(remaining.total_seconds()), 1)
 
 
 class TokenStore:
