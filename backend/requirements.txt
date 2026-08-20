@@ -7,9 +7,10 @@ psycopg2-binary
 celery
 redis
 
-pydantic
+pydantic[email]
+pydantic-settings
 python-jose
-passlib
+bcrypt
 
 httpx
 dnspython
