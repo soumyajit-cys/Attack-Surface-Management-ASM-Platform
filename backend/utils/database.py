@@ -1,14 +1,35 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import NullPool
 
-DATABASE_URL="postgresql://"
+from config import settings
 
-engine=create_engine(DATABASE_URL)
 
-SessionLocal=sessionmaker(
+def build_engine(database_url: str = None):
+    url = database_url or settings.database_url
+
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+
+    return create_engine(
+        url,
+        poolclass=NullPool
+    )
+
+
+engine = build_engine()
+
+SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine
 )
 
 
+def get_db():
+    db: Session = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
