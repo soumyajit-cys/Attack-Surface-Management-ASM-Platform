@@ -4,7 +4,6 @@ import traceback
 from sqlalchemy.orm import Session
 
 from metrics.prometheus import SCAN_COUNTER
-from models.asset import Asset
 from models.finding import Finding
 from models.risk_score import RiskScore
 from models.scan_history import ScanHistory
@@ -284,6 +283,17 @@ def _generate_and_persist_findings(
     )
 
     for finding in findings:
+        existing = (
+            db.query(Finding)
+            .filter(
+                Finding.organization_id == scan.organization_id,
+                Finding.asset_id == asset_id,
+                Finding.title == finding["title"],
+            )
+            .first()
+        )
+        if existing is not None:
+            continue
         db.add(Finding(
             organization_id=scan.organization_id,
             asset_id=asset_id,
