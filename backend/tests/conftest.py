@@ -32,10 +32,16 @@ def _setup_database():
 
 
 @pytest.fixture(autouse=True)
-def _clean_state():
+def _clean_state(db):
     get_redis().flushdb()
+    for table in reversed(Base.metadata.sorted_tables):
+        db.execute(table.delete())
+    db.commit()
     yield
     get_redis().flushdb()
+    for table in reversed(Base.metadata.sorted_tables):
+        db.execute(table.delete())
+    db.commit()
 
 
 @pytest.fixture()
