@@ -115,7 +115,10 @@ def test_logout_revokes_tokens(client):
 
     client.post(
         "/auth/logout",
-        json={"refresh_token": login["refresh_token"]},
+        json={
+            "refresh_token": login["refresh_token"],
+            "access_token": access,
+        },
     )
 
     assert (
