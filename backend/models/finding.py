@@ -9,6 +9,8 @@ from sqlalchemy import (
 
 from sqlalchemy.sql import func
 
+from sqlalchemy.orm import relationship
+
 from models.base import Base
 
 
@@ -18,14 +20,23 @@ class Finding(Base):
 
     id = Column(Integer, primary_key=True)
 
-    asset_id = Column(
+    organization_id = Column(
         Integer,
-        ForeignKey("assets.id")
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
     )
 
-    title = Column(String)
+    asset_id = Column(
+        Integer,
+        ForeignKey("assets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
 
-    severity = Column(String)
+    title = Column(String, nullable=False)
+
+    severity = Column(String, nullable=False)
 
     category = Column(String)
 
@@ -38,4 +49,18 @@ class Finding(Base):
         server_default=func.now()
     )
 
-    
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    organization = relationship(
+        "Organization",
+        back_populates="findings"
+    )
+
+    asset = relationship(
+        "Asset",
+        back_populates="findings"
+    )
