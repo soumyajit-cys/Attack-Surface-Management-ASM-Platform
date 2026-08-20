@@ -53,8 +53,7 @@ class Domain(Base):
 
     organization = relationship(
         "Organization",
-        back_populates="assets",
-        overlaps="assets"
+        back_populates="domains"
     )
 
     asset = relationship(

@@ -41,6 +41,11 @@ class Organization(Base):
         back_populates="organization"
     )
 
+    domains = relationship(
+        "Domain",
+        back_populates="organization"
+    )
+
     findings = relationship(
         "Finding",
         back_populates="organization"
