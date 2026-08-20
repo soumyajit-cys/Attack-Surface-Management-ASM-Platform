@@ -6,6 +6,7 @@ from auth.dependencies import get_current_user
 from auth.security import hash_password, verify_password
 from auth.token_store import token_store
 from auth.roles import ROLE_ADMIN
+from config import settings
 from models.organization import Organization
 from models.user import User
 from repositories.user_repository import UserRepository
