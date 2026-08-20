@@ -2,8 +2,11 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
-    ForeignKey
+    ForeignKey,
+    DateTime
 )
+
+from sqlalchemy.sql import func
 
 from sqlalchemy.orm import relationship
 
@@ -16,12 +19,20 @@ class Domain(Base):
 
     id = Column(Integer, primary_key=True)
 
-    asset_id = Column(
+    organization_id = Column(
         Integer,
-        ForeignKey("assets.id")
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
     )
 
-    domain = Column(String, unique=True)
+    asset_id = Column(
+        Integer,
+        ForeignKey("assets.id", ondelete="CASCADE"),
+        index=True
+    )
+
+    domain = Column(String, unique=True, nullable=False)
 
     registrar = Column(String)
 
@@ -29,12 +40,36 @@ class Domain(Base):
 
     hosting_provider = Column(String)
 
-    asset = relationship("Asset")
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
 
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
 
+    organization = relationship(
+        "Organization",
+        back_populates="assets",
+        overlaps="assets"
+    )
 
+    asset = relationship(
+        "Asset",
+        back_populates="domains"
+    )
 
+    subdomains = relationship(
+        "Subdomain",
+        back_populates="domain",
+        cascade="all, delete-orphan"
+    )
 
-
-
-    
+    dns_records = relationship(
+        "DNSRecord",
+        back_populates="domain",
+        cascade="all, delete-orphan"
+    )
