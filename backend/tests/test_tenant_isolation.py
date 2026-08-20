@@ -69,7 +69,7 @@ def test_tenant_isolation_dashboard(client, db, org_factory, auth_headers):
 def test_scan_status_is_org_scoped(client, db, org_factory, auth_headers):
     from models.scan_history import ScanHistory
 
-    org_a, _ = _seed_org_data(db, org_factory, "OrgE", "erin_e")
+    org_a, _, _ = _seed_org_data(db, org_factory, "OrgE", "erin_e")
     org_factory("OrgF", "frank_f", "frank_f@example.com")
 
     scan = ScanHistory(
