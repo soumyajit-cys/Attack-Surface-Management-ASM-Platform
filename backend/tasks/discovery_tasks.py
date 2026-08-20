@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import traceback
 
 from sqlalchemy.orm import Session
@@ -59,7 +60,7 @@ def run_discovery(self, scan_id: int):
 
         domain_name = scan.target
 
-        results = asyncio.run(_collect(domain_name))
+        results = _run_async(lambda: _collect(domain_name))
 
         resolved_ip = results["resolved"].get("ip")
 
@@ -143,6 +144,21 @@ def run_discovery(self, scan_id: int):
         db.close()
 
 
+def _run_async(coro_factory):
+    """Run a coroutine on its own event loop.
+
+    Works inside an already-running event loop (e.g. eager Celery execution
+    during a FastAPI request in tests) as well as in a plain worker process.
+    """
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=1,
+    ) as pool:
+        return pool.submit(
+            asyncio.run,
+            coro_factory(),
+        ).result()
+
+
 def _now():
     from datetime import datetime, timezone
     return datetime.now(timezone.utc)
@@ -184,7 +200,7 @@ def _scan_targets(
     for sub in targets[:MAX_PORT_SUBDOMAINS]:
         host = sub.subdomain
         try:
-            ports = asyncio.run(scan_ports(host))
+            ports = _run_async(lambda: scan_ports(host))
         except Exception:
             continue
 
@@ -197,7 +213,7 @@ def _scan_targets(
         persist_port_results(db, sub, ports)
 
         try:
-            ssl_data = asyncio.run(analyze_ssl(host))
+            ssl_data = _run_async(lambda: analyze_ssl(host))
             ssl_data["risk_level"] = _ssl_risk_level(ssl_data)
             persist_ssl_result(db, sub, ssl_data)
             summary["ssl"]["scanned"] += 1
@@ -207,8 +223,8 @@ def _scan_targets(
             pass
 
         try:
-            header_issues = asyncio.run(
-                analyze_headers(f"https://{host}")
+            header_issues = _run_async(
+                lambda: analyze_headers(f"https://{host}")
             )
             summary["headers"]["scanned"] += 1
             summary["headers"]["issues"] += len(header_issues)
