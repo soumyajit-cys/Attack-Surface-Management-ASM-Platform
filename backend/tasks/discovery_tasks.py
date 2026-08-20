@@ -260,24 +260,12 @@ def _generate_and_persist_findings(
     asset_id: int,
     summary: dict,
 ) -> None:
-    open_ports = [
-        {"port": None}
-    ]
-    findings = generate_findings(
-        open_ports=[],
-        ssl_risk="low" if summary["ssl"]["issues"] == 0 else "high",
-        header_findings=[],
-    )
-
-    severity_by_ssl = (
-        "high" if summary["ssl"]["issues"] else None
-    )
-    if severity_by_ssl:
+    if summary["ssl"]["issues"]:
         db.add(Finding(
             organization_id=scan.organization_id,
             asset_id=asset_id,
             title="Weak or expiring TLS certificates detected",
-            severity=severity_by_ssl,
+            severity="high",
             category="tls",
             description=(
                 f"{summary['ssl']['issues']} target(s) have "
@@ -285,6 +273,15 @@ def _generate_and_persist_findings(
             ),
             recommendation="Renew certificates and remove self-signed certs.",
         ))
+
+    findings = generate_findings(
+        open_ports=[
+            {"port": p, "status": "open"}
+            for p in summary["open_port_numbers"]
+        ],
+        ssl_risk="low",
+        header_findings=[],
+    )
 
     for finding in findings:
         db.add(Finding(
