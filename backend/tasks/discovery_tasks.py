@@ -177,6 +177,7 @@ def _scan_targets(
     summary = {
         "ports_open": 0,
         "ports_total": 0,
+        "open_port_numbers": [],
         "ssl": {"scanned": 0, "issues": 0},
         "headers": {"scanned": 0, "issues": 0},
     }
@@ -191,6 +192,9 @@ def _scan_targets(
         open_ports = [p for p in ports if p.get("status") == "open"]
         summary["ports_total"] += len(ports)
         summary["ports_open"] += len(open_ports)
+        summary["open_port_numbers"].extend(
+            p["port"] for p in open_ports
+        )
         persist_port_results(db, sub, ports)
 
         try:
