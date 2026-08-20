@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from config import settings
 from models import Base
@@ -22,9 +23,7 @@ from workers.celery_app import celery
 def _setup_database():
     engine = create_engine(
         settings.database_url,
-        poolclass=create_engine.__self__ and __import__(
-            "sqlalchemy.pool", fromlist=["NullPool"]
-        ).NullPool,
+        poolclass=NullPool,
     )
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
