@@ -280,30 +280,13 @@ def _generate_and_persist_findings(
     asset_id: int,
     summary: dict,
 ) -> None:
-    if summary["ssl"]["issues"]:
-        db.add(Finding(
-            organization_id=scan.organization_id,
-            asset_id=asset_id,
-            title="Weak or expiring TLS certificates detected",
-            severity="high",
-            category="tls",
-            description=(
-                f"{summary['ssl']['issues']} target(s) have "
-                "self-signed, expiring or expired certificates."
-            ),
-            recommendation="Renew certificates and remove self-signed certs.",
-        ))
-
-    ssl_findings = []
-    header_findings = []
-
     findings = generate_findings(
         open_ports=[
             {"port": p, "status": "open"}
             for p in summary["open_port_numbers"]
         ],
-        ssl_findings=ssl_findings,
-        header_findings=header_findings,
+        ssl_findings=summary.get("ssl_findings", []),
+        header_findings=summary.get("header_findings", []),
     )
 
     for finding in findings:
