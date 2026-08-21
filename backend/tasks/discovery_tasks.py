@@ -266,6 +266,11 @@ def _generate_and_persist_findings(
         header_findings=summary.get("header_findings", []),
     )
 
+    import logging
+    logging.warning(f"DEBUG generate_findings returned {len(findings)} findings")
+    for f in findings:
+        logging.warning(f"  Generated finding: {f}")
+
     for finding in findings:
         existing = (
             db.query(Finding)
@@ -287,6 +292,12 @@ def _generate_and_persist_findings(
             description=finding.get("description"),
             recommendation=finding.get("recommendation"),
         ))
+    
+    import logging
+    logging.warning(f"DEBUG after adding findings, flushing...")
+    db.flush()
+    count = db.query(Finding).filter(Finding.asset_id == asset_id).count()
+    logging.warning(f"DEBUG findings in session after flush: {count}")
 
 
 def _persist_risk_score(
