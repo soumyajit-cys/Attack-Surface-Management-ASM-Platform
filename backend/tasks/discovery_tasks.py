@@ -96,6 +96,13 @@ def run_discovery(self, scan_id: int):
         )
         db.commit()
 
+        for sub in persisted["subdomains"]:
+            ips = _run_async(lambda: resolve_subdomain_ips(sub.subdomain))
+            if ips:
+                persist_subdomain_ips(db, sub, ips)
+                sub.ip_address = ips[0]
+        db.commit()
+
         scan_summary = _scan_targets(
             db,
             scan,
