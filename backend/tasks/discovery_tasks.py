@@ -34,18 +34,6 @@ from workers.celery_app import celery
 MAX_PORT_SUBDOMAINS = 5
 
 
-def _ssl_risk_level(ssl_data: dict | None) -> str:
-    if not ssl_data:
-        return "unknown"
-    if ssl_data.get("self_signed"):
-        return "high"
-    if ssl_data.get("expired"):
-        return "critical"
-    if ssl_data.get("expires_soon"):
-        return "high"
-    return "low"
-
-
 @celery.task(bind=True, name="tasks.run_discovery")
 def run_discovery(self, scan_id: int):
     SCAN_COUNTER.inc()
@@ -226,11 +214,31 @@ def _scan_targets(
 
         try:
             ssl_data = _run_async(lambda: analyze_ssl(host))
-            ssl_data["risk_level"] = _ssl_risk_level(ssl_data)
+            ssl_assessment = assess_ssl_risk(ssl_data)
             persist_ssl_result(db, sub, ssl_data)
             summary["ssl"]["scanned"] += 1
-            if ssl_data["risk_level"] in ("high", "critical"):
+            if ssl_assessment["risk_level"] in ("high", "critical"):
                 summary["ssl"]["issues"] += 1
+            for finding in ssl_assessment["findings"]:
+                existing = (
+                    db.query(Finding)
+                    .filter(
+                        Finding.organization_id == scan.organization_id,
+                        Finding.asset_id == sub.domain.asset_id,
+                        Finding.title == finding["title"],
+                    )
+                    .first()
+                )
+                if existing is None:
+                    db.add(Finding(
+                        organization_id=scan.organization_id,
+                        asset_id=sub.domain.asset_id,
+                        title=finding["title"],
+                        severity=finding["severity"],
+                        category=finding["category"],
+                        description=finding["description"],
+                        recommendation=finding["recommendation"],
+                    ))
         except Exception:
             pass
 
