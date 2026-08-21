@@ -62,10 +62,12 @@ def mock_scan_pipeline(monkeypatch):
     async def fake_ssl(host):
         return {
             "issuer": "CN=Test CA",
+            "subject": "CN=example.com",
             "tls_version": "TLSv1.3",
             "cipher": "TLS_AES_256_GCM_SHA384",
-            "expires_at": datetime.now(timezone.utc) + timedelta(days=200),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=200)).isoformat(),
             "self_signed": False,
+            "san": ["example.com", "www.example.com"],
         }
 
     async def fake_headers(url):
