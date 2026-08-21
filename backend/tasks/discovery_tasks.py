@@ -114,6 +114,12 @@ def run_discovery(self, scan_id: int):
             scan_summary,
         )
         _persist_risk_score(db, scan, asset_id, scan_summary)
+
+        create_asset_snapshot(db, asset_id)
+        changes = detect_changes(db, asset_id)
+        if changes:
+            persist_alerts(db, changes, scan.organization_id)
+
         db.commit()
 
         scan.status = "completed"
