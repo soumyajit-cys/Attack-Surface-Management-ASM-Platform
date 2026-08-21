@@ -240,40 +240,6 @@ def _scan_targets(
     return summary
 
 
-def _persist_header_issues(
-    db: Session,
-    scan: ScanHistory,
-    sub,
-    issues: list,
-) -> None:
-    from models.finding import Finding
-
-    for issue in issues:
-        title = f"{sub.subdomain}: {issue}"
-        existing = (
-            db.query(Finding)
-            .filter(
-                Finding.organization_id == scan.organization_id,
-                Finding.title == title,
-                Finding.asset_id == sub.domain.asset_id,
-            )
-            .first()
-        )
-        if existing is None:
-            db.add(Finding(
-                organization_id=scan.organization_id,
-                asset_id=sub.domain.asset_id,
-                title=title,
-                severity="medium",
-                category="security_headers",
-                description=issue,
-                recommendation=(
-                    "Configure the missing security header in the "
-                    "web server or CDN configuration."
-                ),
-            ))
-
-
 def _generate_and_persist_findings(
     db: Session,
     scan: ScanHistory,
