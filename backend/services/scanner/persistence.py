@@ -167,6 +167,7 @@ def persist_port_results(
                 service=port.get("service"),
                 protocol=port.get("protocol", "tcp"),
                 status=status,
+                banner=port.get("banner"),
             ))
         else:
             row.status = status
@@ -174,6 +175,8 @@ def persist_port_results(
                 row.service = port.get("service")
             if port.get("protocol"):
                 row.protocol = port.get("protocol")
+            if port.get("banner"):
+                row.banner = port.get("banner")
 
     for number, row in existing_by_key.items():
         if number not in seen:
