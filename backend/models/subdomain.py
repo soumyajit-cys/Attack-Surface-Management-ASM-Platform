@@ -11,6 +11,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from models.base import Base
+from models.subdomain_ip import subdomain_ips
 
 
 class Subdomain(Base):

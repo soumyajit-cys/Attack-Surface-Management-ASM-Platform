@@ -14,6 +14,7 @@ from models.alert import Alert
 from models.report import Report
 from models.audit_log import AuditLog
 from models.asset_snapshot import AssetSnapshot
+from models.subdomain_ip import subdomain_ips
 
 __all__ = [
     "Base",
@@ -32,4 +33,5 @@ __all__ = [
     "Report",
     "AuditLog",
     "AssetSnapshot",
+    "subdomain_ips",
 ]

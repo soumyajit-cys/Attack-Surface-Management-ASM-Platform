@@ -28,6 +28,8 @@ class Asset(Base):
 
     name = Column(String, nullable=False)
 
+    criticality = Column(String, default="dev", nullable=False)
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
