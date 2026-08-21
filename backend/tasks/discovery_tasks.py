@@ -295,34 +295,5 @@ def _persist_risk_score(
     asset_id: int,
     summary: dict,
 ) -> None:
-    severity = 1.0
-    if summary["ssl"]["issues"]:
-        severity = 3.0
-
-    exposure = 1.0
-    if summary["ports_open"] > 5:
-        exposure = 1.5
-
-    score = calculate_risk(
-        exposure=exposure,
-        severity=severity,
-        confidence=0.8,
-    )
-
-    existing = (
-        db.query(RiskScore)
-        .filter(RiskScore.asset_id == asset_id)
-        .first()
-    )
-    if existing is None:
-        db.add(RiskScore(
-            asset_id=asset_id,
-            score=score,
-            exposure=exposure,
-            severity=severity,
-            confidence=0.8,
-        ))
-    else:
-        existing.score = score
-        existing.exposure = exposure
-        existing.severity = severity
+    from services.scoring.risk_engine import recalculate_asset_risk_score
+    recalculate_asset_risk_score(db, asset_id)
