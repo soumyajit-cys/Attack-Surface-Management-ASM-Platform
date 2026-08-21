@@ -309,13 +309,16 @@ def _generate_and_persist_findings(
             recommendation="Renew certificates and remove self-signed certs.",
         ))
 
+    ssl_findings = []
+    header_findings = []
+
     findings = generate_findings(
         open_ports=[
             {"port": p, "status": "open"}
             for p in summary["open_port_numbers"]
         ],
-        ssl_risk="low",
-        header_findings=[],
+        ssl_findings=ssl_findings,
+        header_findings=header_findings,
     )
 
     for finding in findings:
