@@ -133,17 +133,6 @@ def recalculate_asset_risk_score(db, asset_id: int) -> float:
         Finding.organization_id == asset.organization_id,
     ).all()
 
-    import logging
-    logging.warning(f"DEBUG recalculate_asset_risk_score: asset_id={asset_id}, asset_org={asset.organization_id}, findings_count={len(findings)}")
-    for f in findings:
-        logging.warning(f"  Finding: {f.title}, org={f.organization_id}, severity={f.severity}, asset_id={f.asset_id}")
-
-    # Also check all findings for this asset_id regardless of org
-    all_findings = db.query(Finding).filter(Finding.asset_id == asset_id).all()
-    logging.warning(f"  All findings for asset_id={asset_id}: {len(all_findings)}")
-    for f in all_findings:
-        logging.warning(f"    Finding: {f.title}, org={f.organization_id}")
-
     if not findings:
         return 0.0
 
