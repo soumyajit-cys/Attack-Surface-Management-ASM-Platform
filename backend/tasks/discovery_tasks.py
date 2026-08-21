@@ -62,20 +62,25 @@ def run_discovery(self, scan_id: int):
 
         resolved_ip = results["resolved"].get("ip")
 
-        subdomain_names = results["subdomains"]
-        if domain_name not in subdomain_names:
-            subdomain_names.insert(0, domain_name)
-
+        subdomain_data = results["subdomains"]
         normalized = []
-        for name in subdomain_names:
-            name = name.strip().lower().rstrip(".")
+        for item in subdomain_data:
+            if isinstance(item, str):
+                name = item.strip().lower().rstrip(".")
+                source = "crt.sh" if name != domain_name else "primary"
+            else:
+                name = item.get("subdomain", "").strip().lower().rstrip(".")
+                source = item.get("source", "unknown")
             if not name or "*" in name:
                 continue
-            if name.endswith(domain_name):
+            if name.endswith(domain_name) or name == domain_name:
                 normalized.append({
                     "subdomain": name,
-                    "source": "crt.sh" if name != domain_name else "primary",
+                    "source": source,
                 })
+
+        if domain_name not in [n["subdomain"] for n in normalized]:
+            normalized.insert(0, {"subdomain": domain_name, "source": "primary"})
 
         persisted = persist_discovery_results(
             db,
