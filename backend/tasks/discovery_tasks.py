@@ -16,6 +16,11 @@ from services.discovery.subdomain_service import (
 )
 from services.discovery.whois_service import get_whois
 from services.findings.finding_engine import generate_findings
+from services.history.change_detector import (
+    create_asset_snapshot,
+    detect_changes,
+    persist_alerts,
+)
 from services.scanner.header_scanner import analyze_headers
 from services.scanner.persistence import (
     persist_discovery_results,
