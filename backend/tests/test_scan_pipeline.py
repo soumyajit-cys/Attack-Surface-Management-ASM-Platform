@@ -69,7 +69,13 @@ def mock_scan_pipeline(monkeypatch):
         }
 
     async def fake_headers(url):
-        return ["Missing Content-Security-Policy"]
+        return [{
+            "title": "Missing Content-Security-Policy Header",
+            "severity": "medium",
+            "category": "security_headers",
+            "description": "Content Security Policy not set",
+            "recommendation": "Implement a restrictive Content-Security-Policy header",
+        }]
 
     monkeypatch.setattr(tasks, "resolve_domain", fake_resolve)
     monkeypatch.setattr(tasks, "enumerate_dns", fake_dns)
