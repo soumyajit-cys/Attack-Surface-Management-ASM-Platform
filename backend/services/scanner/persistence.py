@@ -6,6 +6,22 @@ from models.dns_record import DNSRecord
 from models.port import Port
 from models.ssl_result import SSLResult
 from models.subdomain import Subdomain
+from models.subdomain_ip import subdomain_ips
+
+
+def persist_subdomain_ips(db: Session, subdomain: Subdomain, ips: list[str]) -> None:
+    if not ips:
+        return
+    for ip in ips:
+        existing = db.query(subdomain_ips).filter(
+            subdomain_ips.c.subdomain_id == subdomain.id,
+            subdomain_ips.c.ip_address == ip,
+        ).first()
+        if existing is None:
+            db.execute(subdomain_ips.insert().values(
+                subdomain_id=subdomain.id,
+                ip_address=ip,
+            ))
 
 
 def get_or_create_asset(db: Session, org_id: int, name: str) -> Asset:

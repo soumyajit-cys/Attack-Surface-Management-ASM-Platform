@@ -10,7 +10,10 @@ from models.risk_score import RiskScore
 from models.scan_history import ScanHistory
 from services.discovery.domain_service import resolve_domain
 from services.discovery.dns_service import enumerate_dns
-from services.discovery.subdomain_service import discover_subdomains
+from services.discovery.subdomain_service import (
+    discover_subdomains,
+    resolve_subdomain_ips,
+)
 from services.discovery.whois_service import get_whois
 from services.findings.finding_engine import generate_findings
 from services.scanner.header_scanner import analyze_headers
@@ -18,6 +21,7 @@ from services.scanner.persistence import (
     persist_discovery_results,
     persist_port_results,
     persist_ssl_result,
+    persist_subdomain_ips,
 )
 from services.scanner.port_scanner import scan_ports
 from services.scanner.ssl_scanner import analyze_ssl
