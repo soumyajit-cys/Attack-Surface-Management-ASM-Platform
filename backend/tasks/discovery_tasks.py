@@ -195,6 +195,8 @@ def _scan_targets(
         "open_port_numbers": [],
         "ssl": {"scanned": 0, "issues": 0},
         "headers": {"scanned": 0, "issues": 0},
+        "ssl_findings": [],
+        "header_findings": [],
     }
 
     for sub in targets[:MAX_PORT_SUBDOMAINS]:
@@ -220,25 +222,7 @@ def _scan_targets(
             if ssl_assessment["risk_level"] in ("high", "critical"):
                 summary["ssl"]["issues"] += 1
             for finding in ssl_assessment["findings"]:
-                existing = (
-                    db.query(Finding)
-                    .filter(
-                        Finding.organization_id == scan.organization_id,
-                        Finding.asset_id == sub.domain.asset_id,
-                        Finding.title == finding["title"],
-                    )
-                    .first()
-                )
-                if existing is None:
-                    db.add(Finding(
-                        organization_id=scan.organization_id,
-                        asset_id=sub.domain.asset_id,
-                        title=finding["title"],
-                        severity=finding["severity"],
-                        category=finding["category"],
-                        description=finding["description"],
-                        recommendation=finding["recommendation"],
-                    ))
+                summary["ssl_findings"].append(finding)
         except Exception:
             pass
 
@@ -248,7 +232,8 @@ def _scan_targets(
             )
             summary["headers"]["scanned"] += 1
             summary["headers"]["issues"] += len(header_issues)
-            _persist_header_issues(db, scan, sub, header_issues)
+            for issue in header_issues:
+                summary["header_findings"].append(issue)
         except Exception:
             pass
 
