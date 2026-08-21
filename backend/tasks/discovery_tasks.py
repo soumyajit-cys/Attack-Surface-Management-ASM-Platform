@@ -25,6 +25,7 @@ from services.scanner.persistence import (
 )
 from services.scanner.port_scanner import scan_ports
 from services.scanner.ssl_scanner import analyze_ssl
+from services.scanner.ssl_risk import assess_ssl_risk
 from services.scoring.risk_engine import calculate_risk
 from utils.database import SessionLocal
 from utils.logger import logger
