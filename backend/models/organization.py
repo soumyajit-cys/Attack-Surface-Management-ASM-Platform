@@ -1,5 +1,6 @@
 import secrets
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 
 from sqlalchemy import (
     Column,
