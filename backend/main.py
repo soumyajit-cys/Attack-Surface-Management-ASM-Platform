@@ -8,6 +8,7 @@ from api.routes.organizations import router as organizations_router
 from api.routes.scan_policies import router as scan_policies_router
 from api.routes.graph import router as graph_router
 from api.routes.alerting import router as alerting_router
+from api.routes.reports import router as reports_router
 
 app = FastAPI(
     title="SentinelASM",
@@ -26,6 +27,7 @@ app.include_router(organizations_router)
 app.include_router(scan_policies_router)
 app.include_router(graph_router)
 app.include_router(alerting_router)
+app.include_router(reports_router)
 
 
 @app.get("/health")
