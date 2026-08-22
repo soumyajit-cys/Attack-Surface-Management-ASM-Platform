@@ -15,6 +15,7 @@ from models.report import Report
 from models.audit_log import AuditLog
 from models.asset_snapshot import AssetSnapshot
 from models.subdomain_ip import subdomain_ips
+from models.scan_policy import ScanPolicy, ScanScope, ScanFrequency
 
 __all__ = [
     "Base",
@@ -37,4 +38,7 @@ __all__ = [
     "AuditLog",
     "AssetSnapshot",
     "subdomain_ips",
+    "ScanPolicy",
+    "ScanScope",
+    "ScanFrequency",
 ]
