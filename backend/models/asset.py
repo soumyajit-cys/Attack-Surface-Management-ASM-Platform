@@ -74,3 +74,9 @@ class Asset(Base):
         "ScanHistory",
         back_populates="asset"
     )
+
+    scan_policies = relationship(
+        "ScanPolicy",
+        back_populates="asset",
+        cascade="all, delete-orphan"
+    )

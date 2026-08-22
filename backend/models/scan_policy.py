@@ -90,19 +90,6 @@ class ScanPolicy(Base):
         onupdate=func.now()
     )
 
-    organization = relationship("Organization")
-    asset = relationship("Asset")
+    organization = relationship("Organization", back_populates="scan_policies")
+    asset = relationship("Asset", back_populates="scan_policies")
     creator = relationship("User", foreign_keys=[created_by])
-
-
-Organization.scan_policies = relationship(
-    "ScanPolicy",
-    back_populates="organization",
-    cascade="all, delete-orphan"
-)
-
-Asset.scan_policies = relationship(
-    "ScanPolicy",
-    back_populates="asset",
-    cascade="all, delete-orphan"
-)

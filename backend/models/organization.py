@@ -97,6 +97,12 @@ class Organization(Base):
         cascade="all, delete-orphan"
     )
 
+    scan_policies = relationship(
+        "ScanPolicy",
+        back_populates="organization",
+        cascade="all, delete-orphan"
+    )
+
 
 class Invitation(Base):
 
