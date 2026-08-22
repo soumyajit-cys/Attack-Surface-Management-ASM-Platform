@@ -1,5 +1,5 @@
 from models.base import Base
-from models.organization import Organization
+from models.organization import Organization, Invitation, InvitationStatus, APIKey
 from models.user import User
 from models.asset import Asset
 from models.domain import Domain
@@ -19,6 +19,9 @@ from models.subdomain_ip import subdomain_ips
 __all__ = [
     "Base",
     "Organization",
+    "Invitation",
+    "InvitationStatus",
+    "APIKey",
     "User",
     "Asset",
     "Domain",
