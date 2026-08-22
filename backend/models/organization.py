@@ -205,8 +205,9 @@ class APIKey(Base):
 
     @staticmethod
     def generate_key() -> tuple[str, str]:
+        import hashlib
         prefix = "sk"
         random_part = secrets.token_urlsafe(32)
         full_key = f"{prefix}_{random_part}"
-        key_hash = secrets.token_urlsafe(32)
+        key_hash = hashlib.sha256(full_key.encode()).hexdigest()
         return full_key, key_hash

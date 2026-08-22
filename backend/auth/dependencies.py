@@ -102,28 +102,32 @@ async def _authenticate_token(token: str, db: Session) -> Optional[User]:
 
 
 async def _authenticate_api_key(api_key: str, db: Session) -> Optional[User]:
+    import hashlib
     if not api_key or "_" not in api_key:
         return None
 
-    key_prefix = api_key.split("_")[0]
+    key_hash = hashlib.sha256(api_key.encode()).hexdigest()
 
-    keys = db.query(APIKey).filter(
-        APIKey.key_prefix == key_prefix,
+    key = db.query(APIKey).filter(
+        APIKey.key_hash == key_hash,
         APIKey.is_active == True,
-    ).all()
+    ).first()
 
-    for key in keys:
-        if secrets.compare_digest(key.key_hash, api_key):
-            if key.expires_at and key.expires_at < datetime.now(timezone.utc):
-                return None
-            user = db.query(User).filter(
-                User.id == key.created_by,
-                User.is_active == True,
-            ).first()
-            if user:
-                key.last_used_at = datetime.now(timezone.utc)
-                db.commit()
-                return user
+    if not key:
+        return None
+
+    if key.expires_at and key.expires_at < datetime.now(timezone.utc):
+        return None
+
+    user = db.query(User).filter(
+        User.id == key.created_by,
+        User.is_active == True,
+    ).first()
+
+    if user:
+        key.last_used_at = datetime.now(timezone.utc)
+        db.commit()
+        return user
     return None
 
 
