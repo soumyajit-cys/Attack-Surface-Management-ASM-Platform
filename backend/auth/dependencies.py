@@ -103,10 +103,14 @@ async def _authenticate_token(token: str, db: Session) -> Optional[User]:
 
 async def _authenticate_api_key(api_key: str, db: Session) -> Optional[User]:
     import hashlib
+    import logging
+    logger = logging.getLogger("sentinelasm")
     if not api_key or "_" not in api_key:
+        logger.warning("API key format invalid: %s", api_key[:20] if api_key else "None")
         return None
 
     key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+    logger.warning("Looking for API key with hash: %s", key_hash[:20])
 
     key = db.query(APIKey).filter(
         APIKey.key_hash == key_hash,
@@ -114,9 +118,11 @@ async def _authenticate_api_key(api_key: str, db: Session) -> Optional[User]:
     ).first()
 
     if not key:
+        logger.warning("No API key found with hash: %s", key_hash[:20])
         return None
 
     if key.expires_at and key.expires_at < datetime.now(timezone.utc):
+        logger.warning("API key expired: %s", key.id)
         return None
 
     user = db.query(User).filter(
@@ -127,7 +133,9 @@ async def _authenticate_api_key(api_key: str, db: Session) -> Optional[User]:
     if user:
         key.last_used_at = datetime.now(timezone.utc)
         db.commit()
+        logger.warning("API key authenticated for user: %s", user.id)
         return user
+    logger.warning("User not found for API key: %s", key.id)
     return None
 
 
