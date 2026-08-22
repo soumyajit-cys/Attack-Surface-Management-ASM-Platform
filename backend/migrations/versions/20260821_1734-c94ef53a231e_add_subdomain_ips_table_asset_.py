@@ -26,7 +26,9 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['subdomain_id'], ['subdomains.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('subdomain_id', 'ip_address')
     )
-    op.add_column('assets', sa.Column('criticality', sa.String(), nullable=False))
+    op.add_column('assets', sa.Column('criticality', sa.String(), nullable=True, server_default='dev'))
+    op.execute("UPDATE assets SET criticality = 'dev' WHERE criticality IS NULL")
+    op.alter_column('assets', 'criticality', nullable=False)
     op.add_column('ports', sa.Column('banner', sa.String(), nullable=True))
     # ### end Alembic commands ###
 
