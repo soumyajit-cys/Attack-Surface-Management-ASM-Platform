@@ -7,6 +7,7 @@ from io import BytesIO
 
 from auth.dependencies import get_current_user
 from auth.roles import ROLE_ADMIN, require_roles
+from models import User
 from utils.database import get_db
 from services.reporting.csv_export import (
     export_findings_csv,
