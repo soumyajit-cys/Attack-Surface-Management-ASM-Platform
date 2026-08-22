@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from auth.dependencies import get_current_user
 from auth.roles import ROLE_ADMIN, require_roles
-from models import ScanPolicy, ScanHistory, Asset, ScanScope, ScanFrequency
+from models import ScanPolicy, ScanHistory, Asset, ScanScope, ScanFrequency, User
 from schemas.scan_policy import ScanPolicyCreate, ScanPolicyUpdate, ScanPolicyResponse
 from tasks.discovery_tasks import run_discovery
 from utils.database import get_db
