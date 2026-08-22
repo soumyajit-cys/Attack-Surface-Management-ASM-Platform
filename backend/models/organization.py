@@ -26,6 +26,78 @@ class InvitationStatus(str, Enum):
     REVOKED = "revoked"
 
 
+class Organization(Base):
+
+    __tablename__ = "organizations"
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(String, unique=True, nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+
+    users = relationship(
+        "User",
+        back_populates="organization"
+    )
+
+    assets = relationship(
+        "Asset",
+        back_populates="organization"
+    )
+
+    domains = relationship(
+        "Domain",
+        back_populates="organization"
+    )
+
+    findings = relationship(
+        "Finding",
+        back_populates="organization"
+    )
+
+    scan_history = relationship(
+        "ScanHistory",
+        back_populates="organization"
+    )
+
+    alerts = relationship(
+        "Alert",
+        back_populates="organization"
+    )
+
+    reports = relationship(
+        "Report",
+        back_populates="organization"
+    )
+
+    audit_logs = relationship(
+        "AuditLog",
+        back_populates="organization"
+    )
+
+    invitations = relationship(
+        "Invitation",
+        back_populates="organization",
+        cascade="all, delete-orphan"
+    )
+
+    api_keys = relationship(
+        "APIKey",
+        back_populates="organization",
+        cascade="all, delete-orphan"
+    )
+
+
 class Invitation(Base):
 
     __tablename__ = "invitations"
@@ -138,16 +210,3 @@ class APIKey(Base):
         full_key = f"{prefix}_{random_part}"
         key_hash = secrets.token_urlsafe(32)
         return full_key, key_hash
-
-
-Organization.invitations = relationship(
-    "Invitation",
-    back_populates="organization",
-    cascade="all, delete-orphan"
-)
-
-Organization.api_keys = relationship(
-    "APIKey",
-    back_populates="organization",
-    cascade="all, delete-orphan"
-)
