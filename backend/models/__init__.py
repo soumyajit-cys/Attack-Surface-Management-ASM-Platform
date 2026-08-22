@@ -16,6 +16,7 @@ from models.audit_log import AuditLog
 from models.asset_snapshot import AssetSnapshot
 from models.subdomain_ip import subdomain_ips
 from models.scan_policy import ScanPolicy, ScanScope, ScanFrequency
+from models.alert_integration import AlertIntegration, AlertChannel, AlertSeverity, EmailDigestConfig
 
 __all__ = [
     "Base",
@@ -41,4 +42,8 @@ __all__ = [
     "ScanPolicy",
     "ScanScope",
     "ScanFrequency",
+    "AlertIntegration",
+    "AlertChannel",
+    "AlertSeverity",
+    "EmailDigestConfig",
 ]
