@@ -184,6 +184,7 @@ def run_discovery(self, scan_id: int):
         raise
     finally:
         db.close()
+        clear_correlation_id()
 
 
 def _run_async(coro_factory):
