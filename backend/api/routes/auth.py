@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from schemas.auth import (
 )
 from services.alerts.email_service import send_email
 from utils.database import get_db
+from utils.rate_limiter import limiter
 
 router = APIRouter(
     prefix="/auth",
@@ -40,7 +41,9 @@ def _issue_tokens(db: Session, user: User) -> TokenResponse:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def register(
+    request: Request,
     data: RegisterRequest,
     db: Session = Depends(get_db),
 ):
