@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.responses import Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from api.routes.auth import router as auth_router
 from api.routes.scans import router as scan_router
@@ -10,6 +12,7 @@ from api.routes.graph import router as graph_router
 from api.routes.alerting import router as alerting_router
 from api.routes.reports import router as reports_router
 from utils.rate_limiter import setup_rate_limiting
+from metrics.middleware import PrometheusMiddleware
 
 app = FastAPI(
     title="SentinelASM",
@@ -21,6 +24,8 @@ app = FastAPI(
 )
 
 setup_rate_limiting(app)
+
+app.add_middleware(PrometheusMiddleware)
 
 app.include_router(auth_router)
 app.include_router(scan_router)
@@ -36,3 +41,8 @@ app.include_router(reports_router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
