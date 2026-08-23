@@ -4,7 +4,7 @@ import traceback
 
 from sqlalchemy.orm import Session
 
-from metrics.prometheus import SCAN_COUNTER
+from metrics.prometheus import SCAN_COUNTER, SCAN_DURATION, ACTIVE_SCANS
 from models.finding import Finding
 from models.risk_score import RiskScore
 from models.scan_history import ScanHistory
@@ -41,20 +41,28 @@ MAX_PORT_SUBDOMAINS = 5
 
 @celery.task(bind=True, name="tasks.run_discovery")
 def run_discovery(self, scan_id: int):
-    SCAN_COUNTER.inc()
-
     db: Session = SessionLocal()
+    scan = None
+    org_label = "unknown"
     try:
         scan = db.query(ScanHistory).filter(
             ScanHistory.id == scan_id
         ).first()
         if scan is None:
             logger.error("ScanHistory %s not found", scan_id)
+            SCAN_COUNTER.labels(status="not_found", organization="unknown").inc()
             return {"scan_id": scan_id, "status": "not_found"}
 
+        org_label = str(scan.organization_id)
         scan.status = "running"
         scan.error = None
         db.commit()
+
+        ACTIVE_SCANS.labels(organization=org_label).inc()
+        SCAN_COUNTER.labels(status="started", organization=org_label).inc()
+
+        import time
+        start_time = time.perf_counter()
 
         domain_name = scan.target
 
