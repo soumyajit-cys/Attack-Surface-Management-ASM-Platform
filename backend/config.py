@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     rate_limit_auth_requests_per_minute: int = 10
     rate_limit_scan_requests_per_minute: int = 5
 
+    log_level: str = "INFO"
+    log_format: str = "json"
+
     @property
     def jwt_secret_for_use(self) -> str:
         if (
