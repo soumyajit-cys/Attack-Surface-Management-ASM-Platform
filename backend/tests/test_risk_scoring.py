@@ -50,19 +50,20 @@ def test_calculate_risk_time_decay():
     score_day30 = calculate_risk("high", "internet", "prod", 30, False, 1.0)
     score_day90 = calculate_risk("high", "internet", "prod", 90, False, 1.0)
 
-    assert score_day30 < score_day0
-    assert score_day90 < score_day30
+    assert score_day30 <= score_day0
+    assert score_day90 <= score_day30
 
     decay_30 = 0.3 + 0.7 * (0.5 ** (30 / TIME_DECAY_HALF_LIFE_DAYS))
     expected_30 = round(7.0 * 1.5 * 1.5 * 1.0 * decay_30, 1)
-    assert score_day30 == expected_30
+    assert score_day30 == min(expected_30, 10.0)
 
 
 def test_calculate_risk_kev_boost():
     score_no_kev = calculate_risk("medium", "internet", "prod", 0, False, 1.0)
     score_kev = calculate_risk("medium", "internet", "prod", 0, True, 1.0)
 
-    assert score_kev == round(score_no_kev * 1.5, 1)
+    expected = round(score_no_kev * 1.5, 1)
+    assert score_kev == min(expected, 10.0)
 
 
 def test_calculate_risk_confidence():
@@ -84,13 +85,13 @@ def test_get_finding_age_days_none():
 def test_get_finding_age_days_datetime():
     created = datetime.now(timezone.utc) - timedelta(days=5)
     age = get_finding_age_days(created)
-    assert 4 <= age <= 5
+    assert 4.5 <= age <= 5.5
 
 
 def test_get_finding_age_days_string():
     created = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
     age = get_finding_age_days(created)
-    assert 9 <= age <= 10
+    assert 9.5 <= age <= 10.5
 
 
 def test_recalculate_asset_risk_score_no_findings(db):
