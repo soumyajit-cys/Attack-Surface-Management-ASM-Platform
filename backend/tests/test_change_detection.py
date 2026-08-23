@@ -295,9 +295,13 @@ def test_persist_alerts(db):
     db.add(org)
     db.flush()
 
+    asset = Asset(organization_id=org.id, name="alert.example.com")
+    db.add(asset)
+    db.flush()
+
     changes = [
-        {"type": "test", "asset_id": 1, "title": "Test Alert", "severity": "high", "details": "{}"},
-        {"type": "test", "asset_id": 1, "title": "Test Alert 2", "severity": "medium", "details": "{}"},
+        {"type": "test", "asset_id": asset.id, "title": "Test Alert", "severity": "high", "details": "{}"},
+        {"type": "test", "asset_id": asset.id, "title": "Test Alert 2", "severity": "medium", "details": "{}"},
     ]
 
     count = persist_alerts(db, changes, org.id)
