@@ -1,7 +1,7 @@
 import re
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 
 from auth.dependencies import get_current_user
@@ -11,6 +11,7 @@ from models.user import User
 from schemas.scan import ScanRequest
 from tasks.discovery_tasks import run_discovery
 from utils.database import get_db
+from utils.rate_limiter import limiter
 from utils.ssrf_guard import (
     validate_scan_target,
     verify_domain_ownership,
@@ -30,7 +31,9 @@ DOMAIN_RE = re.compile(
 
 
 @router.post("/", status_code=202)
+@limiter.limit("5/minute")
 async def start_scan(
+    request: Request,
     data: ScanRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
