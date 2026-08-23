@@ -290,7 +290,9 @@ def persist_alerts(db: Session, changes: list[dict], organization_id: int) -> in
     if not changes:
         return 0
 
+    from datetime import datetime, timezone
     count = 0
+    now = datetime.now(timezone.utc)
     for change in changes:
         alert = Alert(
             organization_id=organization_id,
@@ -298,6 +300,8 @@ def persist_alerts(db: Session, changes: list[dict], organization_id: int) -> in
             title=change.get("title"),
             severity=change.get("severity", "info"),
             message=change.get("details"),
+            created_at=now,
+            updated_at=now,
         )
         db.add(alert)
         count += 1
