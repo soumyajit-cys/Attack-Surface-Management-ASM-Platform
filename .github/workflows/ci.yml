@@ -1,0 +1,317 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "20"
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  lint-backend:
+    name: Lint Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Attack-Surface-Management-ASM-Platform/backend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff mypy
+
+      - name: Run Ruff (lint)
+        run: ruff check .
+
+      - name: Run MyPy (type check)
+        run: mypy . --ignore-missing-imports || true
+
+  lint-frontend:
+    name: Lint Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Attack-Surface-Management-ASM-Platform/frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npx eslint src --ext .ts,.tsx || true
+
+      - name: Run Prettier check
+        run: npx prettier --check src || true
+
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Attack-Surface-Management-ASM-Platform/backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sentinelasm_test
+          POSTGRES_USER: sentinel
+          POSTGRES_PASSWORD: sentinelpass
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U sentinel && break
+            sleep 1
+          done
+
+      - name: Wait for Redis
+        run: |
+          for i in {1..10}; do
+            redis-cli -h localhost -p 6379 ping && break
+            sleep 1
+          done
+
+      - name: Set up test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE sentinelasm_test;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE USER sentinel WITH PASSWORD 'sentinelpass';"
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE sentinelasm_test TO sentinel;"
+
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL: postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm_test
+          REDIS_URL: redis://localhost:6379/15
+          JWT_SECRET: test-secret-key-for-ci
+        run: |
+          alembic upgrade head
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm_test
+          REDIS_URL: redis://localhost:6379/15
+          JWT_SECRET: test-secret-key-for-ci
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Attack-Surface-Management-ASM-Platform/frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --coverage || true
+
+  dependency-scan:
+    name: Dependency Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run pip-audit (Python)
+        run: |
+          pip install pip-audit
+          pip-audit -r Attack-Surface-Management-ASM-Platform/backend/requirements.txt || true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run npm audit (Frontend)
+        working-directory: ./Attack-Surface-Management-ASM-Platform/frontend
+        run: npm audit --audit-level=high || true
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint-backend, lint-frontend, test-backend, test-frontend, dependency-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/backend
+          tags: |
+            type=ref,event=branch
+            type=sha
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Attack-Surface-Management-ASM-Platform/backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/frontend
+          tags: |
+            type=ref,event=branch
+            type=sha
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Attack-Surface-Management-ASM-Platform/frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata for Worker
+        id: meta-worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/worker
+          tags: |
+            type=ref,event=branch
+            type=sha
+
+      - name: Build and push Worker
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Attack-Surface-Management-ASM-Platform/backend
+          push: true
+          tags: ${{ steps.meta-worker.outputs.tags }}
+          labels: ${{ steps.meta-worker.outputs.labels }}
+          target: worker
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-build-pr:
+    name: Build Docker Images (PR)
+    runs-on: ubuntu-latest
+    needs: [lint-backend, lint-frontend, test-backend, test-frontend, dependency-scan]
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Attack-Surface-Management-ASM-Platform/backend
+          push: false
+          tags: sentinelasm/backend:pr-${{ github.event.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Frontend (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Attack-Surface-Management-ASM-Platform/frontend
+          push: false
+          tags: sentinelasm/frontend:pr-${{ github.event.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Worker (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Attack-Surface-Management-ASM-Platform/backend
+          push: false
+          tags: sentinelasm/worker:pr-${{ github.event.number }}
+          target: worker
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
