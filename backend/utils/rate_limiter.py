@@ -14,8 +14,8 @@ def get_client_identifier(request: Request) -> str:
 
 limiter = Limiter(
     key_func=get_client_identifier,
-    default_limits=[f"{settings.rate_limit_requests_per_minute}/minute"] if hasattr(settings, 'rate_limit_requests_per_minute') else [],
-    storage_uri=settings.redis_url if hasattr(settings, 'redis_url') else "memory://",
+    default_limits=[f"{settings.rate_limit_requests_per_minute}/minute"],
+    storage_uri=settings.redis_url,
 )
 
 
