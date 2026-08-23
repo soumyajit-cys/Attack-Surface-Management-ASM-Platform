@@ -139,6 +139,11 @@ def run_discovery(self, scan_id: int):
         scan.completed_at = _now()
         db.commit()
 
+        duration = time.perf_counter() - start_time
+        SCAN_DURATION.labels(organization=org_label).observe(duration)
+        ACTIVE_SCANS.labels(organization=org_label).dec()
+        SCAN_COUNTER.labels(status="completed", organization=org_label).inc()
+
         logger.info(
             "Scan %s completed for %s: %s",
             scan_id,
@@ -157,6 +162,9 @@ def run_discovery(self, scan_id: int):
             scan.error = str(exc)
             scan.completed_at = _now()
             db.commit()
+            SCAN_COUNTER.labels(status="failed", organization=str(scan.organization_id)).inc()
+            SCAN_ERRORS.labels(organization=str(scan.organization_id), error_type=type(exc).__name__).inc()
+        ACTIVE_SCANS.labels(organization=org_label).dec()
         logger.error(
             "Scan %s failed: %s\n%s",
             scan_id,
