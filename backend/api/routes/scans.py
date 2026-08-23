@@ -79,7 +79,9 @@ async def start_scan(
 
 
 @router.post("/verify-ownership")
+@limiter.limit("10/minute")
 async def request_ownership_verification(
+    request: Request,
     data: ScanRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -129,7 +131,9 @@ async def check_ownership_verification(
 
 
 @router.get("/verify-ownership/check")
+@limiter.limit("20/minute")
 async def check_ownership_verification_get(
+    request: Request,
     domain: str,
     token: str,
     db: Session = Depends(get_db),
