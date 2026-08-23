@@ -9,6 +9,7 @@ from api.routes.scan_policies import router as scan_policies_router
 from api.routes.graph import router as graph_router
 from api.routes.alerting import router as alerting_router
 from api.routes.reports import router as reports_router
+from utils.rate_limiter import setup_rate_limiting
 
 app = FastAPI(
     title="SentinelASM",
@@ -18,6 +19,8 @@ app = FastAPI(
     ),
     version="0.1.0",
 )
+
+setup_rate_limiting(app)
 
 app.include_router(auth_router)
 app.include_router(scan_router)
