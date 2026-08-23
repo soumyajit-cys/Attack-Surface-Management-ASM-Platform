@@ -47,6 +47,10 @@ class Settings(BaseSettings):
 
     frontend_url: str = "http://localhost:5173"
 
+    rate_limit_requests_per_minute: int = 60
+    rate_limit_auth_requests_per_minute: int = 10
+    rate_limit_scan_requests_per_minute: int = 5
+
     @property
     def jwt_secret_for_use(self) -> str:
         if (
