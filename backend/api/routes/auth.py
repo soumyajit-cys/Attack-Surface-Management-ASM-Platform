@@ -87,7 +87,9 @@ async def register(
 
 
 @router.post("/login")
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     data: LoginRequest,
     db: Session = Depends(get_db),
 ):
@@ -113,7 +115,9 @@ async def login(
 
 
 @router.post("/refresh")
+@limiter.limit("10/minute")
 async def refresh(
+    request: Request,
     data: RefreshRequest,
     db: Session = Depends(get_db),
 ):
@@ -153,7 +157,9 @@ async def refresh(
 
 
 @router.post("/logout")
+@limiter.limit("10/minute")
 async def logout(
+    request: Request,
     data: LogoutRequest,
     db: Session = Depends(get_db),
 ):
