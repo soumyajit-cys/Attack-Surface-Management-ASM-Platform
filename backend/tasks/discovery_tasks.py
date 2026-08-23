@@ -1,10 +1,11 @@
 import asyncio
 import concurrent.futures
 import traceback
+import uuid
 
 from sqlalchemy.orm import Session
 
-from metrics.prometheus import SCAN_COUNTER, SCAN_DURATION, ACTIVE_SCANS
+from metrics.prometheus import SCAN_COUNTER, SCAN_DURATION, ACTIVE_SCANS, SCAN_ERRORS
 from models.finding import Finding
 from models.risk_score import RiskScore
 from models.scan_history import ScanHistory
@@ -33,7 +34,13 @@ from services.scanner.ssl_scanner import analyze_ssl
 from services.scanner.ssl_risk import assess_ssl_risk
 from services.scoring.risk_engine import calculate_risk
 from utils.database import SessionLocal
-from utils.logger import logger
+from utils.logger import (
+    logger,
+    get_correlation_id,
+    set_correlation_id,
+    clear_correlation_id,
+    log_with_context,
+)
 from workers.celery_app import celery
 
 MAX_PORT_SUBDOMAINS = 5
@@ -41,6 +48,9 @@ MAX_PORT_SUBDOMAINS = 5
 
 @celery.task(bind=True, name="tasks.run_discovery")
 def run_discovery(self, scan_id: int):
+    correlation_id = f"scan-{scan_id}-{uuid.uuid4().hex[:8]}"
+    set_correlation_id(correlation_id)
+
     db: Session = SessionLocal()
     scan = None
     org_label = "unknown"
