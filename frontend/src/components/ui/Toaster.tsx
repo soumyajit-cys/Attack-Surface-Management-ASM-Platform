@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
 interface Toast {
@@ -46,11 +46,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
-        {toasts.map((toast) => (
-          <Toast key={toast.id} toast={toast} onRemove={removeToast} />
-        ))}
-      </div>
+      <Toaster />
     </ToastContext.Provider>
   )
 }
