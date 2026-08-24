@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { Search, Filter, Loader2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Filter, Loader2, AlertTriangle, ChevronLeft, ChevronRight, AlertCircle, MinusCircle, Info } from 'lucide-react'
 
 interface Finding {
   id: number
@@ -13,6 +13,22 @@ interface Finding {
   description: string
   recommendation: string
   created_at: string
+}
+
+const severityColors: Record<string, string> = {
+  critical: 'badge-critical',
+  high: 'badge-high',
+  medium: 'badge-medium',
+  low: 'badge-low',
+  info: 'badge-info',
+}
+
+const severityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  critical: AlertTriangle,
+  high: AlertTriangle,
+  medium: AlertCircle,
+  low: MinusCircle,
+  info: Info,
 }
 
 export function Findings() {
@@ -46,7 +62,7 @@ export function Findings() {
 
   useEffect(() => { fetchFindings() }, [page, severityFilter])
 
-  const severityColors = {
+  const severityBadges: Record<string, string> = {
     critical: 'badge-critical',
     high: 'badge-high',
     medium: 'badge-medium',
@@ -114,7 +130,7 @@ export function Findings() {
                     <p className="text-sm text-gray-500 truncate max-w-xs">{finding.description}</p>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`badge ${severityColors[finding.severity as keyof typeof severityColors] || 'badge-info'}`}>
+                    <span className={`badge ${severityColors[finding.severity] || 'badge-info'}`}>
                       {finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1)}
                     </span>
                   </td>
@@ -144,13 +160,13 @@ export function Findings() {
             <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
                 <h2 className="text-xl font-bold">Finding Details</h2>
-                <button onClick={() => setSelectedFinding(null)} className="p-2 rounded-lg hover:bg-gray-100">✕</button>
+                <button onClick={() => setSelectedFinding(null)} className="p-2 rounded-lg hover:bg-gray-100">Close</button>
               </div>
               <div className="p-6 space-y-6">
                 <div>
                   <div className="flex items-center gap-3 mb-4">
                     <h3 className="text-xl font-bold text-gray-900">{selectedFinding.title}</h3>
-                    <span className={`badge ${severityColors[selectedFinding.severity as keyof typeof severityColors] || 'badge-info'}`}>
+                    <span className={`badge ${severityColors[selectedFinding.severity] || 'badge-info'}`}>
                       {selectedFinding.severity.toUpperCase()}
                     </span>
                   </div>
@@ -180,7 +196,7 @@ export function Findings() {
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Pagination */}
         <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200">
