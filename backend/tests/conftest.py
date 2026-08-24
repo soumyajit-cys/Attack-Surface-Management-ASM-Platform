@@ -8,7 +8,7 @@ os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
