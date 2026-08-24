@@ -98,7 +98,7 @@ export function Organizations() {
       setShowKeyModal(true) // Show modal with key
       setNewKeyName('')
       setNewKeyExpiresDays('')
-      addToast({ type: 'success', title: 'API key created', message: 'Copy the key now - it won\\'t be shown again' })
+      addToast({ type: 'success', title: 'API key created', message: "Copy the key now - it won't be shown again" })
     } catch (error: any) {
       addToast({ type: 'error', title: 'Failed to create API key', message: error.response?.data?.detail })
     }

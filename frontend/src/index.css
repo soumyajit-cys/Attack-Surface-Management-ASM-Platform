@@ -46,7 +46,7 @@
     @apply badge bg-danger-100 text-danger-700;
   }
   .badge-medium {
-    @apply badge bg-warning-100 text-warning-700;
+    @apply badge bg-yellow-100 text-yellow-800;
   }
   .badge-low {
     @apply badge bg-primary-100 text-primary-700;
