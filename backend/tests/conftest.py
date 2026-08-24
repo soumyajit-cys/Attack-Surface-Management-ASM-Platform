@@ -8,7 +8,7 @@ os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -34,13 +34,17 @@ def _setup_database():
 @pytest.fixture(autouse=True)
 def _clean_state(db):
     get_redis().flushdb()
+    db.execute(text("SET session_replication_role = 'replica'"))
     for table in reversed(Base.metadata.sorted_tables):
         db.execute(table.delete())
+    db.execute(text("SET session_replication_role = 'origin'"))
     db.commit()
     yield
     get_redis().flushdb()
+    db.execute(text("SET session_replication_role = 'replica'"))
     for table in reversed(Base.metadata.sorted_tables):
         db.execute(table.delete())
+    db.execute(text("SET session_replication_role = 'origin'"))
     db.commit()
 
 
@@ -49,7 +53,9 @@ def db():
     engine = create_engine(settings.database_url)
     TestingSession = sessionmaker(bind=engine)
     session = TestingSession()
+    session.begin_nested()
     yield session
+    session.rollback()
     session.close()
     engine.dispose()
 
