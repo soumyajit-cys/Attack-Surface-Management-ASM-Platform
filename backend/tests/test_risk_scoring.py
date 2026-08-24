@@ -120,7 +120,7 @@ def test_recalculate_asset_risk_score_with_findings(db):
 
     asset = Asset(organization_id=org.id, name="test2.example.com", criticality="prod")
     db.add(asset)
-    db.flush()
+    db.commit()
 
     for sev in ["critical", "high", "medium"]:
         db.add(Finding(
