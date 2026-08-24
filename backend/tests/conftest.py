@@ -32,20 +32,25 @@ def _setup_database():
 
 
 @pytest.fixture(autouse=True)
-def _clean_redis():
+def _clean_state(db):
     get_redis().flushdb()
+    # Use TRUNCATE CASCADE for fast cleanup that handles FK constraints
+    for table in reversed(Base.metadata.sorted_tables):
+        db.execute(text(f"TRUNCATE TABLE {table.name} CASCADE"))
+    db.commit()
     yield
     get_redis().flushdb()
+    for table in reversed(Base.metadata.sorted_tables):
+        db.execute(text(f"TRUNCATE TABLE {table.name} CASCADE"))
+    db.commit()
 
 
 @pytest.fixture()
 def db():
-    engine = create_engine(settings.database_url)
+    engine = create_engine(settings.database_url, poolclass=NullPool)
     TestingSession = sessionmaker(bind=engine)
     session = TestingSession()
-    session.begin_nested()
     yield session
-    session.rollback()
     session.close()
     engine.dispose()
 
