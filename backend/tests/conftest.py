@@ -34,14 +34,18 @@ def _setup_database():
 @pytest.fixture(autouse=True)
 def _clean_state(db):
     get_redis().flushdb()
-    # Use TRUNCATE CASCADE for fast cleanup that handles FK constraints
+    # Disable FK constraints, truncate, re-enable
+    db.execute(text("SET session_replication_role = 'replica'"))
     for table in reversed(Base.metadata.sorted_tables):
         db.execute(text(f"TRUNCATE TABLE {table.name} CASCADE"))
+    db.execute(text("SET session_replication_role = 'origin'"))
     db.commit()
     yield
     get_redis().flushdb()
+    db.execute(text("SET session_replication_role = 'replica'"))
     for table in reversed(Base.metadata.sorted_tables):
         db.execute(text(f"TRUNCATE TABLE {table.name} CASCADE"))
+    db.execute(text("SET session_replication_role = 'origin'"))
     db.commit()
 
 
