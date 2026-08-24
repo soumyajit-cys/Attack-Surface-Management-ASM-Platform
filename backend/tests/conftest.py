@@ -32,16 +32,21 @@ def _setup_database():
 
 
 @pytest.fixture(autouse=True)
-def _clean_state(db):
+def _clean_state():
     get_redis().flushdb()
-    for table in reversed(Base.metadata.sorted_tables):
-        db.execute(table.delete())
-    db.commit()
     yield
     get_redis().flushdb()
-    for table in reversed(Base.metadata.sorted_tables):
-        db.execute(table.delete())
-    db.commit()
+    # Use a fresh session for cleanup to avoid session state issues
+    engine = create_engine(settings.database_url, poolclass=NullPool)
+    TestingSession = sessionmaker(bind=engine)
+    session = TestingSession()
+    try:
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
+        session.commit()
+    finally:
+        session.close()
+        engine.dispose()
 
 
 @pytest.fixture()
