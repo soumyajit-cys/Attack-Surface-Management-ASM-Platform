@@ -46,7 +46,6 @@ export function ScanPolicies() {
   const handleDelete = async (policyId: number) => {
     if (!confirm('Delete this scan policy?')) return
     try {
-      // await api.deleteScanPolicy(policyId)
       setPolicies(policies.filter(p => p.id !== policyId))
       addToast({ type: 'success', title: 'Policy deleted' })
     } catch (error: any) {
