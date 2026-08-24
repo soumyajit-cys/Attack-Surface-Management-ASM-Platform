@@ -84,7 +84,6 @@ export function Scans() {
               <Scan className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="example.com"
                 value={scanDomain}
                 onChange={(e) => setScanDomain(e.target.value)}
                 className="input pl-10"

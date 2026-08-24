@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { FileText, Download, FileSpreadsheet, FilePdf, Loader2, Calendar, Filter, Save } from 'lucide-react'
+import { FileText, Download, FileSpreadsheet, File, Loader2, Calendar, Filter, Save } from 'lucide-react'
 
 export function Reports() {
   const { addToast } = useToast()

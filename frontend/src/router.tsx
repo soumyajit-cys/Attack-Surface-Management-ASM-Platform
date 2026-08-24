@@ -22,7 +22,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/login" replace />
 }
 
-export function Router() {
+export default function Router() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
