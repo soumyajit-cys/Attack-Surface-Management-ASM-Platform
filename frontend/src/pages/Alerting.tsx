@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { MessageSquare, Mail, Plus, Loader2, Trash2, Check, AlertTriangle, Zap, Send, TestTube2, Zap } from 'lucide-react'
+import { MessageSquare, Mail, Plus, Loader2, Trash2, Check, AlertTriangle, Zap, Send, TestTube2 } from 'lucide-react'
 
 interface AlertIntegration {
   id: number
