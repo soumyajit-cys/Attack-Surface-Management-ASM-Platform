@@ -18,7 +18,7 @@ const toastIcons = {
 const toastColors = {
   success: 'bg-success-50 border-success-200 text-success-800',
   error: 'bg-danger-50 border-danger-200 text-danger-800',
-  warning: 'bg-warning-50 border-warning-200 text-warning-800',
+  warning: 'bg-yellow-100 text-yellow-800',
   info: 'bg-primary-50 border-primary-200 text-primary-800',
 }
 
@@ -29,27 +29,6 @@ interface ToastContextType {
 }
 
 const ToastContext = React.createContext<ToastContextType | undefined>(undefined)
-
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([])
-
-  const addToast = (toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substr(2, 9)
-    setToasts((prev) => [...prev, { ...toast, id }])
-    setTimeout(() => removeToast(id), 5000)
-  }
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-  }
-
-  return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
-      {children}
-      <Toaster />
-    </ToastContext.Provider>
-  )
-}
 
 function Toast({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
   const Icon = toastIcons[toast.type]
@@ -73,15 +52,7 @@ function Toast({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => vo
   )
 }
 
-export function useToast() {
-  const context = React.useContext(ToastContext)
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider')
-  }
-  return context
-}
-
-export function Toaster() {
+function Toaster() {
   const { toasts } = React.useContext(ToastContext)
 
   return (
@@ -91,6 +62,35 @@ export function Toaster() {
       ))}
     </div>
   )
+}
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toasts, setToasts] = useState<Toast[]>([])
+
+  const addToast = (toast: Omit<Toast, 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9)
+    setToasts((prev) => [...prev, { ...toast, id }])
+    setTimeout(() => removeToast(id), 5000)
+  }
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
+  return (
+    <ToastContext.Provider value={{ toasts, addToast, removeToast }}>
+      {children}
+      <Toaster />
+    </ToastContext.Provider>
+  )
+}
+
+export function useToast() {
+  const context = React.useContext(ToastContext)
+  if (!context) {
+    throw new Error('useToast must be used within a ToastProvider')
+  }
+  return context
 }
 
 export { ToastProvider, useToast, Toaster }
