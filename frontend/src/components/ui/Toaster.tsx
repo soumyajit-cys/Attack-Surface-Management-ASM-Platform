@@ -93,5 +93,4 @@ export function Toaster() {
   )
 }
 
-// Need to fix the ToastContext import
-import React from 'react'
+export { ToastProvider, useToast, Toaster }
