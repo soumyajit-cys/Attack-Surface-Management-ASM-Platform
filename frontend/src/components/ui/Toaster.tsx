@@ -64,7 +64,7 @@ function Toaster() {
   )
 }
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const addToast = (toast: Omit<Toast, 'id'>) => {
@@ -85,7 +85,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useToast() {
+function useToast() {
   const context = React.useContext(ToastContext)
   if (!context) {
     throw new Error('useToast must be used within a ToastProvider')
