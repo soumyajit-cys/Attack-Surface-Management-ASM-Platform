@@ -23,8 +23,8 @@ def test_scope_without_org_raises(db):
 
 
 def test_user_repo_is_scoped_to_organization(db, org_factory):
-    org_a, user_a = org_factory("Iso A", "iso_a")
-    org_b, user_b = org_factory("Iso B", "iso_b")
+    org_a, user_a = org_factory("Iso A", "iso_a", "iso_a@example.com")
+    org_b, user_b = org_factory("Iso B", "iso_b", "iso_b@example.com")
 
     repo_a = UserRepository(OrgScope(db=db, organization_id=org_a.id))
     repo_b = UserRepository(OrgScope(db=db, organization_id=org_b.id))
@@ -37,8 +37,8 @@ def test_user_repo_is_scoped_to_organization(db, org_factory):
 
 
 def test_asset_repo_is_scoped(db, org_factory):
-    org_a, user_a = org_factory("Iso Assets A", "iso_assets_a")
-    org_b, user_b = org_factory("Iso Assets B", "iso_assets_b")
+    org_a, user_a = org_factory("Iso Assets A", "iso_assets_a", "iso_assets_a@example.com")
+    org_b, user_b = org_factory("Iso Assets B", "iso_assets_b", "iso_assets_b@example.com")
 
     asset_a = Asset(organization_id=org_a.id, name="a.example.com")
     asset_b = Asset(organization_id=org_b.id, name="b.example.com")
@@ -57,7 +57,7 @@ def test_asset_repo_is_scoped(db, org_factory):
 
 
 def test_get_or_create_domain_same_org_roundtrip(db, org_factory):
-    org_a, _ = org_factory("Domain Org", "domain_user")
+    org_a, _ = org_factory("Domain Org", "domain_user", "domain_user@example.com")
     asset = Asset(organization_id=org_a.id, name="domain-org.example")
     db.add(asset)
     db.flush()
@@ -76,8 +76,8 @@ def test_get_or_create_domain_cross_org_raises_not_hijacks(db, org_factory):
 
     Now the scoped repository raises instead of stealing the row.
     """
-    org_a, _ = org_factory("Domain Owner", "owner_user")
-    org_b, _ = org_factory("Domain Attacker", "attacker_user")
+    org_a, _ = org_factory("Domain Owner", "owner_user", "owner_user@example.com")
+    org_b, _ = org_factory("Domain Attacker", "attacker_user", "attacker_user@example.com")
 
     asset_a = Asset(organization_id=org_a.id, name="owner.example")
     asset_b = Asset(organization_id=org_b.id, name="attacker.example")
@@ -103,8 +103,8 @@ def test_get_or_create_domain_cross_org_raises_not_hijacks(db, org_factory):
 
 
 def test_domain_repo_get_scoped(db, org_factory):
-    org_a, _ = org_factory("Domain Iso A", "domain_iso_a")
-    org_b, _ = org_factory("Domain Iso B", "domain_iso_b")
+    org_a, _ = org_factory("Domain Iso A", "domain_iso_a", "domain_iso_a@example.com")
+    org_b, _ = org_factory("Domain Iso B", "domain_iso_b", "domain_iso_b@example.com")
 
     asset_a = Asset(organization_id=org_a.id, name="iso-a.example")
     asset_b = Asset(organization_id=org_b.id, name="iso-b.example")
