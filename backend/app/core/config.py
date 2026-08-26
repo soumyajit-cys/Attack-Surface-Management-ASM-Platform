@@ -24,7 +24,6 @@ _DEFAULT_JWT_SECRETS = frozenset(
     {
         "",
         "dev-only-insecure-secret-replace-me",
-        "test-secret-please-change",
         "change-me",
         "secret",
     }
