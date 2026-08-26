@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import Request
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from auth import jwt as token_service
@@ -20,7 +20,7 @@ from models import APIKey, User
 
 from app.core.errors import UnauthenticatedError
 from app.core.permissions import Permission, effective_permissions, require_permissions
-from app.db.session import get_db as _db_dependency  # noqa: F401 (re-exported below)
+from app.db.session import get_db
 
 AuthMethod = Literal["jwt", "api_key"]
 
@@ -112,25 +112,19 @@ def get_principal(request: Request, db: Session) -> Principal:
     raise UnauthenticatedError()
 
 
-def require_permissions_dep(*needed: Permission):
+def current_principal(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Principal:
+    """FastAPI dependency: any authenticated principal (JWT or API key)."""
+    return get_principal(request, db)
+
+
+def require_permissions(*needed: Permission):
     """Dependency factory: authenticate then enforce permissions."""
 
-    def dependency(
-        principal: Principal = None,  # type: ignore[assignment]
-    ) -> Principal:
-        return principal
-
-    async def _inner(
-        request: Request,
-        db: Session,
-    ) -> Principal:
-        principal = get_principal(request, db)
+    def dependency(principal: Principal = Depends(current_principal)) -> Principal:
         require_permissions(principal.permissions, *needed)
         return principal
 
-    return _inner
-
-
-# Convenience dependency: any authenticated principal.
-def current_principal(request: Request, db: Session) -> Principal:
-    return get_principal(request, db)
+    return dependency
