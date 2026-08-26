@@ -15,6 +15,7 @@ import {
   ArrowDownRight,
   Minus,
   ExternalLink,
+  CheckCircle,
 } from 'lucide-react'
 import {
   LineChart,

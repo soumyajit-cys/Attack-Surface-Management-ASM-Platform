@@ -211,7 +211,7 @@ export function Reports() {
                     disabled={item.loading || (item.key === 'asset' && !pdfAssetId)}
                     className="btn-primary flex items-center gap-2 whitespace-nowrap"
                   >
-                    <FilePdf className="w-4 h-4" />
+                    <FileText className="w-4 h-4" />
                     {item.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Generate PDF'}
                   </button>
                 </div>

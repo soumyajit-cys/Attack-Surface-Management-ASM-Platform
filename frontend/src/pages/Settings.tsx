@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
-import { User, Lock, Bell, Shield, Palette, Moon, Sun, Globe, Key, Trash2, Loader2 } from 'lucide-react'
+import { User, Lock, Bell, Shield, Palette, Moon, Sun, Globe, Key, Trash2, Loader2, AlertTriangle } from 'lucide-react'
 
 export function Settings() {
   const { user, refreshUser } = useAuth()
