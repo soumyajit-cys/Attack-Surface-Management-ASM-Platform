@@ -17,6 +17,11 @@ dnspython
 python-whois
 requests
 
+# Rate limiting (was missing -- fresh installs failed at startup)
+slowapi>=0.1.9
+# PDF report generation (was missing -- PDF endpoints returned 501)
+fpdf2>=2.7
+
 pytest
 pytest-asyncio
 
