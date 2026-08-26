@@ -9,7 +9,7 @@ Parity with the legacy ``/auth`` routes plus:
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, exc as orm_exc
 
 from auth import jwt as token_service
 from auth.roles import ROLE_ADMIN
@@ -70,8 +70,6 @@ async def register(
     data: RegisterRequest,
     db: Session = Depends(get_db),
 ) -> TokenBundle:
-    from sqlalchemy.orm import exc as orm_exc
-
     existing = (
         db.query(User).filter(User.username == data.username).first()
     )
@@ -293,11 +291,6 @@ async def reset_password(
 @router.get("/me", response_model=UserOut)
 async def me(principal: Principal = Depends(current_principal)) -> UserOut:
     user = principal.user
-    org = None
-    if principal.via != "api_key":
-        org = None  # filled below via db-free path when needed
-    # Organization name is fetched lazily through the user's relationship to
-    # avoid a second dependency in the common JWT case.
     return UserOut(
         id=user.id,
         username=user.username,
