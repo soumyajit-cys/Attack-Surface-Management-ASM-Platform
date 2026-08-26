@@ -1,4 +1,4 @@
-import { Router } from './router'
+import Router from './router'
 import { ToastProvider } from './components/ui/Toaster'
 
 export default function App() {
