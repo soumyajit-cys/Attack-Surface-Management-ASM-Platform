@@ -1,35 +1,12 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
+"""Legacy database module -- kept as a re-export shim during the rewrite.
 
-from config import settings
+Re-exports the *same objects* from :mod:`app.db.session` so dependency
+overrides in tests apply uniformly to legacy and v1 routes.
+"""
 
-
-def build_engine(database_url: str = None):
-    url = database_url or settings.database_url
-
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
-
-    return create_engine(
-        url,
-        poolclass=NullPool
-    )
-
-
-engine = build_engine()
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
+from app.db.session import (  # noqa: F401
+    SessionLocal,
+    build_engine,
+    engine,
+    get_db,
 )
-
-
-def get_db():
-    db: Session = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
