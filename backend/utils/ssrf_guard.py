@@ -1,3 +1,11 @@
+"""SSRF guard: validates scan targets and blocks private/metadata IPs.
+
+Chunk 2 additions:
+- ``_strip_mapped_prefix`` strips ``::ffff:x.x.x.x`` → ``x.x.x.x`` so
+  IPv4-mapped IPv6 addresses are caught by the private-IP check.
+- ``normalize_ip`` is a public helper that callers can use before comparison.
+"""
+
 import ipaddress
 import re
 from typing import Optional
@@ -25,19 +33,39 @@ CLOUD_METADATA_IPS = [
 ]
 
 
-def is_private_ip(ip: str) -> bool:
+def normalize_ip(ip_str: str) -> str:
+    """Normalize an IP string: strip IPv4-mapped prefix, return canonical form.
+
+    ``::ffff:127.0.0.1`` → ``127.0.0.1``
+    ``::1``              → ``::1``
+    """
     try:
-        ip_obj = ipaddress.ip_address(ip)
+        addr = ipaddress.ip_address(ip_str)
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+    except ValueError:
+        pass
+    return ip_str
+
+
+def is_private_ip(ip: str) -> bool:
+    canonical = normalize_ip(ip)
+    try:
+        ip_obj = ipaddress.ip_address(canonical)
         for network in PRIVATE_IP_RANGES:
             if ip_obj in network:
                 return True
+        # Catch-all: any IPv6 link-local or ULA that slipped through.
+        if ip_obj.is_link_local or ip_obj.is_loopback:
+            return True
         return False
     except ValueError:
         return False
 
 
 def is_cloud_metadata_ip(ip: str) -> bool:
-    return ip in CLOUD_METADATA_IPS
+    canonical = normalize_ip(ip)
+    return canonical in CLOUD_METADATA_IPS
 
 
 def is_allowed_target(ip: str) -> bool:
