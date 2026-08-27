@@ -34,7 +34,10 @@ _WEBHOOK_BACKOFF_BASE = 1.5  # seconds
 
 
 def severity_meets_threshold(finding_severity: str, min_severity: AlertSeverity) -> bool:
-    finding_level = SEVERITY_ORDER.get(AlertSeverity(finding_severity.upper()), 0)
+    try:
+        finding_level = SEVERITY_ORDER.get(AlertSeverity(finding_severity.lower()), 0)
+    except ValueError:
+        return False
     min_level = SEVERITY_ORDER.get(min_severity, 0)
     return finding_level >= min_level
 
