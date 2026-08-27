@@ -61,7 +61,7 @@ def pin_ip(host: str, ip: str) -> None:
     Called once at scan submission time after SSRF validation passes.
     """
     r = get_redis()
-    r.setex(_pin_key(host), _PIN_TTL_SECONDS, ip)
+    r.set(_pin_key(host), ip, ex=_PIN_TTL_SECONDS)
     logger.debug("Pinned %s -> %s (TTL %ds)", host, ip, _PIN_TTL_SECONDS)
 
 

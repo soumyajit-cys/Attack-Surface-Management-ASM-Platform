@@ -7,8 +7,6 @@ and that the Slack/Discord webhook delivery retry logic works.
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from sqlalchemy.orm import Session
-
 from models import AlertIntegration, AlertChannel, AlertSeverity
 from services.alerts.alerting_service import (
     process_finding_alerts,
@@ -18,6 +16,9 @@ from services.alerts.alerting_service import (
 
 
 def _make_finding(**overrides):
+    class FakeFinding:
+        pass
+
     defaults = {
         "id": 1,
         "organization_id": 1,
@@ -29,10 +30,6 @@ def _make_finding(**overrides):
         "recommendation": "Fix it",
     }
     defaults.update(overrides)
-
-    class FakeFinding:
-        pass
-
     f = FakeFinding()
     for k, v in defaults.items():
         setattr(f, k, v)
@@ -40,12 +37,11 @@ def _make_finding(**overrides):
 
 
 def _make_asset(**overrides):
-    defaults = {"id": 1, "organization_id": 1, "name": "test.example.com"}
-    defaults.update(overrides)
-
     class FakeAsset:
         pass
 
+    defaults = {"id": 1, "organization_id": 1, "name": "test.example.com"}
+    defaults.update(overrides)
     a = FakeAsset()
     for k, v in defaults.items():
         setattr(a, k, v)
@@ -67,20 +63,21 @@ class TestSeverityThreshold:
 
 
 class TestProcessFindingAlerts:
-    def test_no_integrations_does_nothing(self, db):
-        finding = _make_finding()
-        asset = _make_asset()
-        # Should not raise even with no integrations.
-        db.run_sync(lambda conn: None)
+    def test_no_integrations_does_nothing(self, db, org_factory):
+        org, user = org_factory("Alert Org NoInt", "alert_noint", "alert_noint@test.com")
+        finding = _make_finding(organization_id=org.id, asset_id=0)
+        asset = _make_asset(organization_id=org.id, id=0)
         import asyncio
         asyncio.run(process_finding_alerts(db, finding, asset))
 
     @patch("services.alerts.alerting_service.send_slack_alert", new_callable=AsyncMock)
-    def test_dispatches_to_matching_slack_integration(self, mock_slack, db):
+    def test_dispatches_to_matching_slack_integration(self, mock_slack, db, org_factory):
         mock_slack.return_value = True
+        org, user = org_factory("Alert Org Slack", "alert_slack", "alert_slack@test.com")
 
         integration = AlertIntegration(
-            organization_id=1,
+            organization_id=org.id,
+            name="Test Slack",
             channel=AlertChannel.SLACK,
             webhook_url="https://hooks.slack.com/test",
             min_severity=AlertSeverity.LOW,
@@ -89,8 +86,8 @@ class TestProcessFindingAlerts:
         db.add(integration)
         db.flush()
 
-        finding = _make_finding(severity="high")
-        asset = _make_asset()
+        finding = _make_finding(organization_id=org.id, severity="high")
+        asset = _make_asset(organization_id=org.id)
 
         import asyncio
         asyncio.run(process_finding_alerts(db, finding, asset))
@@ -98,9 +95,11 @@ class TestProcessFindingAlerts:
         mock_slack.assert_called_once()
 
     @patch("services.alerts.alerting_service.send_slack_alert", new_callable=AsyncMock)
-    def test_skips_when_severity_below_threshold(self, mock_slack, db):
+    def test_skips_when_severity_below_threshold(self, mock_slack, db, org_factory):
+        org, user = org_factory("Alert Org Crit", "alert_crit", "alert_crit@test.com")
         integration = AlertIntegration(
-            organization_id=1,
+            organization_id=org.id,
+            name="Critical Only",
             channel=AlertChannel.SLACK,
             webhook_url="https://hooks.slack.com/test",
             min_severity=AlertSeverity.CRITICAL,
@@ -109,8 +108,8 @@ class TestProcessFindingAlerts:
         db.add(integration)
         db.flush()
 
-        finding = _make_finding(severity="low")
-        asset = _make_asset()
+        finding = _make_finding(organization_id=org.id, severity="low")
+        asset = _make_asset(organization_id=org.id)
 
         import asyncio
         asyncio.run(process_finding_alerts(db, finding, asset))
@@ -118,9 +117,11 @@ class TestProcessFindingAlerts:
         mock_slack.assert_not_called()
 
     @patch("services.alerts.alerting_service.send_slack_alert", new_callable=AsyncMock)
-    def test_skips_inactive_integration(self, mock_slack, db):
+    def test_skips_inactive_integration(self, mock_slack, db, org_factory):
+        org, user = org_factory("Alert Org Inactive", "alert_inactive", "alert_inactive@test.com")
         integration = AlertIntegration(
-            organization_id=1,
+            organization_id=org.id,
+            name="Inactive Slack",
             channel=AlertChannel.SLACK,
             webhook_url="https://hooks.slack.com/test",
             min_severity=AlertSeverity.LOW,
@@ -129,8 +130,8 @@ class TestProcessFindingAlerts:
         db.add(integration)
         db.flush()
 
-        finding = _make_finding(severity="critical")
-        asset = _make_asset()
+        finding = _make_finding(organization_id=org.id, severity="critical")
+        asset = _make_asset(organization_id=org.id)
 
         import asyncio
         asyncio.run(process_finding_alerts(db, finding, asset))
@@ -141,8 +142,9 @@ class TestProcessFindingAlerts:
 class TestPostWithRetry:
     @patch("services.alerts.alerting_service.httpx.AsyncClient")
     def test_succeeds_on_first_try(self, mock_client_cls):
-        mock_resp = AsyncMock()
-        mock_resp.raise_for_status = AsyncMock()
+        from unittest.mock import MagicMock
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
@@ -155,16 +157,21 @@ class TestPostWithRetry:
 
     @patch("services.alerts.alerting_service.httpx.AsyncClient")
     def test_retries_on_500_then_succeeds(self, mock_client_cls):
-        import httpx
+        import httpx as real_httpx
+        from unittest.mock import MagicMock
 
-        fail_resp = AsyncMock()
+        fail_resp = MagicMock()
         fail_resp.status_code = 500
-        fail_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Server Error", request=AsyncMock(), response=fail_resp
-        )
 
-        ok_resp = AsyncMock()
-        ok_resp.raise_for_status = AsyncMock()
+        http_error = real_httpx.HTTPStatusError(
+            "Server Error",
+            request=MagicMock(),
+            response=fail_resp,
+        )
+        fail_resp.raise_for_status.side_effect = http_error
+
+        ok_resp = MagicMock()
+        ok_resp.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -179,13 +186,18 @@ class TestPostWithRetry:
 
     @patch("services.alerts.alerting_service.httpx.AsyncClient")
     def test_returns_false_on_400_no_retry(self, mock_client_cls):
-        import httpx
+        import httpx as real_httpx
+        from unittest.mock import MagicMock
 
-        fail_resp = AsyncMock()
+        fail_resp = MagicMock()
         fail_resp.status_code = 400
-        fail_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Bad Request", request=AsyncMock(), response=fail_resp
+
+        http_error = real_httpx.HTTPStatusError(
+            "Bad Request",
+            request=MagicMock(),
+            response=fail_resp,
         )
+        fail_resp.raise_for_status.side_effect = http_error
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -196,5 +208,4 @@ class TestPostWithRetry:
         import asyncio
         result = asyncio.run(_post_with_retry("https://hook.example", {"text": "hi"}))
         assert result is False
-        # Client errors (4xx) should NOT retry.
         assert mock_client.post.call_count == 1

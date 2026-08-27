@@ -110,7 +110,7 @@ def run_discovery(self, scan_id: int) -> dict:
         domain_name = scan.target
 
         # ── Phase 1: Discovery ────────────────────────────────────────────
-        results = _with_retry(self, scan_id, "discovery", lambda: _collect(domain_name))
+        results = _with_retry(self, scan_id, "discovery", lambda: _run_async(lambda: _collect(domain_name)))
         resolved_ip = results["resolved"].get("ip")
 
         if not resolved_ip:

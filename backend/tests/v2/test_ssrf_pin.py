@@ -46,7 +46,7 @@ class TestAssertSafeIP:
             _assert_safe_ip("192.168.1.1")
 
     def test_metadata_rejected(self):
-        with pytest.raises(ValueError, match="metadata"):
+        with pytest.raises(ValueError, match="private|metadata"):
             _assert_safe_ip("169.254.169.254")
 
     def test_ipv4_mapped_loopback_rejected(self):

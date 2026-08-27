@@ -304,8 +304,8 @@ def test_persist_alerts(db):
         {"type": "test", "asset_id": asset.id, "title": "Test Alert 2", "severity": "medium", "details": "{}"},
     ]
 
-    count = persist_alerts(db, changes, org.id)
-    assert count == 2
+    created = persist_alerts(db, changes, org.id)
+    assert len(created) == 2
 
     from models.alert import Alert
     alerts = db.query(Alert).filter(Alert.organization_id == org.id).all()
