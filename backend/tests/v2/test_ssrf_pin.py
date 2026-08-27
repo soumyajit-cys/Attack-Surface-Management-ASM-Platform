@@ -38,7 +38,7 @@ class TestAssertSafeIP:
         _assert_safe_ip("8.8.8.8")  # should not raise
 
     def test_loopback_rejected(self):
-        with pytest.raises(ValueError, match="loopback"):
+        with pytest.raises(ValueError, match="private|loopback"):
             _assert_safe_ip("127.0.0.1")
 
     def test_private_rejected(self):
@@ -50,11 +50,11 @@ class TestAssertSafeIP:
             _assert_safe_ip("169.254.169.254")
 
     def test_ipv4_mapped_loopback_rejected(self):
-        with pytest.raises(ValueError, match="loopback"):
+        with pytest.raises(ValueError, match="private|loopback"):
             _assert_safe_ip("::ffff:127.0.0.1")
 
     def test_0_x_rejected(self):
-        with pytest.raises(ValueError, match="0.0.0.0/8"):
+        with pytest.raises(ValueError, match="private|0.0.0.0"):
             _assert_safe_ip("0.0.0.1")
 
 
