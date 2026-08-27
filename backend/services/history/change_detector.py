@@ -286,13 +286,18 @@ def _diff_findings(current: dict, previous: dict, asset_id: int) -> list[dict]:
     return changes
 
 
-def persist_alerts(db: Session, changes: list[dict], organization_id: int) -> int:
-    if not changes:
-        return 0
+def persist_alerts(db: Session, changes: list[dict], organization_id: int) -> list[Alert]:
+    """Persist change-detection alerts and return the created Alert objects.
 
-    from datetime import datetime, timezone
-    count = 0
+    External notification (Slack/Discord) is handled by the caller in
+    ``tasks.discovery_tasks`` after this returns.
+    """
+    if not changes:
+        return []
+
     now = datetime.now(timezone.utc)
+    created: list[Alert] = []
+
     for change in changes:
         alert = Alert(
             organization_id=organization_id,
@@ -304,5 +309,7 @@ def persist_alerts(db: Session, changes: list[dict], organization_id: int) -> in
             updated_at=now,
         )
         db.add(alert)
-        count += 1
-    return count
+        created.append(alert)
+
+    db.flush()
+    return created
