@@ -1,11 +1,19 @@
+"""Alerting service: dispatches finding alerts to Slack/Discord/email.
+
+Chunk 2 changes:
+- ``send_email`` now lives in ``services.alerts.email_service`` (canonical).
+- Webhook delivery retries with exponential backoff (1 attempt, 2 retries).
+- ``process_finding_alerts`` is called from the scan pipeline (was dead code).
+"""
+
 import httpx
-import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from models import AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset, User
+from models import AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
+from services.alerts.email_service import send_email
 from utils.ssrf_guard import is_allowed_target
 from utils.logger import logger
 from config import settings
@@ -19,11 +27,52 @@ SEVERITY_ORDER = {
     AlertSeverity.INFO: 1,
 }
 
+# Webhook delivery configuration.
+_WEBHOOK_TIMEOUT = 10.0
+_WEBHOOK_MAX_RETRIES = 2
+_WEBHOOK_BACKOFF_BASE = 1.5  # seconds
+
 
 def severity_meets_threshold(finding_severity: str, min_severity: AlertSeverity) -> bool:
     finding_level = SEVERITY_ORDER.get(AlertSeverity(finding_severity.upper()), 0)
     min_level = SEVERITY_ORDER.get(min_severity, 0)
     return finding_level >= min_level
+
+
+async def _post_with_retry(url: str, payload: dict) -> bool:
+    """POST to *url* with exponential-backoff retry on transient failures."""
+    last_error = None
+    for attempt in range(_WEBHOOK_MAX_RETRIES + 1):
+        try:
+            async with httpx.AsyncClient(timeout=_WEBHOOK_TIMEOUT) as client:
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+                return True
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code >= 500:
+                last_error = exc
+                wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
+                logger.debug(
+                    "Webhook %s returned %s, retrying in %.1fs (attempt %s/%s)",
+                    url, exc.response.status_code, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
+                )
+                import asyncio
+                await asyncio.sleep(wait)
+            else:
+                logger.warning("Webhook %s returned client error %s", url, exc.response.status_code)
+                return False
+        except Exception as exc:
+            last_error = exc
+            wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
+            logger.debug(
+                "Webhook %s failed (%s), retrying in %.1fs (attempt %s/%s)",
+                url, exc, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
+            )
+            import asyncio
+            await asyncio.sleep(wait)
+
+    logger.warning("Webhook %s delivery failed after %s attempts: %s", url, _WEBHOOK_MAX_RETRIES + 1, last_error)
+    return False
 
 
 async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
@@ -32,14 +81,14 @@ async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> 
         return False
 
     severity_emoji = {
-        "critical": "🔴",
-        "high": "🟠",
-        "medium": "🟡",
-        "low": "🟢",
-        "info": "🔵",
+        "critical": "\U0001f534",
+        "high": "\U0001f7e0",
+        "medium": "\U0001f7e1",
+        "low": "\U0001f7e2",
+        "info": "\U0001f535",
     }
 
-    emoji = severity_emoji.get(finding.severity.lower(), "⚪")
+    emoji = severity_emoji.get(finding.severity.lower(), "\u26aa")
 
     payload = {
         "blocks": [
@@ -85,14 +134,7 @@ async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> 
         ],
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(webhook_url, json=payload)
-            resp.raise_for_status()
-            return True
-    except Exception as exc:
-        logger.warning("Failed to send Slack alert: %s", exc)
-        return False
+    return await _post_with_retry(webhook_url, payload)
 
 
 async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
@@ -112,34 +154,24 @@ async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -
 
     embed = {
         "title": f"SentinelASM Alert: {finding.severity.upper()}",
-        "description": finding.title,
+        "description": finding.description or finding.title or "No description",
         "color": color,
         "fields": [
             {"name": "Asset", "value": asset.name, "inline": True},
             {"name": "Severity", "value": finding.severity.upper(), "inline": True},
             {"name": "Category", "value": finding.category or "N/A", "inline": True},
         ],
-        "description": finding.description or "No description",
         "footer": {
             "text": f"SentinelASM | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
         },
     }
 
     payload = {"embeds": [embed]}
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(webhook_url, json=payload)
-            resp.raise_for_status()
-            return True
-    except Exception as exc:
-        logger.warning("Failed to send Discord alert: %s", exc)
-        return False
+    return await _post_with_retry(webhook_url, payload)
 
 
 async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
-    from models import AlertIntegration, AlertChannel
-
+    """Dispatch finding to all matching alert integrations for the org."""
     integrations = db.query(AlertIntegration).filter(
         AlertIntegration.organization_id == asset.organization_id,
         AlertIntegration.is_active == True,
@@ -161,15 +193,15 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
 
 
 async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
-    from models import Finding, Asset
+    from models import Finding as FindingModel, Asset as AssetModel
 
     since = datetime.now(timezone.utc) - timedelta(days=7)
 
-    findings = db.query(Finding).join(Asset).filter(
-        Finding.organization_id == config.organization_id,
-        Finding.created_at >= since,
-        Finding.severity.in_([s.value for s in AlertSeverity if SEVERITY_ORDER[s] >= SEVERITY_ORDER[config.min_severity]]),
-    ).order_by(Finding.created_at.desc()).limit(50).all()
+    findings = db.query(FindingModel).join(AssetModel).filter(
+        FindingModel.organization_id == config.organization_id,
+        FindingModel.created_at >= since,
+        FindingModel.severity.in_([s.value for s in AlertSeverity if SEVERITY_ORDER[s] >= SEVERITY_ORDER[config.min_severity]]),
+    ).order_by(FindingModel.created_at.desc()).limit(50).all()
 
     if not findings:
         logger.info("No findings for email digest, skipping")
@@ -198,26 +230,24 @@ async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
         if not severity_findings:
             continue
 
-        html += f"""
-        <h3 style="color: {'#dc2626' if severity == 'critical' else '#ea580c' if severity == 'high' else '#f59e0b' if severity == 'medium' else '#10b981' if severity == 'low' else '#6b7280'};">
-            {severity.upper()} ({len(severity_findings)})
-        </h3>
-        <ul>
-        """
+        color = {
+            "critical": "#dc2626", "high": "#ea580c", "medium": "#f59e0b",
+            "low": "#10b981", "info": "#6b7280",
+        }.get(severity, "#6b7280")
+
+        html += f'<h3 style="color: {color};">{severity.upper()} ({len(severity_findings)})</h3><ul>'
 
         for f in severity_findings[:10]:
             asset = db.query(Asset).filter(Asset.id == f.asset_id).first()
-            html += f"""
-            <li><strong>{f.title}</strong> - {asset.name if asset else 'Unknown asset'}
-                <br><small>{f.description[:200] if f.description else 'No description'}</small>
-            </li>
-            """
+            desc = (f.description[:200] if f.description else "No description")
+            html += f'<li><strong>{f.title}</strong> - {asset.name if asset else "Unknown asset"}<br><small>{desc}</small></li>'
 
         html += "</ul>"
 
-    html += """
+    frontend_url = settings.frontend_url
+    html += f"""
         <hr>
-        <p><small>Generated by SentinelASM | <a href="{settings.frontend_url}">View Dashboard</a></small></p>
+        <p><small>Generated by SentinelASM | <a href="{frontend_url}">View Dashboard</a></small></p>
     </body>
     </html>
     """
@@ -233,29 +263,3 @@ async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
 
     config.last_sent_at = datetime.now(timezone.utc)
     return True
-
-
-def send_email(receiver: str, subject: str, body: str) -> bool:
-    if not settings.smtp_host:
-        logger.info("Email service not configured; would send to=%s subject=%s", receiver, subject)
-        return False
-
-    from email.message import EmailMessage
-    import smtplib
-
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = settings.smtp_from
-    msg["To"] = receiver
-    msg.add_alternative(body, subtype="html")
-
-    try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
-            server.starttls()
-            if settings.smtp_user:
-                server.login(settings.smtp_user, settings.smtp_password)
-            server.send_message(msg)
-        return True
-    except Exception as exc:
-        logger.warning("Failed to send email to %s: %s", receiver, exc)
-        return False
