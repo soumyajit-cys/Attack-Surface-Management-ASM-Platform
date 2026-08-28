@@ -23,9 +23,13 @@ from sqlalchemy.orm import Session
 from app.core.ssrf import pin_ip, pinned_resolve, PinnedResolutionMissing
 from metrics.prometheus import (
     ACTIVE_SCANS,
+    FINDINGS_PER_SCAN,
+    PORTS_SCANNED,
     SCAN_COUNTER,
     SCAN_DURATION,
     SCAN_ERRORS,
+    SSL_CERTS_ANALYZED,
+    SUBDOMAINS_DISCOVERED,
 )
 from models.finding import Finding
 from models.scan_history import ScanHistory
