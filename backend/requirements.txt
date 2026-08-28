@@ -21,6 +21,8 @@ requests
 slowapi>=0.1.9
 # PDF report generation (was missing -- PDF endpoints returned 501)
 fpdf2>=2.7
+# Cron expression evaluation for scan-policy scheduling (Celery Beat)
+croniter>=1.4.0
 
 pytest
 pytest-asyncio
