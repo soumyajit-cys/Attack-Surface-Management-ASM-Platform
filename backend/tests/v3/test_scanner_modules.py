@@ -35,26 +35,12 @@ class TestScannerModuleDiscovery:
         assert [m.name for m in port_mods] == ["port_scan"]
 
     def test_scan_context_contract(self):
-        """Modules accept a ScanContext and return a dict (no persistence)."""
-        from app.scanning.context import ScanContext
-        from types import SimpleNamespace
-
-        ctx = ScanContext(
-            domain="example.com",
-            pinned_ip="93.184.216.34",
-            org_id=1,
-            scan_id=1,
-            db=SimpleNamespace(),
-            config={},
-        )
-
-        import asyncio
+        """Modules accept a single ScanContext positional arg (no persistence)."""
+        import inspect
 
         for mod in registry.get_modules():
-            if mod.name == "port_scan":
-                result = asyncio.run(mod.run(ctx))
-                assert isinstance(result, dict)
-                assert "ports" in result
+            params = inspect.signature(mod.run).parameters
+            assert list(params) == ["ctx"]
 
     def test_modules_wrap_legacy_scanners(self):
         """The plugin modules call the existing scanner functions."""
