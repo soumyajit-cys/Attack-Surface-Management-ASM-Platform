@@ -49,7 +49,7 @@ def calculate_risk(
     asset_criticality: str = "dev",
     finding_age_days: float = 0,
     is_kev: bool = False,
-    confidence: float = 0.8,
+    confidence: float = DEFAULT_CONFIDENCE,
 ) -> float:
     base = SEVERITY_BASE_SCORE.get(base_severity.lower(), 2.0)
 
@@ -68,6 +68,17 @@ def calculate_risk(
     score = min(score, 10.0)
 
     return round(score, 1)
+
+
+def cisa_kev_cache_path() -> str:
+    """Configurable KEV cache path (falls back to a per-process temp file)."""
+    try:
+        from app.core.config import settings
+        base = settings.kev_cache_dir or "/tmp"
+    except Exception:
+        base = "/tmp"
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, CISA_KEV_FILE)
 
 
 def get_finding_age_days(created_at) -> float:
