@@ -154,7 +154,7 @@ async def list_integrations(
     )
 
 
-@router.get("/integrations/{integration_id}", response_model=AlertIntegration)
+@router.get("/integrations/{integration_id}", response_model=AlertIntegrationResponse)
 async def get_integration(
     integration_id: int,
     db: Session = Depends(get_db),
@@ -169,7 +169,7 @@ async def get_integration(
     return integration
 
 
-@router.patch("/integrations/{integration_id}", response_model=AlertIntegration)
+@router.patch("/integrations/{integration_id}", response_model=AlertIntegrationResponse)
 async def update_integration(
     integration_id: int,
     data: AlertIntegrationUpdate,
