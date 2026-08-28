@@ -97,9 +97,10 @@ def is_cisa_kev(cve_id: str) -> bool:
 
 @lru_cache(maxsize=1)
 def _fetch_cisa_kev() -> set:
+    cache_path = cisa_kev_cache_path()
     try:
-        if os.path.exists(CISA_KEV_CACHE_PATH):
-            with open(CISA_KEV_CACHE_PATH) as f:
+        if os.path.exists(cache_path):
+            with open(cache_path) as f:
                 cache = json.load(f)
             cached_at = datetime.fromisoformat(cache["cached_at"])
             if (datetime.now(timezone.utc) - cached_at).total_seconds() < CISA_KEV_TTL_HOURS * 3600:
@@ -114,7 +115,8 @@ def _fetch_cisa_kev() -> set:
             if cve:
                 cves.add(cve)
 
-        with open(CISA_KEV_CACHE_PATH, "w") as f:
+        os.makedirs(os.path.dirname(cache_path) or ".", exist_ok=True)
+        with open(cache_path, "w") as f:
             json.dump({
                 "cached_at": datetime.now(timezone.utc).isoformat(),
                 "cves": list(cves),
@@ -125,9 +127,9 @@ def _fetch_cisa_kev() -> set:
 
     except Exception as exc:
         logger.warning("Failed to fetch CISA KEV catalog: %s", exc)
-        if os.path.exists(CISA_KEV_CACHE_PATH):
+        if os.path.exists(cache_path):
             try:
-                with open(CISA_KEV_CACHE_PATH) as f:
+                with open(cache_path) as f:
                     cache = json.load(f)
                 return set(cache.get("cves", []))
             except Exception:
