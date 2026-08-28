@@ -331,7 +331,7 @@ async def create_digest_config(
     return config
 
 
-@router.get("/digest", response_model=EmailDigestConfig)
+@router.get("/digest", response_model=EmailDigestConfigResponse)
 async def get_digest_config(
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ALERT_ADMIN_DEP),
@@ -344,7 +344,7 @@ async def get_digest_config(
     return config
 
 
-@router.patch("/digest", response_model=EmailDigestConfig)
+@router.patch("/digest", response_model=EmailDigestConfigResponse)
 async def update_digest_config(
     data: EmailDigestConfigUpdate,
     request: Request,
