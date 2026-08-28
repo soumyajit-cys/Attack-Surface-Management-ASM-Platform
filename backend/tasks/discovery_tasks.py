@@ -441,14 +441,6 @@ def _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None):
         logger.debug("Header analysis failed for %s", host)
 
 
-def _safe_pin(host: str) -> str | None:
-    """Return pinned IP or None (non-throwing)."""
-    try:
-        return pinned_resolve(host)
-    except PinnedResolutionMissing:
-        return None
-
-
 def _generate_and_persist_findings(
     db: Session,
     scan: ScanHistory,
