@@ -204,7 +204,7 @@ class TestEmailDigestTask:
         cfg = EmailDigestConfig(
             organization_id=org.id,
             frequency="daily",
-            hour_utc=9,
+            hour_utc=0,  # midnight window is always in the past
             recipient_emails="test@receiver.com",
             min_severity="medium",
             is_active=True,
