@@ -418,7 +418,6 @@ def _run_in_context(ctx, modules) -> dict:
 
 def _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None):
     """Fallback SSL + header scan when no pinned IP exists for *host*."""
-    org_label = None  # placeholder signature compatibility
     try:
         target = pinned_ip if pinned_ip else host
         ssl_data = _run_async(lambda h=target: analyze_ssl(h))
