@@ -137,7 +137,12 @@ def _fetch_cisa_kev() -> set:
         return set()
 
 
-def recalculate_asset_risk_score(db, asset_id: int) -> float:
+def recalculate_asset_risk_score(
+    db,
+    asset_id: int,
+    exposure: str | None = None,
+    confidence: float = DEFAULT_CONFIDENCE,
+) -> float:
     from models.finding import Finding
     from models.asset import Asset
     from models.risk_score import RiskScore
@@ -154,6 +159,9 @@ def recalculate_asset_risk_score(db, asset_id: int) -> float:
     if not findings:
         return 0.0
 
+    effective_exposure = (exposure or asset.exposure or "internet").lower()
+    exposure_mult = EXPOSURE_MULTIPLIER.get(effective_exposure, 1.0)
+
     total_score = 0.0
     count = 0
 
@@ -161,18 +169,17 @@ def recalculate_asset_risk_score(db, asset_id: int) -> float:
         age_days = get_finding_age_days(finding.created_at)
         kev = False
         if finding.category == "vulnerability" and "CVE-" in finding.title.upper():
-            import re
-            match = re.search(r"CVE-\d{4}-\d+", finding.title.upper())
+            match = CVE_RE.search(finding.title)
             if match:
                 kev = is_cisa_kev(match.group(0))
 
         score = calculate_risk(
             base_severity=finding.severity,
-            exposure="internet",
+            exposure=effective_exposure,
             asset_criticality=asset.criticality,
             finding_age_days=age_days,
             is_kev=kev,
-            confidence=0.8,
+            confidence=confidence,
         )
         total_score += score
         count += 1
@@ -182,14 +189,16 @@ def recalculate_asset_risk_score(db, asset_id: int) -> float:
     existing = db.query(RiskScore).filter(RiskScore.asset_id == asset_id).first()
     if existing:
         existing.score = round(avg_score, 1)
+        existing.exposure = exposure_mult
+        existing.confidence = confidence
         existing.updated_at = datetime.now(timezone.utc)
     else:
         db.add(RiskScore(
             asset_id=asset_id,
             score=round(avg_score, 1),
-            exposure=EXPOSURE_MULTIPLIER["internet"],
+            exposure=exposure_mult,
             severity=SEVERITY_BASE_SCORE.get("medium", 5.0),
-            confidence=0.8,
+            confidence=confidence,
         ))
 
     return round(avg_score, 1)
