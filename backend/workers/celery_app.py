@@ -11,11 +11,15 @@ from kombu import Exchange, Queue
 
 from config import settings
 
+# Importing this module registers the Prometheus Celery signal handlers.
+# It must happen before any task is dispatched so *all* workers observe them.
+from metrics import celery_metrics  # noqa: F401
+
 celery = Celery(
     "sentinelasm",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["tasks.discovery_tasks"],
+    include=["tasks.discovery_tasks", "tasks.scheduler_tasks"],
 )
 
 # ── Exchange / Queue definitions ──────────────────────────────────────────────
