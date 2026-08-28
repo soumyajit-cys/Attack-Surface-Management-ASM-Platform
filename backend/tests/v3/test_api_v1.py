@@ -213,13 +213,17 @@ class TestScanPoliciesV1:
     def test_list_policies_isolated_by_org(self, client, db):
         headers, asset = self._register_with_asset(client, db, username="polv4")
 
+        from models.organization import Organization
+        from models.user import User
+
+        user = db.query(User).filter(User.username == "polv4").first()
         policy = ScanPolicy(
             organization_id=asset.organization_id,
             asset_id=asset.id,
             name="Existing",
             frequency=ScanFrequency.DAILY,
             scope="full",
-            created_by=1,
+            created_by=user.id,
         )
         db.add(policy)
         db.commit()

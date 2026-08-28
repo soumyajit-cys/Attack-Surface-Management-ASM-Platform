@@ -219,19 +219,19 @@ def _digest_due(cfg: EmailDigestConfig, now: datetime) -> bool:
 
     if freq == "daily":
         window = now.replace(hour=cfg.hour_utc or DEFAULT_SCHEDULE_HOUR_UTC, minute=0, second=0, microsecond=0)
-        return not cfg.last_sent_at or cfg.last_sent_at < window <= now
+        return window <= now and (not cfg.last_sent_at or cfg.last_sent_at < window)
 
     if freq == "weekly":
         if now.weekday() != (cfg.day_of_week or 1):
             return False
         window = now.replace(hour=cfg.hour_utc or DEFAULT_SCHEDULE_HOUR_UTC, minute=0, second=0, microsecond=0)
-        return not cfg.last_sent_at or cfg.last_sent_at < window <= now
+        return window <= now and (not cfg.last_sent_at or cfg.last_sent_at < window)
 
     if freq == "monthly":
         if now.day != 1:
             return False
         window = now.replace(hour=cfg.hour_utc or DEFAULT_SCHEDULE_HOUR_UTC, minute=0, second=0, microsecond=0)
-        return not cfg.last_sent_at or cfg.last_sent_at < window <= now
+        return window <= now and (not cfg.last_sent_at or cfg.last_sent_at < window)
 
     logger.warning("Unknown digest frequency %r", freq)
     return False
@@ -284,7 +284,7 @@ def _build_digest_body(
     alerts_open = (
         db.query(Alert)
         .filter(Alert.organization_id == org_id)
-        .filter(Alert.status.in_(["open", "acknowledged"]))
+        .filter(Alert.read == 0)
         .count()
     )
 
