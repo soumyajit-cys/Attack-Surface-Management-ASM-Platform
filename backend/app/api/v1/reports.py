@@ -36,10 +36,6 @@ class CSVExportRequest(BaseModel):
     severity: Optional[str] = None
 
 
-def _attachment(name: str) -> dict:
-    return {"Content-Disposition": f'attachment; filename="{name}_{datetime.now().strftime("%Y%m%d")}"'}
-
-
 @router.post("/export/findings/csv")
 async def export_findings_csv_endpoint(
     data: CSVExportRequest,
