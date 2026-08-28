@@ -63,6 +63,41 @@ class EmailDigestConfigUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class AlertIntegrationResponse(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    channel: AlertChannel
+    webhook_url: str
+    min_severity: AlertSeverity
+    is_active: bool
+    last_triggered_at: datetime | None
+    created_by: int | None
+    created_at: datetime | None
+    updated_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class EmailDigestConfigResponse(BaseModel):
+    id: int
+    organization_id: int
+    frequency: str
+    day_of_week: int
+    hour_utc: int
+    recipient_emails: str
+    min_severity: AlertSeverity
+    is_active: bool
+    last_sent_at: datetime | None
+    created_by: int | None
+    created_at: datetime | None
+    updated_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
 def _check_webhook(url: str) -> None:
     if not is_allowed_target(url):
         raise BadRequestError(
@@ -71,7 +106,7 @@ def _check_webhook(url: str) -> None:
         )
 
 
-@router.post("/integrations", response_model=AlertIntegration, status_code=status.HTTP_201_CREATED)
+@router.post("/integrations", response_model=AlertIntegrationResponse, status_code=status.HTTP_201_CREATED)
 async def create_integration(
     request: Request,
     data: AlertIntegrationCreate,
@@ -106,7 +141,7 @@ async def create_integration(
     return integration
 
 
-@router.get("/integrations", response_model=list[AlertIntegration])
+@router.get("/integrations", response_model=list[AlertIntegrationResponse])
 async def list_integrations(
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ALERT_ADMIN_DEP),
@@ -254,7 +289,7 @@ async def test_integration(
     return {"message": "Test alert sent successfully"}
 
 
-@router.post("/digest", response_model=EmailDigestConfig, status_code=status.HTTP_201_CREATED)
+@router.post("/digest", response_model=EmailDigestConfigResponse, status_code=status.HTTP_201_CREATED)
 async def create_digest_config(
     request: Request,
     data: EmailDigestConfigCreate,
