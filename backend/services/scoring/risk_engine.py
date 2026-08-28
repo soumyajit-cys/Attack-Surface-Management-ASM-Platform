@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import requests
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -34,8 +35,12 @@ EXPOSURE_MULTIPLIER = {
 TIME_DECAY_HALF_LIFE_DAYS = 30
 
 CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
-CISA_KEV_CACHE_PATH = "/tmp/cisa_kev_cache.json"
+CISA_KEV_FILE = "cisa_kev_cache.json"
 CISA_KEV_TTL_HOURS = 24
+
+CVE_RE = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
+
+DEFAULT_CONFIDENCE = 0.8
 
 
 def calculate_risk(

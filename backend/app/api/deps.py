@@ -124,11 +124,11 @@ def current_principal(
     return get_principal(request, db)
 
 
-def require_permissions(*needed: Permission):
+def require_permissions_dep(*needed: Permission):
     """Dependency factory: authenticate then enforce permissions."""
 
     def dependency(principal: Principal = Depends(current_principal)) -> Principal:
-        require_permissions(principal.permissions, *needed)
+        enforce_permissions(principal.permissions, *needed)
         return principal
 
     return dependency
