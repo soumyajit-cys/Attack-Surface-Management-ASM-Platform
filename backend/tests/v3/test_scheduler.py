@@ -73,11 +73,10 @@ class TestProcessDueScanPolicies:
 
         dispatched = []
 
-        def fake_delay(self, scan_id, **kw):
+        def fake_delay(scan_id=None, **kw):
             dispatched.append(scan_id)
 
-        monkeypatch.setattr("tasks.discovery_tasks.run_discovery.delay", fake_delay)
-        # schedule task imports delay from discovery_tasks lazily; patch module fn
+        # schedule task imports delay from discovery_tasks lazily; patch instance attr
         import tasks.discovery_tasks as dt
 
         monkeypatch.setattr(dt.run_discovery, "delay", fake_delay)
@@ -114,7 +113,7 @@ class TestProcessDueScanPolicies:
 
         import tasks.discovery_tasks as dt
         calls = []
-        monkeypatch.setattr(dt.run_discovery, "delay", lambda self, **kw: calls.append(kw))
+        monkeypatch.setattr(dt.run_discovery, "delay", lambda scan_id=None, **kw: calls.append(scan_id))
 
         result = process_due_scan_policies()
         assert result["dispatched"] == 0
@@ -151,6 +150,7 @@ class TestDigestDue:
             recipient_emails="a@b.com",
             min_severity="medium",
             is_active=True,
+            last_sent_at=None,
         )
         defaults.update(overrides)
 
