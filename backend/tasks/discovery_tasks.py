@@ -286,6 +286,14 @@ def _persist_discovery(db: Session, scan: ScanHistory, domain_name: str, results
         },
     )
     db.commit()
+
+    org_label = str(scan.organization_id)
+    for item in normalized:
+        SUBDOMAINS_DISCOVERED.labels(
+            organization=org_label,
+            source=item["source"],
+        ).inc()
+
     return persisted
 
 
@@ -342,6 +350,11 @@ def _scan_targets(
         summary["ports_open"] += len(open_ports)
         summary["open_port_numbers"].extend(p["port"] for p in open_ports)
         persist_port_results(db, sub, ports)
+        for p in ports:
+            PORTS_SCANNED.labels(
+                organization=str(scan.organization_id),
+                status=p.get("status", "unknown"),
+            ).inc()
 
         # SSL analysis — use pinned IP for connection.
         try:
@@ -351,6 +364,10 @@ def _scan_targets(
             ssl_assessment = assess_ssl_risk(ssl_data)
             persist_ssl_result(db, sub, ssl_data)
             summary["ssl"]["scanned"] += 1
+            SSL_CERTS_ANALYZED.labels(
+                organization=str(scan.organization_id),
+                risk_level=ssl_assessment["risk_level"],
+            ).inc()
             if ssl_assessment["risk_level"] in ("high", "critical"):
                 summary["ssl"]["issues"] += 1
             for finding in ssl_assessment["findings"]:
