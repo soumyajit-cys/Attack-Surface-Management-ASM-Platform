@@ -439,6 +439,16 @@ def _generate_and_persist_findings(
         new_findings.append(f)
 
     db.flush()
+
+    severity_buckets: dict[str, int] = {}
+    for finding in new_findings:
+        severity_buckets[finding.severity] = severity_buckets.get(finding.severity, 0) + 1
+    for severity, count in severity_buckets.items():
+        FINDINGS_PER_SCAN.labels(
+            organization=str(scan.organization_id),
+            severity=severity,
+        ).observe(count)
+
     return new_findings
 
 
