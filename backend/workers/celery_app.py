@@ -61,7 +61,25 @@ celery.conf.update(
     task_default_queue="celery",
     task_routes={
         "tasks.discovery_tasks.*": {"queue": "scans"},
+        "tasks.scheduler.*": {"queue": "scans"},
+        "tasks.scheduler.process_due_scan_policies": {"queue": "scans"},
+        "tasks.scheduler.send_due_email_digests": {"queue": "celery"},
     },
+
+    # ── Beat schedule (scan policies + email digests) ────────────────────────
+    beat_schedule={
+        "process-due-scan-policies": {
+            "task": "tasks.scheduler.process_due_scan_policies",
+            "schedule": 60.0,       # every minute
+            "options": {"queue": "scans"},
+        },
+        "send-due-email-digests": {
+            "task": "tasks.scheduler.send_due_email_digests",
+            "schedule": 3600.0,     # hourly
+            "options": {"queue": "celery"},
+        },
+    },
+    timezone="UTC",
 
     # ── Dead-letter sink (tasks that exhaust retries land here) ──────────────
     # Individual tasks call ``move_to_dlq()`` on permanent failure.

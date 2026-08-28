@@ -78,9 +78,6 @@ def compute_next_run(
     raise ValueError(f"Unsupported frequency: {freq}")
 
 
-_ONE_DAY = __import__("datetime").timedelta(days=1)
-
-
 def _add_months(dt: datetime, months: int) -> datetime:
     year = dt.year + (dt.month - 1 + months) // 12
     month = (dt.month - 1 + months) % 12 + 1
