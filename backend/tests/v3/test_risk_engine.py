@@ -113,8 +113,9 @@ class TestRecalculateAssetRisk:
             category="vulnerability",
         ))
 
+        # critical(9.0) * internet(1.5) * dev(1.0) * 0.8 = 10.8 → capped at 10.0
         score = recalculate_asset_risk_score(db, asset.id, exposure="internet")
-        assert score == round(9.0 * 1.5 * 1.0 * 0.8, 1)  # internet mult, critical
+        assert score == 10.0
 
     def test_no_findings_returns_zero(self, db, org_factory):
         org, user = org_factory("Risk Org3", "risk_org3", "risk_org3@test.com")

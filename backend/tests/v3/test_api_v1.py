@@ -291,7 +291,7 @@ class TestOrganizationsV1:
         headers = _login(client, username="orgv1b")
 
         response = client.post("/api/v1/organizations/api-keys", json={"name": "ci"}, headers=headers)
-        assert response.status_code == 200, response.text
+        assert response.status_code == 201, response.text
         body = response.json()
         assert body["key"].startswith("sk")
 

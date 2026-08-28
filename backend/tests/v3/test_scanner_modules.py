@@ -1,16 +1,26 @@
 """v3 scanner-module tests: registry discovery of the plugin modules."""
 
+import sys
+
 import pytest
 
 from app.scanning.registry import registry, ScanPhase
 
 
+def _evict_scanner_modules() -> None:
+    """Drop cached scanner_modules imports so discovery re-executes them."""
+    for name in [n for n in sys.modules if n == "scanner_modules" or n.startswith("scanner_modules.")]:
+        del sys.modules[name]
+
+
 @pytest.fixture(autouse=True)
 def _fresh_registry():
     """Reset the global registry so discovery runs fresh."""
+    _evict_scanner_modules()
     registry._entries.clear()
     registry._discovered = False
     yield
+    _evict_scanner_modules()
     registry._entries.clear()
     registry._discovered = False
 
