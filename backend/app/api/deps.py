@@ -19,7 +19,11 @@ from auth.token_store import token_store
 from models import APIKey, User
 
 from app.core.errors import UnauthenticatedError
-from app.core.permissions import Permission, effective_permissions, require_permissions
+from app.core.permissions import (
+    Permission,
+    effective_permissions,
+    require_permissions as enforce_permissions,
+)
 from app.db.session import get_db
 
 AuthMethod = Literal["jwt", "api_key"]
