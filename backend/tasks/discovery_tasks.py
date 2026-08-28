@@ -317,6 +317,8 @@ def _scan_targets(
     resolved_ip: str | None,
 ) -> dict:
     from models.subdomain import Subdomain
+    from app.scanning.context import ScanContext
+    from app.scanning.registry import ScanPhase, registry
 
     targets = persisted["subdomains"]
     summary = {
@@ -328,64 +330,116 @@ def _scan_targets(
         "ssl_findings": [],
         "header_findings": [],
     }
+    org_label = str(scan.organization_id)
 
     for sub in targets[:MAX_PORT_SUBDOMAINS]:
         host = sub.subdomain
 
-        # Port scan — use pinned_resolve for SSRF safety.
         try:
             pinned_ip = pinned_resolve(host)
-            ports = _run_async(lambda ip=pinned_ip: scan_ports(ip))
         except PinnedResolutionMissing:
-            # Fallback: the subdomain may not have been pinned.
             try:
                 ports = _run_async(lambda h=host: scan_ports(h))
+                open_ports = [p for p in ports if p.get("status") == "open"]
+                summary["ports_total"] += len(ports)
+                summary["ports_open"] += len(open_ports)
+                summary["open_port_numbers"].extend(p["port"] for p in open_ports)
+                persist_port_results(db, sub, ports)
+                for p in ports:
+                    PORTS_SCANNED.labels(
+                        organization=org_label,
+                        status=p.get("status", "unknown"),
+                    ).inc()
             except Exception:
                 continue
-        except Exception:
+            _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None)
             continue
 
-        open_ports = [p for p in ports if p.get("status") == "open"]
-        summary["ports_total"] += len(ports)
-        summary["ports_open"] += len(open_ports)
-        summary["open_port_numbers"].extend(p["port"] for p in open_ports)
-        persist_port_results(db, sub, ports)
-        for p in ports:
-            PORTS_SCANNED.labels(
-                organization=str(scan.organization_id),
-                status=p.get("status", "unknown"),
-            ).inc()
+        ctx = ScanContext(
+            domain=host,
+            pinned_ip=pinned_ip,
+            org_id=scan.organization_id,
+            scan_id=scan.id,
+            db=db,
+        )
 
-        # SSL analysis — use pinned IP for connection.
-        try:
-            ssl_ip = _safe_pin(host)
-            ssl_host = ssl_ip if ssl_ip else host
-            ssl_data = _run_async(lambda h=ssl_host: analyze_ssl(h))
-            ssl_assessment = assess_ssl_risk(ssl_data)
+        port_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.PORT))
+        ports = [p for p in port_results.get("ports", [])]
+        if ports:
+            open_ports = [p for p in ports if p.get("status") == "open"]
+            summary["ports_total"] += len(ports)
+            summary["ports_open"] += len(open_ports)
+            summary["open_port_numbers"].extend(p["port"] for p in open_ports)
+            persist_port_results(db, sub, ports)
+            for p in ports:
+                PORTS_SCANNED.labels(
+                    organization=org_label,
+                    status=p.get("status", "unknown"),
+                ).inc()
+
+        ssl_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.SSL))
+        ssl_data = ssl_results.get("ssl")
+        if ssl_data:
             persist_ssl_result(db, sub, ssl_data)
             summary["ssl"]["scanned"] += 1
             SSL_CERTS_ANALYZED.labels(
-                organization=str(scan.organization_id),
-                risk_level=ssl_assessment["risk_level"],
+                organization=org_label,
+                risk_level=ssl_results.get("risk_level", "unknown"),
             ).inc()
-            if ssl_assessment["risk_level"] in ("high", "critical"):
+            if ssl_results.get("risk_level") in ("high", "critical"):
                 summary["ssl"]["issues"] += 1
-            for finding in ssl_assessment["findings"]:
+            for finding in ssl_results.get("findings", []):
                 summary["ssl_findings"].append(finding)
-        except Exception:
-            logger.debug("SSL analysis failed for %s", host)
 
-        # Header analysis — use pinned IP via Host header trick.
-        try:
-            header_issues = _run_async(lambda h=host: analyze_headers(f"https://{h}"))
+        header_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.HEADER))
+        issues = header_results.get("issues", [])
+        if issues:
             summary["headers"]["scanned"] += 1
-            summary["headers"]["issues"] += len(header_issues)
-            for issue in header_issues:
+            summary["headers"]["issues"] += len(issues)
+            for issue in issues:
                 summary["header_findings"].append(issue)
-        except Exception:
-            logger.debug("Header analysis failed for %s", host)
 
     return summary
+
+
+def _run_in_context(ctx, modules) -> dict:
+    """Run all *modules* against *ctx*; merge their dict results."""
+    merged: dict = {}
+    for mod in modules:
+        try:
+            import asyncio
+            result = _run_async(lambda m=mod: m.run(ctx))
+            if isinstance(result, dict):
+                merged.update(result)
+        except Exception:
+            logger.debug("Scanner module %s failed for %s", mod.name, ctx.domain)
+    return merged
+
+
+def _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None):
+    """Fallback SSL + header scan when no pinned IP exists for *host*."""
+    org_label = None  # placeholder signature compatibility
+    try:
+        target = pinned_ip if pinned_ip else host
+        ssl_data = _run_async(lambda h=target: analyze_ssl(h))
+        ssl_assessment = assess_ssl_risk(ssl_data)
+        persist_ssl_result(db, sub, ssl_data)
+        summary["ssl"]["scanned"] += 1
+        if ssl_assessment["risk_level"] in ("high", "critical"):
+            summary["ssl"]["issues"] += 1
+        for finding in ssl_assessment["findings"]:
+            summary["ssl_findings"].append(finding)
+    except Exception:
+        logger.debug("SSL analysis failed for %s", host)
+
+    try:
+        header_issues = _run_async(lambda h=host: analyze_headers(f"https://{h}"))
+        summary["headers"]["scanned"] += 1
+        summary["headers"]["issues"] += len(header_issues)
+        for issue in header_issues:
+            summary["header_findings"].append(issue)
+    except Exception:
+        logger.debug("Header analysis failed for %s", host)
 
 
 def _safe_pin(host: str) -> str | None:
