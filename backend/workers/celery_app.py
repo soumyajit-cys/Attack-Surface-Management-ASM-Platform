@@ -79,7 +79,6 @@ celery.conf.update(
             "options": {"queue": "celery"},
         },
     },
-    timezone="UTC",
 
     # ── Dead-letter sink (tasks that exhaust retries land here) ──────────────
     # Individual tasks call ``move_to_dlq()`` on permanent failure.
