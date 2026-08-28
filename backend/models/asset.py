@@ -30,6 +30,8 @@ class Asset(Base):
 
     criticality = Column(String, default="dev", nullable=False)
 
+    exposure = Column(String, default="internet", nullable=False)
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
