@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     rate_limit_auth_requests_per_minute: int = 10
     rate_limit_scan_requests_per_minute: int = 5
 
+    kev_cache_dir: str = ""
+
     log_level: str = "INFO"
     log_format: str = "json"
 
