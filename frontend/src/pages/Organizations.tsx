@@ -38,6 +38,7 @@ export function Organizations() {
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [apiKeys, setApiKeys] = useState<APIKey[]>([])
   const [digestConfig, setDigestConfig] = useState<DigestConfig | null>(null)
+  const [digestExists, setDigestExists] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [showDigestModal, setShowDigestModal] = useState(false)
@@ -59,7 +60,13 @@ export function Organizations() {
       ])
       if (invitationsData.status === 'fulfilled') setInvitations(invitationsData.value)
       if (apiKeysData.status === 'fulfilled') setApiKeys(apiKeysData.value)
-      if (digest.status === 'fulfilled') setDigestConfig(digest.value)
+      if (digest.status === 'fulfilled') {
+        setDigestConfig(digest.value)
+        setDigestExists(true)
+      } else {
+        setDigestConfig(null)
+        setDigestExists(false)
+      }
     } catch {
       addToast({ type: 'error', title: 'Failed to load organization settings' })
     } finally {
@@ -322,7 +329,7 @@ export function Organizations() {
             <form onSubmit={handleSaveDigest} className="space-y-4">
               <div>
                 <label className="label">Frequency</label>
-                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...(digestConfig||{}), frequency: e.target.value})}>
+                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, frequency: e.target.value})}>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -330,21 +337,21 @@ export function Organizations() {
               </div>
               <div>
                 <label className="label">Day of Week</label>
-                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...(digestConfig||{}), day_of_week: parseInt(e.target.value)})}>
+                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, day_of_week: parseInt(e.target.value)})}>
                   {days.map((d, i) => <option key={d} value={i}>{d}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Hour (UTC)</label>
-                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...(digestConfig||{}), hour_utc: parseInt(e.target.value)})} />
+                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, hour_utc: parseInt(e.target.value)})} />
               </div>
               <div>
                 <label className="label">Recipient Emails (comma-separated)</label>
-                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...(digestConfig||{}), recipient_emails: e.target.value})} placeholder="security@example.com,admin@example.com" required />
+                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, recipient_emails: e.target.value})} placeholder="security@example.com,admin@example.com" required />
               </div>
               <div>
                 <label className="label">Minimum Severity</label>
-                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...(digestConfig||{}), min_severity: e.target.value})}>
+                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, min_severity: e.target.value})}>
                   <option value="critical">Critical</option>
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
@@ -352,7 +359,7 @@ export function Organizations() {
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active} onChange={(e) => setDigestConfig({...(digestConfig||{}), is_active: e.target.checked})} />
+                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, is_active: e.target.checked})} />
                 <label htmlFor="digest-active" className="text-sm text-gray-700">Active</label>
               </div>
               <div className="flex justify-end gap-2 pt-4">
