@@ -180,7 +180,7 @@ async def list_scans(
 
     total = query.count()
     items = (
-        query.order_by(ScanHistory.created_at.desc())
+        query.order_by(ScanHistory.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -199,7 +199,7 @@ async def list_scans(
                 "asset_id": s.asset_id,
                 "started_at": s.started_at,
                 "completed_at": s.completed_at,
-                "created_at": s.created_at,
+                "updated_at": s.updated_at,
             }
             for s in items
         ],

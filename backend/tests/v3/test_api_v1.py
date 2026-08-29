@@ -386,7 +386,7 @@ class TestAssetsV1:
             severity="high",
             category="general",
         ))
-        db.add(RiskScore(asset_id=asset.id, organization_id=org_id, score=8.0, exposure=1.5, confidence=0.8))
+        db.add(RiskScore(asset_id=asset.id, score=8.0, exposure=1.5, confidence=0.8))
         db.commit()
         return headers, asset.id
 
