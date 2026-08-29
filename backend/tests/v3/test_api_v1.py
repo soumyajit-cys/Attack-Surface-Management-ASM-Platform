@@ -349,6 +349,163 @@ class TestAlertingV1:
         assert second.json()["error"]["code"] == "digest_config_exists"
 
 
+class TestAssetsV1:
+    def _seed(self, client, db, username="assetv1"):
+        _register(client, org="AssetV1 Org", username=username, email=f"{username}@example.com")
+        headers = _login(client, username=username)
+
+        from models.user import User
+        from models.domain import Domain
+        from models.subdomain import Subdomain
+        from models.port import Port
+        from models.ssl_result import SSLResult
+        from models.risk_score import RiskScore
+
+        user = db.query(User).filter(User.username == username).first()
+        org_id = user.organization_id
+
+        asset = Asset(organization_id=org_id, name="assetv1.example.com", criticality="prod")
+        db.add(asset)
+        db.flush()
+
+        domain = Domain(organization_id=org_id, asset_id=asset.id, domain="assetv1.example.com")
+        db.add(domain)
+        db.flush()
+
+        sub = Subdomain(domain_id=domain.id, subdomain="www.assetv1.example.com", ip_address="192.0.2.1")
+        db.add(sub)
+        db.flush()
+
+        db.add(Port(subdomain_id=sub.id, port=443, protocol="tcp", service="https", status="open"))
+        db.add(Port(subdomain_id=sub.id, port=8080, protocol="tcp", service="http", status="closed"))
+        db.add(SSLResult(subdomain_id=sub.id, issuer="Test CA", tls_version="TLS1.3", self_signed=False))
+        db.add(Finding(
+            organization_id=org_id,
+            asset_id=asset.id,
+            title="Top finding",
+            severity="high",
+            category="general",
+        ))
+        db.add(RiskScore(asset_id=asset.id, organization_id=org_id, score=8.0, exposure=1.5, confidence=0.8))
+        db.commit()
+        return headers, asset.id
+
+    def test_list_assets_shape(self, client, db):
+        headers, _ = self._seed(client, db)
+        response = client.get("/api/v1/assets", headers=headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["total"] == 1
+        item = body["items"][0]
+        assert item["name"] == "assetv1.example.com"
+        assert item["criticality"] == "prod"
+        assert item["risk_score"] == 8.0
+        assert item["domains_count"] == 1
+        assert item["findings_count"] == 1
+
+    def test_list_assets_isolation(self, client, db):
+        self._seed(client, db, username="assetv2")
+        _register(client, org="Other AssetOSA", username="other2", email="other2@example.com")
+        headers = _login(client, username="other2")
+        body = client.get("/api/v1/assets", headers=headers).json()
+        assert body["total"] == 0
+
+    def test_asset_detail_nested(self, client, db):
+        headers, asset_id = self._seed(client, db)
+        response = client.get(f"/api/v1/assets/{asset_id}", headers=headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["name"] == "assetv1.example.com"
+        assert body["domains"][0]["domain"] == "assetv1.example.com"
+        sub = body["domains"][0]["subdomains"][0]
+        assert sub["subdomain"] == "www.assetv1.example.com"
+        assert sub["ip_address"] == "192.0.2.1"
+        open_ports = [p for p in sub["ports"] if p["status"] == "open"]
+        assert open_ports[0]["port"] == 443
+        assert sub["ssl"]["tls_version"] == "TLS1.3"
+
+    def test_asset_detail_404_other_org(self, client, db):
+        headers, asset_id = self._seed(client, db)
+        _register(client, org="Other OrgX", username="otherx", email="otherx@example.com")
+        other = _login(client, username="otherx")
+        response = client.get(f"/api/v1/assets/{asset_id}", headers=other)
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "asset_not_found"
+
+    def test_asset_graph(self, client, db):
+        headers, asset_id = self._seed(client, db)
+        response = client.get(f"/api/v1/assets/{asset_id}/graph", headers=headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["asset_id"] == asset_id
+        types = {n["type"] for n in body["nodes"]}
+        assert {"asset", "domain", "subdomain", "port", "ssl", "finding"} <= types
+        assert len(body["edges"]) >= 5
+
+
+class TestScansListV1:
+    def test_list_scans_paginated(self, client, db):
+        _register(client, org="ListScan Org", username="listscan", email="listscan@example.com")
+        headers = _login(client, username="listscan")
+
+        from models.user import User
+        user = db.query(User).filter(User.username == "listscan").first()
+        from models.scan_history import ScanHistory
+        db.add(ScanHistory(
+            organization_id=user.organization_id,
+            target="scan-list.example.com",
+            status="completed",
+        ))
+        db.add(ScanHistory(
+            organization_id=user.organization_id,
+            target="scan-list-pending.example.com",
+            status="pending",
+        ))
+        db.commit()
+
+        response = client.get("/api/v1/scans", headers=headers)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 2
+        assert len(body["items"]) == 2
+
+        filtered = client.get("/api/v1/scans?status=completed", headers=headers).json()
+        assert filtered["total"] == 1
+        assert filtered["items"][0]["status"] == "completed"
+
+
+class TestFindingDetailV1:
+    def test_get_finding(self, client, db):
+        _register(client, org="FDOrg", username="fduser", email="fduser@example.com")
+        headers = _login(client, username="fduser")
+
+        from models.user import User
+        user = db.query(User).filter(User.username == "fduser").first()
+        asset = Asset(organization_id=user.organization_id, name="fd.example.com")
+        db.add(asset)
+        db.flush()
+        finding = Finding(
+            organization_id=user.organization_id,
+            asset_id=asset.id,
+            title="Detail finding",
+            severity="medium",
+            category="headers",
+            description="Some description",
+        )
+        db.add(finding)
+        db.commit()
+
+        response = client.get(f"/api/v1/findings/{finding.id}", headers=headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["title"] == "Detail finding"
+        assert body["asset_name"] == "fd.example.com"
+
+        other = client.get("/api/v1/findings/999999", headers=headers)
+        assert other.status_code == 404
+        assert other.json()["error"]["code"] == "finding_not_found"
+
+
 class TestApiKeyAuth:
     def test_api_key_authenticates_findings(self, client, db):
         _register(client, org="KeyV1 Org", username="keyv1", email="keyv1@example.com")
