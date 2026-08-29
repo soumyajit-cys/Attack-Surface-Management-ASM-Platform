@@ -130,6 +130,10 @@ class ApiClient {
     localStorage.setItem('api_key', key)
   }
 
+  get isAuthenticated(): boolean {
+    return !!this.accessToken
+  }
+
   private processQueue(error: Error | null, token: string | null) {
     this.failedQueue.forEach(({ resolve, reject }) => {
       if (error) reject(error)

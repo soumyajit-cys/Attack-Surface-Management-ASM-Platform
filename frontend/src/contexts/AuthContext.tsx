@@ -1,13 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { api } from '../lib/api'
-
-interface User {
-  id: number
-  username: string
-  email: string
-  role: string
-  organization_id: number
-}
+import { api, AuthUser } from '../lib/api'
 
 interface Organization {
   id: number
@@ -15,36 +7,41 @@ interface Organization {
 }
 
 interface AuthContextType {
-  user: User | null
+  user: AuthUser | null
   organization: Organization | null
   loading: boolean
   login: (username: string, password: string) => Promise<void>
   register: (data: { username: string; email: string; password: string; organization: string }) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
+  hasPermission: (permission: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const applyUser = useCallback((u: AuthUser) => {
+    setUser(u)
+    setOrganization({ id: u.organization_id, name: u.organization_name || '' })
+  }, [])
 
   const refreshUser = useCallback(async () => {
     try {
       const response = await api.getMe()
-      setUser(response.data)
-      setOrganization({ id: response.data.organization_id, name: '' })
+      applyUser(response.data)
     } catch {
       setUser(null)
       setOrganization(null)
     }
-  }, [])
+  }, [applyUser])
 
   useEffect(() => {
     api.loadTokens()
-    if (api.accessToken) {
+    if (api.isAuthenticated) {
       refreshUser().finally(() => setLoading(false))
     } else {
       setLoading(false)
@@ -52,13 +49,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser])
 
   const login = async (username: string, password: string) => {
-    await api.login(username, password)
-    await refreshUser()
+    const bundle = await api.login(username, password)
+    if (bundle.user) applyUser(bundle.user)
+    else await refreshUser()
   }
 
   const register = async (data: { username: string; email: string; password: string; organization: string }) => {
-    await api.register(data)
-    await refreshUser()
+    const bundle = await api.register(data)
+    if (bundle.user) applyUser(bundle.user)
+    else await refreshUser()
   }
 
   const logout = async () => {
@@ -67,8 +66,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOrganization(null)
   }
 
+  const hasPermission = useCallback(
+    (permission: string) => (user?.permissions || []).includes(permission),
+    [user]
+  )
+
   return (
-    <AuthContext.Provider value={{ user, organization, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, organization, loading, login, register, logout, refreshUser, hasPermission }}>
       {children}
     </AuthContext.Provider>
   )
