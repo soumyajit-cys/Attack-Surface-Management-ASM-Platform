@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     alerting,
+    assets,
     auth,
     dashboard,
     findings,
@@ -18,6 +19,7 @@ api_v1_router.include_router(auth.router, prefix="/v1")
 api_v1_router.include_router(scans.router, prefix="/v1")
 api_v1_router.include_router(findings.router, prefix="/v1")
 api_v1_router.include_router(dashboard.router, prefix="/v1")
+api_v1_router.include_router(assets.router, prefix="/v1")
 api_v1_router.include_router(organizations.router, prefix="/v1")
 api_v1_router.include_router(alerting.router, prefix="/v1")
 api_v1_router.include_router(reports.router, prefix="/v1")
