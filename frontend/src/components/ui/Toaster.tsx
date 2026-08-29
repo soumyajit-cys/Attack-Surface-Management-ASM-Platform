@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react'
 
 interface Toast {
@@ -53,12 +53,14 @@ function Toast({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => vo
 }
 
 function Toaster() {
-  const { toasts } = React.useContext(ToastContext)
+  const context = React.useContext(ToastContext)
+  if (!context) return null
+  const { toasts, removeToast } = context
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
       {toasts.map((toast) => (
-        <Toast key={toast.id} toast={toast} onRemove={() => {}} />
+        <Toast key={toast.id} toast={toast} onRemove={removeToast} />
       ))}
     </div>
   )
@@ -67,14 +69,14 @@ function Toaster() {
 function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }
+
   const addToast = (toast: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).substr(2, 9)
     setToasts((prev) => [...prev, { ...toast, id }])
     setTimeout(() => removeToast(id), 5000)
-  }
-
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
   return (
