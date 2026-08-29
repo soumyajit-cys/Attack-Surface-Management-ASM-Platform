@@ -71,8 +71,8 @@ export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, heigh
       .join('line')
       .attr('stroke-width', 1.5);
 
-    const node = svg.append('g')
-      .selectAll('g')
+    const node: d3.Selection<SVGGElement, GraphNode, SVGSVGElement, unknown> = svg
+      .selectAll<SVGGElement, GraphNode>('g')
       .data(nodes)
       .join('g')
       .call(drag(simulation));
