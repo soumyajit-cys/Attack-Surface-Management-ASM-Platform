@@ -63,7 +63,7 @@ class ApiClient {
     )
 
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => response.data,
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
@@ -144,26 +144,23 @@ class ApiClient {
 
   // ── auth ───────────────────────────────────────────────────────────────────
   async login(username: string, password: string): Promise<TokenBundle> {
-    const response = await this.client.post<TokenBundle>('/auth/login', { username, password })
-    const data = response.data
+    const data = await this.client.post<TokenBundle>('/auth/login', { username, password })
     this.setTokens(data.access_token, data.refresh_token)
     return data
   }
 
   async register(data: { username: string; email: string; password: string; organization: string }): Promise<TokenBundle> {
-    const response = await this.client.post<TokenBundle>('/auth/register', data)
-    const bundle = response.data
+    const bundle = await this.client.post<TokenBundle>('/auth/register', data)
     this.setTokens(bundle.access_token, bundle.refresh_token)
     return bundle
   }
 
   async refresh() {
-    const response = await this.client.post('/auth/refresh', {
+    const data = await this.client.post('/auth/refresh', {
       refresh_token: this.refreshToken,
     })
-    const { access_token, refresh_token } = response.data
-    this.setTokens(access_token, refresh_token)
-    return response.data
+    this.setTokens(data.access_token, data.refresh_token)
+    return data
   }
 
   async logout() {
