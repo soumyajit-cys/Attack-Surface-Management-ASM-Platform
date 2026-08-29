@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { MessageSquare, Mail, Plus, Loader2, Trash2, Check, AlertTriangle, Zap, Send, TestTube2 } from 'lucide-react'
+import { MessageSquare, Plus, Trash2, Check, AlertTriangle, Zap, TestTube2 } from 'lucide-react'
 
 interface AlertIntegration {
   id: number
@@ -263,7 +262,7 @@ export function Alerting() {
             <form onSubmit={(e) => { e.preventDefault(); handleSaveDigest(e); }} className="space-y-4">
               <div>
                 <label className="label">Frequency</label>
-                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...(digestConfig||{}), frequency: e.target.value})}>
+                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, frequency: e.target.value})}>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -271,26 +270,26 @@ export function Alerting() {
               </div>
               <div>
                 <label className="label">Day of Week</label>
-                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...(digestConfig||{}), day_of_week: parseInt(e.target.value)})}>
+                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, day_of_week: parseInt(e.target.value)})}>
                   {days.map((d, i) => <option key={d} value={i}>{d}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Hour (UTC)</label>
-                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...(digestConfig||{}), hour_utc: parseInt(e.target.value)})} />
+                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, hour_utc: parseInt(e.target.value)})} />
               </div>
               <div>
                 <label className="label">Recipient Emails (comma-separated)</label>
-                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...(digestConfig||{}), recipient_emails: e.target.value})} placeholder="security@example.com,admin@example.com" required />
+                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, recipient_emails: e.target.value})} placeholder="security@example.com,admin@example.com" required />
               </div>
               <div>
                 <label className="label">Minimum Severity</label>
-                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...(digestConfig||{}), min_severity: e.target.value})}>
+                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, min_severity: e.target.value})}>
                   {severities.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active} onChange={(e) => setDigestConfig({...(digestConfig||{}), is_active: e.target.checked})} />
+                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, is_active: e.target.checked})} />
                 <label htmlFor="digest-active" className="text-sm text-gray-700">Active</label>
               </div>
               <div className="flex justify-end gap-2 pt-4">
