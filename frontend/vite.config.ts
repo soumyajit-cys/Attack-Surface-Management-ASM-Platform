@@ -10,50 +10,6 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
-      '/auth': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/scan': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/scan-policies': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/organizations': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/alerting': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/reports': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/graph': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/dashboard': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/findings': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/metrics': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
     },
   },
 })
