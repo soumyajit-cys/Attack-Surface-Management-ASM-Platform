@@ -53,23 +53,20 @@ export function Organizations() {
 
   const fetchData = async () => {
     setLoading(true)
-    // Mock data
-    setInvitations([
-      { id: 1, email: 'analyst@example.com', role: 'analyst', status: 'pending', created_at: '2024-01-20T10:00:00Z', expires_at: '2024-01-27T10:00:00Z' },
-    ])
-    setApiKeys([
-      { id: 1, name: 'CI/CD Pipeline', key_prefix: 'sk', scopes: 'read,write', is_active: true, last_used_at: '2024-01-20T08:00:00Z', expires_at: null, created_at: '2024-01-15T10:00:00Z' },
-      { id: 2, name: 'Monitoring', key_prefix: 'sk', scopes: 'read', is_active: true, last_used_at: '2024-01-19T15:00:00Z', expires_at: '2024-12-31T23:59:59Z', created_at: '2024-01-10T10:00:00Z' },
-    ])
-    setDigestConfig({
-      frequency: 'weekly',
-      day_of_week: 1,
-      hour_utc: 9,
-      recipient_emails: 'security@example.com,admin@example.com',
-      min_severity: 'medium',
-      is_active: true,
-    })
-    setLoading(false)
+    try {
+      const [invitationsData, apiKeysData, digest] = await Promise.allSettled([
+        api.listInvitations(),
+        api.listApiKeys(),
+        api.getDigestConfig(),
+      ])
+      if (invitationsData.status === 'fulfilled') setInvitations(invitationsData.value)
+      if (apiKeysData.status === 'fulfilled') setApiKeys(apiKeysData.value)
+      if (digest.status === 'fulfilled') setDigestConfig(digest.value)
+    } catch {
+      addToast({ type: 'error', title: 'Failed to load organization settings' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -77,37 +74,45 @@ export function Organizations() {
   const handleCreateInvitation = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // await api.createInvitation({ email: newInviteEmail, role: newInviteRole })
-      setInvitations([...invitations, { id: Date.now(), email: newInviteEmail, role: newInviteRole, status: 'pending', created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 7*86400000).toISOString() }])
+      await api.createInvitation(newInviteEmail, newInviteRole)
       setShowInviteModal(false)
       setNewInviteEmail('')
       addToast({ type: 'success', title: 'Invitation sent', message: `Invited ${newInviteEmail} as ${newInviteRole}` })
+      fetchData()
     } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to create invitation', message: error.response?.data?.detail })
+      addToast({ type: 'error', title: 'Failed to create invitation', message: error.message })
     }
   }
 
   const handleCreateApiKey = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Mock response
-      const mockKey = `sk_${Math.random().toString(36).substr(2, 32)}`
-      setApiKeys([...apiKeys, { id: Date.now(), name: newKeyName, key_prefix: 'sk', scopes: newKeyScopes, is_active: true, last_used_at: null, expires_at: newKeyExpiresDays ? new Date(Date.now() + parseInt(newKeyExpiresDays)*86400000).toISOString() : null, created_at: new Date().toISOString(), key: mockKey }])
-      setNewKey(mockKey)
+      const response = await api.createApiKey({
+        name: newKeyName,
+        scopes: newKeyScopes,
+        expires_days: newKeyExpiresDays ? parseInt(newKeyExpiresDays) : undefined,
+      })
+      setNewKey(response.key)
       setShowKeyModal(false)
-      setShowKeyModal(true) // Show modal with key
+      setShowKeyModal(true)
       setNewKeyName('')
       setNewKeyExpiresDays('')
+      fetchData()
       addToast({ type: 'success', title: 'API key created', message: "Copy the key now - it won't be shown again" })
     } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to create API key', message: error.response?.data?.detail })
+      addToast({ type: 'error', title: 'Failed to create API key', message: error.message })
     }
   }
 
   const handleRevokeKey = async (keyId: number) => {
     if (!confirm('Revoke this API key? This cannot be undone.')) return
-    setApiKeys(apiKeys.filter(k => k.id !== keyId))
-    addToast({ type: 'success', title: 'API key revoked' })
+    try {
+      await api.deleteApiKey(keyId)
+      setApiKeys(apiKeys.filter(k => k.id !== keyId))
+      addToast({ type: 'success', title: 'API key revoked' })
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to revoke key', message: error.message })
+    }
   }
 
   const handleCopyKey = (key: string) => {
@@ -117,13 +122,20 @@ export function Organizations() {
 
   const handleSaveDigest = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!digestConfig) return
     try {
-      // await api.updateDigestConfig({ ...digestConfig, is_active: true })
-      setDigestConfig({ ...digestConfig!, is_active: true })
+      const payload = {
+        frequency: digestConfig.frequency,
+        day_of_week: digestConfig.day_of_week,
+        hour_utc: digestConfig.hour_utc,
+        recipient_emails: digestConfig.recipient_emails,
+        min_severity: digestConfig.min_severity,
+      }
+      await api.updateDigestConfig({ ...payload, is_active: digestConfig.is_active })
       setShowDigestModal(false)
       addToast({ type: 'success', title: 'Digest config saved' })
     } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to save', message: error.response?.data?.detail })
+      addToast({ type: 'error', title: 'Failed to save', message: error.message })
     }
   }
 
