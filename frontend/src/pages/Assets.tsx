@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { Server, Search, Filter, Plus, Loader2, MoreHorizontal, Trash2, Edit, Eye, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Asset {
   id: number
@@ -17,6 +17,7 @@ interface Asset {
 }
 
 export function Assets() {
+  const navigate = useNavigate()
   const { addToast } = useToast()
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,27 +25,20 @@ export function Assets() {
   const [criticalityFilter, setCriticalityFilter] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'criticality' | 'findings' | 'risk'>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [showModal, setShowModal] = useState(false)
-  const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
 
   const fetchAssets = async () => {
     setLoading(true)
     try {
-      // Mock data for now
-      setAssets([
-        { id: 1, name: 'example.com', criticality: 'prod', created_at: '2024-01-15', updated_at: '2024-01-20', domains_count: 3, findings_count: 12, open_ports: 8, risk_score: 7.2 },
-        { id: 2, name: 'api.example.com', criticality: 'prod', created_at: '2024-02-01', updated_at: '2024-02-15', domains_count: 2, findings_count: 8, open_ports: 5, risk_score: 6.8 },
-        { id: 3, name: 'staging.example.com', criticality: 'staging', created_at: '2024-03-10', updated_at: '2024-03-20', domains_count: 1, findings_count: 3, open_ports: 2, risk_score: 3.4 },
-        { id: 4, name: 'dev.example.com', criticality: 'dev', created_at: '2024-04-01', updated_at: '2024-04-10', domains_count: 1, findings_count: 1, open_ports: 1, risk_score: 1.2 },
-      ])
-    } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load assets' })
+      const data = await api.getAssets({ page: 1, page_size: 100, search: search || undefined, criticality: criticalityFilter || undefined })
+      setAssets(data.items)
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to load assets', message: error.message })
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchAssets() }, [])
+  useEffect(() => { fetchAssets() }, [search, criticalityFilter])
 
   const handleSort = (field: 'name' | 'criticality' | 'findings' | 'risk') => {
     if (sortBy === field) {
@@ -56,8 +50,6 @@ export function Assets() {
   }
 
   const filteredAssets = assets
-    .filter((a) => a.name.toLowerCase().includes(search.toLowerCase()))
-    .filter((a) => !criticalityFilter || a.criticality === criticalityFilter)
     .sort((a, b) => {
       let aVal = a[sortBy], bVal = b[sortBy]
       if (typeof aVal === 'string') aVal = aVal.toLowerCase()
@@ -74,10 +66,6 @@ export function Assets() {
           <h1 className="text-2xl font-bold text-gray-900">Assets</h1>
           <p className="text-gray-600">Manage your asset inventory</p>
         </div>
-        <button className="btn-primary flex items-center gap-2" onClick={() => { setEditingAsset(null); setShowModal(true); }}>
-          <Plus className="w-4 h-4" />
-          Add Asset
-        </button>
       </div>
 
       <div className="card">
@@ -154,17 +142,12 @@ export function Assets() {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" title="View">
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" title="Edit" onClick={() => { setEditingAsset(asset); setShowModal(true); }}>
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button className="p-2 rounded-lg hover:bg-danger-100 text-danger-500 hover:text-danger-700" title="Delete">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => navigate(`/assets/${asset.id}`)}
+                      className="btn-secondary text-sm"
+                    >
+                      View
+                    </button>
                   </td>
                 </tr>
               ))}
