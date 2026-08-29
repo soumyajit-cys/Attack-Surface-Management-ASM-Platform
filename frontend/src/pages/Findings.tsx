@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { Search, Loader2, AlertTriangle, ChevronLeft, ChevronRight, AlertCircle, MinusCircle, Info } from 'lucide-react'
+import { Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Finding {
   id: number
@@ -49,17 +49,8 @@ export function Findings() {
 
   useEffect(() => { fetchFindings() }, [page, severityFilter])
 
-  const severityBadges: Record<string, string> = {
-    critical: 'badge-critical',
-    high: 'badge-high',
-    medium: 'badge-medium',
-    low: 'badge-low',
-    info: 'badge-info',
-  }
-
   const filteredFindings = findings.filter(f =>
-    f.title.toLowerCase().includes(search.toLowerCase()) &&
-    (!severityFilter || f.severity === severityFilter)
+    f.title.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -131,7 +122,14 @@ export function Findings() {
                   </td>
                 </tr>
               ))}
-              {filteredFindings.length === 0 && (
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                    <Loader2 className="w-6 h-6 animate-spin inline-block text-primary-600" />
+                  </td>
+                </tr>
+              )}
+              {!loading && filteredFindings.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
                     No findings found
