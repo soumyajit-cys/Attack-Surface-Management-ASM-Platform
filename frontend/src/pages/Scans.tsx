@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
 import { Scan, Loader2, Play, Clock, CheckCircle, AlertCircle, MinusCircle } from 'lucide-react'
@@ -116,6 +116,18 @@ export function Scans() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
+              {loading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                    <Loader2 className="w-6 h-6 animate-spin inline-block text-primary-600" />
+                  </td>
+                </tr>
+              )}
+              {!loading && scans.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">No scans found. Start a scan to begin.</td>
+                </tr>
+              )}
               {scans.map((scan) => (
                 <tr key={scan.id} className="hover:bg-gray-50">
                   <td className="px-4 py-4 font-medium text-gray-900">{scan.target}</td>
