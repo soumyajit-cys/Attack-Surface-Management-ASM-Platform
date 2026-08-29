@@ -287,7 +287,7 @@ class ApiClient {
   }
 
   // ── alerting ───────────────────────────────────────────────────────────────
-  async createAlertIntegration(data: { name: string; channel: string; webhook_url: string; min_severity: string }) {
+  async createAlertIntegration(data: { name: string; channel: string; webhook_url: string; min_severity: string; secret?: string }) {
     return this.client.post('/alerting/integrations', data)
   }
 
