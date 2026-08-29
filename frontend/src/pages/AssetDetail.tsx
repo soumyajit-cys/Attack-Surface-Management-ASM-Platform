@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
@@ -93,16 +93,6 @@ export function AssetDetail() {
       case 'staging': return 'badge-high'
       case 'dev': return 'badge-info'
       default: return 'badge-low'
-    }
-  }
-
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'critical': return 'text-danger-600 bg-danger-100'
-      case 'high': return 'text-danger-600 bg-danger-100'
-      case 'medium': return 'text-warning-600 bg-warning-100'
-      case 'low': return 'text-success-600 bg-success-100'
-      default: return 'text-gray-600 bg-gray-100'
     }
   }
 
