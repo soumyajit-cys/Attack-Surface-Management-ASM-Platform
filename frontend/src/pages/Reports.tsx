@@ -87,7 +87,7 @@ export function Reports() {
     }
   }
 
-  const handleGeneratePdf = async (assetId?: string) => {
+  const handleGeneratePdf = async (assetId?: number) => {
     setPdfLoading(true)
     try {
       const blob = await api.getExecutiveSummaryPdf(assetId || undefined)
