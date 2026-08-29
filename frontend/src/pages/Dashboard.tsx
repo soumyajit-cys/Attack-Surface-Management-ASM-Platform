@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
 import {
   Server,
   AlertTriangle,
   Scan,
+  FileText,
   Clock,
   Plus,
   RefreshCw,
@@ -48,7 +48,6 @@ interface FindingSeverity {
 }
 
 export function Dashboard() {
-  const { organization } = useAuth()
   const { addToast } = useToast()
   const [data, setData] = useState<DashboardData | null>(null)
   const [riskTrend, setRiskTrend] = useState<RiskTrendPoint[]>([])
