@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { ArrowLeft, AlertTriangle, AlertCircle, MinusCircle, Info } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
 interface FindingDetailData {
   id: number

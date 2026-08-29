@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { Search, Filter, Loader2, AlertTriangle, ChevronLeft, ChevronRight, AlertCircle, MinusCircle, Info } from 'lucide-react'
+import { Search, Loader2, AlertTriangle, ChevronLeft, ChevronRight, AlertCircle, MinusCircle, Info } from 'lucide-react'
 
 interface Finding {
   id: number
@@ -24,21 +23,13 @@ const severityColors: Record<string, string> = {
   info: 'badge-info',
 }
 
-const severityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  critical: AlertTriangle,
-  high: AlertTriangle,
-  medium: AlertCircle,
-  low: MinusCircle,
-  info: Info,
-}
-
 export function Findings() {
   const { addToast } = useToast()
   const [findings, setFindings] = useState<Finding[]>([])
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const pageSize = 20
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('')
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
@@ -56,7 +47,7 @@ export function Findings() {
     }
   }
 
-  useEffect(() => { fetchFindings() }, [page, pageSize, severityFilter])
+  useEffect(() => { fetchFindings() }, [page, severityFilter])
 
   const severityBadges: Record<string, string> = {
     critical: 'badge-critical',
