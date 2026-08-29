@@ -87,15 +87,6 @@ def _asset_counts(db: Session, org_id: int, assets) -> dict[int, dict]:
     if not ids:
         return {}
 
-    domain_counts = dict(
-        db.query(
-            Asset.domains.and_(),
-        ).filter(Asset.id.in_(ids)).group_by(Asset.id).having(func.count() >= 0).all()
-    ) if False else {
-        # Fall back to relationship access; small orgs only.
-        a.id: len(a.domains) for a in assets
-    }
-
     finding_counts = dict(
         db.query(Finding.asset_id, func.count(Finding.id))
         .filter(Finding.asset_id.in_(ids), Finding.organization_id == org_id)
@@ -122,7 +113,7 @@ def _asset_counts(db: Session, org_id: int, assets) -> dict[int, dict]:
     result: dict[int, dict] = {}
     for a in assets:
         result[a.id] = {
-            "domains_count": domain_counts.get(a.id, len(a.domains)),
+            "domains_count": len(a.domains),
             "findings_count": finding_counts.get(a.id, 0),
             "open_ports": sum(
                 open_port_counts.get(s.id, 0)

@@ -8,7 +8,7 @@ Replaces the legacy ``/scan`` routes with:
 
 import re
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from models.scan_history import ScanHistory
@@ -161,6 +161,48 @@ async def check_ownership_verification(
         "verified": True,
         "message": message,
         "domain": domain,
+    }
+
+
+@router.get("")
+async def list_scans(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: str | None = None,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_READ_SCAN_DEP),
+):
+    query = db.query(ScanHistory).filter(
+        ScanHistory.organization_id == principal.organization_id
+    )
+    if status:
+        query = query.filter(ScanHistory.status == status)
+
+    total = query.count()
+    items = (
+        query.order_by(ScanHistory.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [
+            {
+                "id": s.id,
+                "target": s.target,
+                "status": s.status,
+                "error": s.error,
+                "asset_id": s.asset_id,
+                "started_at": s.started_at,
+                "completed_at": s.completed_at,
+                "created_at": s.created_at,
+            }
+            for s in items
+        ],
     }
 
 
