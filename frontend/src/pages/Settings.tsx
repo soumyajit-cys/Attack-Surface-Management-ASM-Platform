@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
-import { User, Lock, Bell, Shield, Palette, Moon, Sun, Globe, Key, Trash2, Loader2, AlertTriangle } from 'lucide-react'
+import { User, Lock, Bell, Shield, Palette, Moon, Sun, Globe, Loader2, AlertTriangle } from 'lucide-react'
 
 export function Settings() {
-  const { user, refreshUser } = useAuth()
+  const { user } = useAuth()
   const { addToast } = useToast()
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'appearance' | 'danger'>('profile')
   const [profileData, setProfileData] = useState({ username: user?.username || '', email: user?.email || '' })
