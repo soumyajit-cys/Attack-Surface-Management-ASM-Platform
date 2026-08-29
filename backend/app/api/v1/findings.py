@@ -58,7 +58,48 @@ async def list_findings(
                 "description": f.description,
                 "recommendation": f.recommendation,
                 "created_at": f.created_at,
+                "asset_name": _asset_name(db, f.asset_id, principal.organization_id),
             }
             for f in items
         ],
+    }
+
+
+def _asset_name(db: Session, asset_id: int, org_id: int) -> str | None:
+    from models.asset import Asset
+
+    asset = db.query(Asset).filter(
+        Asset.id == asset_id,
+        Asset.organization_id == org_id,
+    ).first()
+    return asset.name if asset else None
+
+
+@router.get("/{finding_id}")
+async def get_finding(
+    finding_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_FINDINGS_DEP),
+):
+    finding = db.query(Finding).filter(
+        Finding.id == finding_id,
+        Finding.organization_id == principal.organization_id,
+    ).first()
+    if not finding:
+        from app.core.errors import NotFoundError
+
+        raise NotFoundError("Finding not found", code="finding_not_found")
+
+    return {
+        "id": finding.id,
+        "asset_id": finding.asset_id,
+        "asset_name": _asset_name(db, finding.asset_id, principal.organization_id),
+        "organization_id": finding.organization_id,
+        "title": finding.title,
+        "severity": finding.severity,
+        "category": finding.category,
+        "description": finding.description,
+        "recommendation": finding.recommendation,
+        "created_at": finding.created_at,
+        "updated_at": finding.updated_at,
     }
