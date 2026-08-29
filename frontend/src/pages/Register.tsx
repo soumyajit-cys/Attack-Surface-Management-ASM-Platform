@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
+import { getApiErrorMessage } from '../lib/api'
 import { Shield, Mail, Lock, Building2, User, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 export function Register() {

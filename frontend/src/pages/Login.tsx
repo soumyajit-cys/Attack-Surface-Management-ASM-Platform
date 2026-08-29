@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
+import { getApiErrorMessage } from '../lib/api'
 import { Shield, Mail, Lock, Building2, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 export function Login() {
@@ -21,7 +22,7 @@ export function Login() {
       addToast({ type: 'success', title: 'Welcome back!', message: `Logged in as ${username}` })
       navigate('/')
     } catch (error: any) {
-      addToast({ type: 'error', title: 'Login failed', message: error.response?.data?.detail || 'Invalid credentials' })
+      addToast({ type: 'error', title: 'Login failed', message: getApiErrorMessage(error) || 'Invalid credentials' })
     } finally {
       setLoading(false)
     }
