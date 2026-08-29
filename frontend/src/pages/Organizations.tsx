@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { Users, Key, Mail, Plus, Loader2, Trash2, Copy, Check, Bell, Shield, Settings, LogOut } from 'lucide-react'
+import { Plus, Trash2, Copy } from 'lucide-react'
 
 interface Invitation {
   id: number
@@ -35,7 +34,6 @@ interface DigestConfig {
 }
 
 export function Organizations() {
-  const { organization, user } = useAuth()
   const { addToast } = useToast()
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [apiKeys, setApiKeys] = useState<APIKey[]>([])
