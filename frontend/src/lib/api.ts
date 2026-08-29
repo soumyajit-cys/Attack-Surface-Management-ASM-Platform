@@ -92,7 +92,7 @@ class ApiClient {
             originalRequest.headers.Authorization = `Bearer ${access_token}`
             return this.client(originalRequest)
           } catch (err) {
-            this.processQueue(err, null)
+            this.processQueue(err instanceof Error ? err : new Error(String(err)), null)
             this.clearTokens()
             window.location.href = '/login'
             return Promise.reject(err)
@@ -318,56 +318,49 @@ class ApiClient {
 
   // ── reports ────────────────────────────────────────────────────────────────
   async exportFindingsCsv(params?: { asset_id?: number; since?: string; severity?: string }) {
-    const response = await this.client.post('/reports/export/findings/csv', params ?? {}, {
+    return this.client.post<Blob>('/reports/export/findings/csv', params ?? {}, {
       responseType: 'blob',
     })
-    return response.data as Blob
   }
 
   async exportAssetsCsv() {
-    const response = await this.client.post('/reports/export/assets/csv', {}, {
+    return this.client.post<Blob>('/reports/export/assets/csv', {}, {
       responseType: 'blob',
     })
-    return response.data as Blob
   }
 
   async exportScansCsv(params?: { since?: string }) {
-    const response = await this.client.post('/reports/export/scans/csv', params ?? {}, {
+    return this.client.post<Blob>('/reports/export/scans/csv', params ?? {}, {
       responseType: 'blob',
     })
-    return response.data as Blob
   }
 
   async exportDomainsCsv() {
-    const response = await this.client.post('/reports/export/domains/csv', {}, {
+    return this.client.post<Blob>('/reports/export/domains/csv', {}, {
       responseType: 'blob',
     })
-    return response.data as Blob
   }
 
   async exportAllCsv() {
-    const response = await this.client.post('/reports/export/all/csv', {}, {
+    return this.client.post<Blob>('/reports/export/all/csv', {}, {
       responseType: 'blob',
     })
-    return response.data as Blob
   }
 
   async getExecutiveSummaryPdf(assetId?: number, since?: string) {
     const params: Record<string, string | number> = {}
     if (assetId) params.asset_id = assetId
     if (since) params.since = since
-    const response = await this.client.get('/reports/pdf/executive-summary', {
+    return this.client.get<Blob>('/reports/pdf/executive-summary', {
       params,
       responseType: 'blob',
     })
-    return response.data as Blob
   }
 
   async getFindingPdf(findingId: number) {
-    const response = await this.client.get(`/reports/pdf/finding/${findingId}`, {
+    return this.client.get<Blob>(`/reports/pdf/finding/${findingId}`, {
       responseType: 'blob',
     })
-    return response.data as Blob
   }
 }
 
