@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { Scan, Loader2, Plus, Play, RefreshCw, Clock, CheckCircle, AlertCircle, MinusCircle } from 'lucide-react'
+import { Scan, Loader2, Play, Clock, CheckCircle, AlertCircle, MinusCircle } from 'lucide-react'
 
 interface Scan {
   id: number

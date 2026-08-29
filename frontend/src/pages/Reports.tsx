@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
-import { FileText, Download, FileSpreadsheet, File, Loader2, Calendar, Filter, Save, AlertTriangle, Server, Scan, Globe } from 'lucide-react'
+import { FileText, FileSpreadsheet, Loader2, AlertTriangle, Server, Scan, Globe } from 'lucide-react'
 
 export function Reports() {
   const { addToast } = useToast()
@@ -115,7 +115,7 @@ export function Reports() {
 
   const pdfItems = [
     { key: 'executive', label: 'Executive Summary', description: 'Risk posture overview with top findings and recommendations', action: () => handleGeneratePdf(), loading: pdfLoading },
-    { key: 'asset', label: 'Asset-Specific Report', description: 'Detailed report for a specific asset (enter Asset ID)', action: () => handleGeneratePdf(pdfAssetId), loading: pdfLoading },
+    { key: 'asset', label: 'Asset-Specific Report', description: 'Detailed report for a specific asset (enter Asset ID)', action: () => handleGeneratePdf(pdfAssetId ? Number(pdfAssetId) : undefined), loading: pdfLoading },
   ]
 
   return (

@@ -56,8 +56,8 @@ export function Dashboard() {
 
   const fetchDashboard = async () => {
     try {
-      const response = await api.getDashboard()
-      setData(response.data)
+      const data = await api.getDashboard()
+      setData(data)
     } catch (error) {
       addToast({ type: 'error', title: 'Failed to load dashboard', message: 'Please try again' })
     } finally {
