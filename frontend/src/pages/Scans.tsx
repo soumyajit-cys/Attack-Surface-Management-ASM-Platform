@@ -21,13 +21,15 @@ export function Scans() {
   const [scanDomain, setScanDomain] = useState('')
 
   const fetchScans = async () => {
-    // Mock data
-    setScans([
-      { id: 1, target: 'example.com', status: 'completed', error: null, started_at: '2024-01-20T10:00:00Z', completed_at: '2024-01-20T10:05:00Z' },
-      { id: 2, target: 'api.example.com', status: 'completed', error: null, started_at: '2024-01-19T10:00:00Z', completed_at: '2024-01-19T10:03:00Z' },
-      { id: 3, target: 'staging.example.com', status: 'running', error: null, started_at: '2024-01-20T11:00:00Z', completed_at: null },
-    ])
-    setLoading(false)
+    setLoading(true)
+    try {
+      const data = await api.getScans({ page: 1, page_size: 50 })
+      setScans(data.items)
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to load scans', message: error.message })
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchScans() }, [])
@@ -42,7 +44,7 @@ export function Scans() {
       setScanDomain('')
       fetchScans()
     } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to start scan', message: error.response?.data?.detail })
+      addToast({ type: 'error', title: 'Failed to start scan', message: error.message })
     } finally {
       setStartingScan(false)
     }
