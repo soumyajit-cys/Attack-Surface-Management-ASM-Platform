@@ -1,6 +1,33 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_BASE || ''
+export const API_PREFIX = import.meta.env.VITE_API_BASE || '/api/v1'
+
+/** Pull a human-readable message out of the v1 error envelope. */
+export function getApiErrorMessage(error: unknown, fallback = 'Something went wrong'): string {
+  if (axios.isAxiosError(error)) {
+    const envelope = error.response?.data as { error?: { message?: string } } | undefined
+    if (envelope?.error?.message) return envelope.error.message
+    if (typeof error.response?.data === 'string' && error.response.data) return error.response.data
+    if (error.message) return error.message
+  }
+  return fallback
+}
+
+export interface AuthUser {
+  id: number
+  username: string
+  email: string
+  role: string
+  organization_id: number
+  organization_name: string | null
+  permissions: string[]
+}
+
+export interface TokenBundle {
+  access_token: string
+  refresh_token: string
+  user?: AuthUser
+}
 
 class ApiClient {
   private client: AxiosInstance
@@ -14,7 +41,7 @@ class ApiClient {
 
   constructor() {
     this.client = axios.create({
-      baseURL: API_BASE,
+      baseURL: API_PREFIX,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -25,6 +52,10 @@ class ApiClient {
       (config: InternalAxiosRequestConfig) => {
         if (this.accessToken) {
           config.headers.Authorization = `Bearer ${this.accessToken}`
+        }
+        const apiKey = localStorage.getItem('api_key')
+        if (apiKey && !config.headers.Authorization) {
+          config.headers['X-API-Key'] = apiKey
         }
         return config
       },
@@ -52,7 +83,7 @@ class ApiClient {
           this.isRefreshing = true
 
           try {
-            const response = await axios.post(`${API_BASE}/auth/refresh`, {
+            const response = await axios.post(`${API_PREFIX}/auth/refresh`, {
               refresh_token: this.refreshToken,
             })
             const { access_token, refresh_token } = response.data
@@ -87,11 +118,16 @@ class ApiClient {
     this.refreshToken = null
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('api_key')
   }
 
   loadTokens() {
     this.accessToken = localStorage.getItem('access_token')
     this.refreshToken = localStorage.getItem('refresh_token')
+  }
+
+  setApiKey(key: string) {
+    localStorage.setItem('api_key', key)
   }
 
   private processQueue(error: Error | null, token: string | null) {
@@ -102,18 +138,19 @@ class ApiClient {
     this.failedQueue = []
   }
 
-  async login(username: string, password: string) {
-    const response = await this.client.post('/auth/login', { username, password })
-    const { access_token, refresh_token } = response.data
-    this.setTokens(access_token, refresh_token)
-    return response.data
+  // ── auth ───────────────────────────────────────────────────────────────────
+  async login(username: string, password: string): Promise<TokenBundle> {
+    const response = await this.client.post<TokenBundle>('/auth/login', { username, password })
+    const data = response.data
+    this.setTokens(data.access_token, data.refresh_token)
+    return data
   }
 
-  async register(data: { username: string; email: string; password: string; organization: string }) {
-    const response = await this.client.post('/auth/register', data)
-    const { access_token, refresh_token } = response.data
-    this.setTokens(access_token, refresh_token)
-    return response.data
+  async register(data: { username: string; email: string; password: string; organization: string }): Promise<TokenBundle> {
+    const response = await this.client.post<TokenBundle>('/auth/register', data)
+    const bundle = response.data
+    this.setTokens(bundle.access_token, bundle.refresh_token)
+    return bundle
   }
 
   async refresh() {
@@ -144,44 +181,77 @@ class ApiClient {
     return this.client.get('/auth/me')
   }
 
+  // ── dashboard / assets ─────────────────────────────────────────────────────
   async getDashboard() {
-    return this.client.get('/dashboard/')
+    return this.client.get('/dashboard')
   }
 
-  async getFindings(params?: { page?: number; page_size?: number; severity?: string }) {
-    return this.client.get('/findings/', { params })
+  async getAssets(params?: { page?: number; page_size?: number; search?: string; criticality?: string }) {
+    return this.client.get('/assets', { params })
   }
 
+  async getAsset(assetId: number) {
+    return this.client.get(`/assets/${assetId}`)
+  }
+
+  async getAssetGraph(assetId: number) {
+    return this.client.get(`/assets/${assetId}/graph`)
+  }
+
+  // ── findings ───────────────────────────────────────────────────────────────
+  async getFindings(params?: { page?: number; page_size?: number; severity?: string; category?: string; asset_id?: number }) {
+    return this.client.get('/findings', { params })
+  }
+
+  async getFinding(findingId: number) {
+    return this.client.get(`/findings/${findingId}`)
+  }
+
+  // ── scans ──────────────────────────────────────────────────────────────────
+  async startScan(domain: string) {
+    return this.client.post('/scans', { domain })
+  }
+
+  async getScans(params?: { page?: number; page_size?: number; status?: string }) {
+    return this.client.get('/scans', { params })
+  }
+
+  async getScanStatus(scanId: number) {
+    return this.client.get(`/scans/${scanId}`)
+  }
+
+  async verifyOwnershipChallenge(domain: string) {
+    return this.client.post('/scans/verify-ownership', { domain })
+  }
+
+  async checkOwnership(domain: string, token: string) {
+    return this.client.get('/scans/verify-ownership/check', { params: { domain, token } })
+  }
+
+  // ── scan policies ──────────────────────────────────────────────────────────
   async getScanPolicies() {
-    return this.client.get('/scan-policies/')
+    return this.client.get('/scan-policies')
   }
 
-  async createScanPolicy(data: { name: string; asset_id: number; frequency: string; scope: string }) {
-    return this.client.post('/scan-policies/', data)
+  async createScanPolicy(data: { name: string; asset_id: number; frequency: string; scope: string; cron_expression?: string | null }) {
+    return this.client.post('/scan-policies', data)
+  }
+
+  async updateScanPolicy(policyId: number, data: Partial<{ name: string; frequency: string; scope: string; cron_expression: string; is_active: boolean }>) {
+    return this.client.patch(`/scan-policies/${policyId}`, data)
+  }
+
+  async deleteScanPolicy(policyId: number) {
+    return this.client.delete(`/scan-policies/${policyId}`)
   }
 
   async runScanPolicy(policyId: number) {
     return this.client.post(`/scan-policies/${policyId}/run-now`)
   }
 
-  async startScan(domain: string) {
-    return this.client.post('/scan/', { domain })
-  }
-
-  async getScanStatus(scanId: number) {
-    return this.client.get(`/scan/${scanId}`)
-  }
-
-  async getAssetGraph(assetId: number) {
-    return this.client.get(`/graph/asset/${assetId}`)
-  }
-
+  // ── organizations ──────────────────────────────────────────────────────────
   async getOrganizations() {
     return this.client.get('/organizations/me')
-  }
-
-  async createOrganization(name: string) {
-    return this.client.post('/organizations/', { name })
   }
 
   async createInvitation(email: string, role: string) {
@@ -204,16 +274,29 @@ class ApiClient {
     return this.client.get('/organizations/api-keys')
   }
 
+  async updateApiKey(id: number, data: Partial<{ name: string; scopes: string; is_active: boolean }>) {
+    return this.client.patch(`/organizations/api-keys/${id}`, data)
+  }
+
   async deleteApiKey(id: number) {
     return this.client.delete(`/organizations/api-keys/${id}`)
   }
 
+  // ── alerting ───────────────────────────────────────────────────────────────
   async createAlertIntegration(data: { name: string; channel: string; webhook_url: string; min_severity: string }) {
     return this.client.post('/alerting/integrations', data)
   }
 
   async listAlertIntegrations() {
     return this.client.get('/alerting/integrations')
+  }
+
+  async deleteAlertIntegration(id: number) {
+    return this.client.delete(`/alerting/integrations/${id}`)
+  }
+
+  async testAlertIntegration(id: number) {
+    return this.client.post(`/alerting/integrations/${id}/test`)
   }
 
   async createDigestConfig(data: { frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string }) {
@@ -228,34 +311,62 @@ class ApiClient {
     return this.client.patch('/alerting/digest', data)
   }
 
+  async deleteDigestConfig() {
+    return this.client.delete('/alerting/digest')
+  }
+
+  // ── reports ────────────────────────────────────────────────────────────────
   async exportFindingsCsv(params?: { asset_id?: number; since?: string; severity?: string }) {
-    const response = await this.client.post('/reports/export/findings/csv', params, {
+    const response = await this.client.post('/reports/export/findings/csv', params ?? {}, {
       responseType: 'blob',
     })
-    return response.data
+    return response.data as Blob
   }
 
   async exportAssetsCsv() {
     const response = await this.client.post('/reports/export/assets/csv', {}, {
       responseType: 'blob',
     })
-    return response.data
+    return response.data as Blob
+  }
+
+  async exportScansCsv(params?: { since?: string }) {
+    const response = await this.client.post('/reports/export/scans/csv', params ?? {}, {
+      responseType: 'blob',
+    })
+    return response.data as Blob
+  }
+
+  async exportDomainsCsv() {
+    const response = await this.client.post('/reports/export/domains/csv', {}, {
+      responseType: 'blob',
+    })
+    return response.data as Blob
   }
 
   async exportAllCsv() {
     const response = await this.client.post('/reports/export/all/csv', {}, {
       responseType: 'blob',
     })
-    return response.data
+    return response.data as Blob
   }
 
-  async getExecutiveSummaryPdf(assetId?: number) {
-    const params = assetId ? { asset_id: assetId } : {}
+  async getExecutiveSummaryPdf(assetId?: number, since?: string) {
+    const params: Record<string, string | number> = {}
+    if (assetId) params.asset_id = assetId
+    if (since) params.since = since
     const response = await this.client.get('/reports/pdf/executive-summary', {
       params,
       responseType: 'blob',
     })
-    return response.data
+    return response.data as Blob
+  }
+
+  async getFindingPdf(findingId: number) {
+    const response = await this.client.get(`/reports/pdf/finding/${findingId}`, {
+      responseType: 'blob',
+    })
+    return response.data as Blob
   }
 }
 
