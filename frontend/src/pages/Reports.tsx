@@ -94,10 +94,11 @@ export function Reports() {
       downloadBlob(blob, `executive_summary_${new Date().toISOString().split('T')[0]}.pdf`)
       addToast({ type: 'success', title: 'PDF generated', message: 'Executive summary downloaded' })
     } catch (error: any) {
-      if (error.message?.includes('fpdf2')) {
+      const message = getApiErrorMessage(error)
+      if (message.includes('fpdf2')) {
         addToast({ type: 'error', title: 'PDF unavailable', message: 'PDF generation requires fpdf2 to be installed on the backend' })
       } else {
-        addToast({ type: 'error', title: 'Generation failed', message: error.message })
+        addToast({ type: 'error', title: 'Generation failed', message })
       }
     } finally {
       setPdfLoading(false)
