@@ -162,33 +162,6 @@ export function Assets() {
           </table>
         </div>
       </div>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl max-w-md w-full mx-4 p-6">
-            <h2 className="text-xl font-bold mb-4">{editingAsset ? 'Edit Asset' : 'Add Asset'}</h2>
-            <form onSubmit={(e) => { e.preventDefault(); setShowModal(false); }} className="space-y-4">
-              <div>
-                <label className="label">Asset Name</label>
-                <input type="text" className="input" placeholder="example.com" defaultValue={editingAsset?.name || ''} required />
-              </div>
-              <div>
-                <label className="label">Criticality</label>
-                <select className="input" defaultValue={editingAsset?.criticality || 'dev'}>
-                  <option value="prod">Production</option>
-                  <option value="staging">Staging</option>
-                  <option value="dev">Development</option>
-                  <option value="test">Test</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-4">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
