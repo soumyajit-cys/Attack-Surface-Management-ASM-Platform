@@ -51,7 +51,10 @@ export function Assets() {
 
   const filteredAssets = assets
     .sort((a, b) => {
-      let aVal = a[sortBy], bVal = b[sortBy]
+      const key: 'name' | 'criticality' | 'findings_count' | 'risk_score' =
+        sortBy === 'findings' ? 'findings_count' : sortBy === 'risk' ? 'risk_score' : sortBy
+      let aVal: string | number = a[key]
+      let bVal: string | number = b[key]
       if (typeof aVal === 'string') aVal = aVal.toLowerCase()
       if (typeof bVal === 'string') bVal = bVal.toLowerCase()
       if (aVal < bVal) return sortDir === 'asc' ? -1 : 1

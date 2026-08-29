@@ -342,31 +342,31 @@ class ApiClient {
 
   // ── reports ────────────────────────────────────────────────────────────────
   async exportFindingsCsv(params?: { asset_id?: number; since?: string; severity?: string }) {
-    return this.client.post<Blob>('/reports/export/findings/csv', params ?? {}, {
+    return this.post<Blob>('/reports/export/findings/csv', params ?? {}, {
       responseType: 'blob',
     })
   }
 
   async exportAssetsCsv() {
-    return this.client.post<Blob>('/reports/export/assets/csv', {}, {
+    return this.post<Blob>('/reports/export/assets/csv', {}, {
       responseType: 'blob',
     })
   }
 
   async exportScansCsv(params?: { since?: string }) {
-    return this.client.post<Blob>('/reports/export/scans/csv', params ?? {}, {
+    return this.post<Blob>('/reports/export/scans/csv', params ?? {}, {
       responseType: 'blob',
     })
   }
 
   async exportDomainsCsv() {
-    return this.client.post<Blob>('/reports/export/domains/csv', {}, {
+    return this.post<Blob>('/reports/export/domains/csv', {}, {
       responseType: 'blob',
     })
   }
 
   async exportAllCsv() {
-    return this.client.post<Blob>('/reports/export/all/csv', {}, {
+    return this.post<Blob>('/reports/export/all/csv', {}, {
       responseType: 'blob',
     })
   }
@@ -375,14 +375,14 @@ class ApiClient {
     const params: Record<string, string | number> = {}
     if (assetId) params.asset_id = assetId
     if (since) params.since = since
-    return this.client.get<Blob>('/reports/pdf/executive-summary', {
+    return this.get<Blob>('/reports/pdf/executive-summary', {
       params,
       responseType: 'blob',
     })
   }
 
   async getFindingPdf(findingId: number) {
-    return this.client.get<Blob>(`/reports/pdf/finding/${findingId}`, {
+    return this.get<Blob>(`/reports/pdf/finding/${findingId}`, {
       responseType: 'blob',
     })
   }
