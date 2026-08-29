@@ -136,8 +136,13 @@ export function Organizations() {
         recipient_emails: digestConfig.recipient_emails,
         min_severity: digestConfig.min_severity,
       }
-      await api.updateDigestConfig({ ...payload, is_active: digestConfig.is_active })
+      if (digestExists) {
+        await api.updateDigestConfig({ ...payload, is_active: digestConfig.is_active })
+      } else {
+        await api.createDigestConfig(payload)
+      }
       setShowDigestModal(false)
+      setDigestExists(true)
       addToast({ type: 'success', title: 'Digest config saved' })
     } catch (error: any) {
       addToast({ type: 'error', title: 'Failed to save', message: error.message })
