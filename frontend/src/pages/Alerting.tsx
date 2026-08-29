@@ -28,6 +28,7 @@ export function Alerting() {
   const { addToast } = useToast()
   const [integrations, setIntegrations] = useState<AlertIntegration[]>([])
   const [digestConfig, setDigestConfig] = useState<DigestConfig | null>(null)
+  const [digestExists, setDigestExists] = useState(false)
   const [showIntegrationModal, setShowIntegrationModal] = useState(false)
   const [showDigestModal, setShowDigestModal] = useState(false)
   const [editingIntegration, setEditingIntegration] = useState<AlertIntegration | null>(null)
@@ -48,7 +49,13 @@ export function Alerting() {
         api.getDigestConfig(),
       ])
       if (integrationsData.status === 'fulfilled') setIntegrations(integrationsData.value)
-      if (digest.status === 'fulfilled') setDigestConfig(digest.value)
+      if (digest.status === 'fulfilled') {
+        setDigestConfig(digest.value)
+        setDigestExists(true)
+      } else {
+        setDigestConfig(null)
+        setDigestExists(false)
+      }
     } catch {
       addToast({ type: 'error', title: 'Failed to load alerting config' })
     } finally {
