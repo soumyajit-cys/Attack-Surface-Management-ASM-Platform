@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 
-interface GraphNode {
+interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
   type: string;
   label: string;
@@ -55,11 +55,11 @@ export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, heigh
 
     const { nodes, edges } = data;
 
-    const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(edges).id((d: GraphNode) => d.id).distance(80))
+    const simulation: d3.Simulation<GraphNode, GraphEdge> = d3.forceSimulation<GraphNode>(nodes)
+      .force('link', d3.forceLink<GraphNode, GraphEdge>(edges).id((d) => d.id).distance(80))
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius((d: GraphNode) => NODE_RADIUS[d.type] + 5))
+      .force('collision', d3.forceCollide<GraphNode>().radius((d) => NODE_RADIUS[d.type] + 5))
       .force('x', d3.forceX(width / 2).strength(0.05))
       .force('y', d3.forceY(height / 2).strength(0.05));
 
@@ -93,21 +93,20 @@ export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, heigh
 
     node.append('title')
       .text((d: GraphNode) => {
-        const data = d.data as Record<string, unknown>;
-        return Object.entries(data)
+        return Object.entries(d.data)
           .map(([k, v]) => `${k}: ${v}`)
           .join('\n');
       });
 
     simulation.on('tick', () => {
       link
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y);
+        .attr('x1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x ?? 0)
+        .attr('y1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y ?? 0)
+        .attr('x2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x ?? 0)
+        .attr('y2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y ?? 0);
 
       node
-        .attr('transform', (d: GraphNode) => `translate(${d.x},${d.y})`);
+        .attr('transform', (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
 
     return () => {
@@ -118,8 +117,8 @@ export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, heigh
   function drag(simulation: d3.Simulation<GraphNode, GraphEdge>) {
     function dragstarted(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
-      event.subject.fx = event.subject.x;
-      event.subject.fy = event.subject.y;
+      event.subject.fx = event.subject.x ?? 0;
+      event.subject.fy = event.subject.y ?? 0;
     }
 
     function dragged(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) {
