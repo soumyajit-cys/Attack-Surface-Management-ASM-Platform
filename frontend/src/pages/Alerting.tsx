@@ -42,20 +42,18 @@ export function Alerting() {
 
   const fetchData = async () => {
     setLoading(true)
-    // Mock data
-    setIntegrations([
-      { id: 1, name: 'Security Team Slack', channel: 'slack', webhook_url: 'https://hooks.slack.com/services/xxx', min_severity: 'high', is_active: true, last_triggered_at: '2024-01-20T10:00:00Z', created_at: '2024-01-15T10:00:00Z' },
-      { id: 2, name: 'DevOps Discord', channel: 'discord', webhook_url: 'https://discord.com/api/webhooks/xxx', min_severity: 'medium', is_active: true, last_triggered_at: '2024-01-20T08:00:00Z', created_at: '2024-01-18T10:00:00Z' },
-    ])
-    setDigestConfig({
-      frequency: 'weekly',
-      day_of_week: 1,
-      hour_utc: 9,
-      recipient_emails: 'security@example.com,admin@example.com',
-      min_severity: 'medium',
-      is_active: true,
-    })
-    setLoading(false)
+    try {
+      const [integrationsData, digest] = await Promise.allSettled([
+        api.listAlertIntegrations(),
+        api.getDigestConfig(),
+      ])
+      if (integrationsData.status === 'fulfilled') setIntegrations(integrationsData.value)
+      if (digest.status === 'fulfilled') setDigestConfig(digest.value)
+    } catch {
+      addToast({ type: 'error', title: 'Failed to load alerting config' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -63,34 +61,58 @@ export function Alerting() {
   const handleCreateIntegration = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      // Mock
-      setIntegrations([...integrations, { id: Date.now(), ...formData, is_active: true, last_triggered_at: null, created_at: new Date().toISOString() }])
+      await api.createAlertIntegration({
+        name: formData.name,
+        channel: formData.channel,
+        webhook_url: formData.webhook_url,
+        min_severity: formData.min_severity,
+        secret: formData.secret || undefined,
+      })
       setShowIntegrationModal(false)
       setFormData({ name: '', channel: 'slack', webhook_url: '', secret: '', min_severity: 'high' })
       addToast({ type: 'success', title: 'Integration created' })
+      fetchData()
     } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to create', message: error.response?.data?.detail })
+      addToast({ type: 'error', title: 'Failed to create', message: error.message })
     }
   }
 
   const handleTestIntegration = async (integration: AlertIntegration) => {
-    addToast({ type: 'info', title: 'Test sent', message: `Test alert sent to ${integration.name}` })
+    try {
+      await api.testAlertIntegration(integration.id)
+      addToast({ type: 'success', title: 'Test sent', message: `Test alert sent to ${integration.name}` })
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Test failed', message: error.message })
+    }
   }
 
   const handleDeleteIntegration = async (id: number) => {
     if (!confirm('Delete this integration?')) return
-    setIntegrations(integrations.filter(i => i.id !== id))
-    addToast({ type: 'success', title: 'Integration deleted' })
+    try {
+      await api.deleteAlertIntegration(id)
+      setIntegrations(integrations.filter(i => i.id !== id))
+      addToast({ type: 'success', title: 'Integration deleted' })
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to delete', message: error.message })
+    }
   }
 
   const handleSaveDigest = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!digestConfig) return
     try {
-      setDigestConfig({ ...digestConfig!, ...formData, is_active: true })
+      const payload = {
+        frequency: digestConfig.frequency,
+        day_of_week: digestConfig.day_of_week,
+        hour_utc: digestConfig.hour_utc,
+        recipient_emails: digestConfig.recipient_emails,
+        min_severity: digestConfig.min_severity,
+      }
+      await api.updateDigestConfig({ ...payload, is_active: digestConfig.is_active })
       setShowDigestModal(false)
       addToast({ type: 'success', title: 'Digest config saved' })
     } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to save', message: error.response?.data?.detail })
+      addToast({ type: 'error', title: 'Failed to save', message: error.message })
     }
   }
 
