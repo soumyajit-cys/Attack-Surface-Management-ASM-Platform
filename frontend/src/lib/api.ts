@@ -142,178 +142,202 @@ class ApiClient {
     this.failedQueue = []
   }
 
+  // Response interceptors unwrap `response.data`, so these helpers type the
+  // public methods as returning the payload directly.
+  private get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.get<T, T>(url, config) as Promise<T>
+  }
+
+  private post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.post<T, T>(url, data, config) as Promise<T>
+  }
+
+  private patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.patch<T, T>(url, data, config) as Promise<T>
+  }
+
+  private delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.delete<T, T>(url, config) as Promise<T>
+  }
+
   // ── auth ───────────────────────────────────────────────────────────────────
   async login(username: string, password: string): Promise<TokenBundle> {
-    const data = await this.client.post<TokenBundle>('/auth/login', { username, password })
-    this.setTokens(data.access_token, data.refresh_token)
-    return data
+    return this.post<TokenBundle>('/auth/login', { username, password })
+      .then((data) => {
+        this.setTokens(data.access_token, data.refresh_token)
+        return data
+      })
   }
 
   async register(data: { username: string; email: string; password: string; organization: string }): Promise<TokenBundle> {
-    const bundle = await this.client.post<TokenBundle>('/auth/register', data)
-    this.setTokens(bundle.access_token, bundle.refresh_token)
-    return bundle
+    return this.post<TokenBundle>('/auth/register', data)
+      .then((bundle) => {
+        this.setTokens(bundle.access_token, bundle.refresh_token)
+        return bundle
+      })
   }
 
   async refresh() {
-    const data = await this.client.post('/auth/refresh', {
+    return this.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
       refresh_token: this.refreshToken,
     })
-    this.setTokens(data.access_token, data.refresh_token)
-    return data
+      .then((data) => {
+        this.setTokens(data.access_token, data.refresh_token)
+        return data
+      })
   }
 
   async logout() {
-    await this.client.post('/auth/logout', {
+    await this.post('/auth/logout', {
       refresh_token: this.refreshToken,
     })
     this.clearTokens()
   }
 
   async forgotPassword(email: string) {
-    return this.client.post('/auth/forgot-password', { email })
+    return this.post('/auth/forgot-password', { email })
   }
 
   async resetPassword(token: string, newPassword: string) {
-    return this.client.post('/auth/reset-password', { token, new_password: newPassword })
+    return this.post('/auth/reset-password', { token, new_password: newPassword })
   }
 
   async getMe() {
-    return this.client.get('/auth/me')
+    return this.get('/auth/me')
   }
 
   // ── dashboard / assets ─────────────────────────────────────────────────────
   async getDashboard() {
-    return this.client.get('/dashboard')
+    return this.get('/dashboard')
   }
 
   async getAssets(params?: { page?: number; page_size?: number; search?: string; criticality?: string }) {
-    return this.client.get('/assets', { params })
+    return this.get('/assets', { params })
   }
 
   async getAsset(assetId: number) {
-    return this.client.get(`/assets/${assetId}`)
+    return this.get(`/assets/${assetId}`)
   }
 
   async getAssetGraph(assetId: number) {
-    return this.client.get(`/assets/${assetId}/graph`)
+    return this.get(`/assets/${assetId}/graph`)
   }
 
   // ── findings ───────────────────────────────────────────────────────────────
   async getFindings(params?: { page?: number; page_size?: number; severity?: string; category?: string; asset_id?: number }) {
-    return this.client.get('/findings', { params })
+    return this.get('/findings', { params })
   }
 
   async getFinding(findingId: number) {
-    return this.client.get(`/findings/${findingId}`)
+    return this.get(`/findings/${findingId}`)
   }
 
   // ── scans ──────────────────────────────────────────────────────────────────
   async startScan(domain: string) {
-    return this.client.post('/scans', { domain })
+    return this.post('/scans', { domain })
   }
 
   async getScans(params?: { page?: number; page_size?: number; status?: string }) {
-    return this.client.get('/scans', { params })
+    return this.get('/scans', { params })
   }
 
   async getScanStatus(scanId: number) {
-    return this.client.get(`/scans/${scanId}`)
+    return this.get(`/scans/${scanId}`)
   }
 
   async verifyOwnershipChallenge(domain: string) {
-    return this.client.post('/scans/verify-ownership', { domain })
+    return this.post('/scans/verify-ownership', { domain })
   }
 
   async checkOwnership(domain: string, token: string) {
-    return this.client.get('/scans/verify-ownership/check', { params: { domain, token } })
+    return this.get('/scans/verify-ownership/check', { params: { domain, token } })
   }
 
   // ── scan policies ──────────────────────────────────────────────────────────
   async getScanPolicies() {
-    return this.client.get('/scan-policies')
+    return this.get('/scan-policies')
   }
 
   async createScanPolicy(data: { name: string; asset_id: number; frequency: string; scope: string; cron_expression?: string | null }) {
-    return this.client.post('/scan-policies', data)
+    return this.post('/scan-policies', data)
   }
 
   async updateScanPolicy(policyId: number, data: Partial<{ name: string; frequency: string; scope: string; cron_expression: string; is_active: boolean }>) {
-    return this.client.patch(`/scan-policies/${policyId}`, data)
+    return this.patch(`/scan-policies/${policyId}`, data)
   }
 
   async deleteScanPolicy(policyId: number) {
-    return this.client.delete(`/scan-policies/${policyId}`)
+    return this.delete(`/scan-policies/${policyId}`)
   }
 
   async runScanPolicy(policyId: number) {
-    return this.client.post(`/scan-policies/${policyId}/run-now`)
+    return this.post(`/scan-policies/${policyId}/run-now`)
   }
 
   // ── organizations ──────────────────────────────────────────────────────────
   async getOrganizations() {
-    return this.client.get('/organizations/me')
+    return this.get('/organizations/me')
   }
 
   async createInvitation(email: string, role: string) {
-    return this.client.post('/organizations/invitations', { email, role })
+    return this.post('/organizations/invitations', { email, role })
   }
 
   async listInvitations() {
-    return this.client.get('/organizations/invitations')
+    return this.get('/organizations/invitations')
   }
 
   async revokeInvitation(id: number) {
-    return this.client.post(`/organizations/invitations/${id}/revoke`)
+    return this.post(`/organizations/invitations/${id}/revoke`)
   }
 
   async createApiKey(data: { name: string; scopes: string; expires_days?: number }) {
-    return this.client.post('/organizations/api-keys', data)
+    return this.post('/organizations/api-keys', data)
   }
 
   async listApiKeys() {
-    return this.client.get('/organizations/api-keys')
+    return this.get('/organizations/api-keys')
   }
 
   async updateApiKey(id: number, data: Partial<{ name: string; scopes: string; is_active: boolean }>) {
-    return this.client.patch(`/organizations/api-keys/${id}`, data)
+    return this.patch(`/organizations/api-keys/${id}`, data)
   }
 
   async deleteApiKey(id: number) {
-    return this.client.delete(`/organizations/api-keys/${id}`)
+    return this.delete(`/organizations/api-keys/${id}`)
   }
 
   // ── alerting ───────────────────────────────────────────────────────────────
   async createAlertIntegration(data: { name: string; channel: string; webhook_url: string; min_severity: string; secret?: string }) {
-    return this.client.post('/alerting/integrations', data)
+    return this.post('/alerting/integrations', data)
   }
 
   async listAlertIntegrations() {
-    return this.client.get('/alerting/integrations')
+    return this.get('/alerting/integrations')
   }
 
   async deleteAlertIntegration(id: number) {
-    return this.client.delete(`/alerting/integrations/${id}`)
+    return this.delete(`/alerting/integrations/${id}`)
   }
 
   async testAlertIntegration(id: number) {
-    return this.client.post(`/alerting/integrations/${id}/test`)
+    return this.post(`/alerting/integrations/${id}/test`)
   }
 
   async createDigestConfig(data: { frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string }) {
-    return this.client.post('/alerting/digest', data)
+    return this.post('/alerting/digest', data)
   }
 
   async getDigestConfig() {
-    return this.client.get('/alerting/digest')
+    return this.get('/alerting/digest')
   }
 
   async updateDigestConfig(data: Partial<{ frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string; is_active: boolean }>) {
-    return this.client.patch('/alerting/digest', data)
+    return this.patch('/alerting/digest', data)
   }
 
   async deleteDigestConfig() {
-    return this.client.delete('/alerting/digest')
+    return this.delete('/alerting/digest')
   }
 
   // ── reports ────────────────────────────────────────────────────────────────
