@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { ArrowLeft, Loader2, AlertTriangle, CheckCircle, AlertCircle, MinusCircle, Info } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, AlertCircle, MinusCircle, Info } from 'lucide-react'
 
 interface FindingDetailData {
   id: number
   asset_id: number
+  asset_name?: string | null
   title: string
   severity: string
   category: string
@@ -27,33 +27,16 @@ export function FindingDetail() {
     if (!id) return
     setLoading(true)
     try {
-      // Mock data
-      setFinding({
-        id: parseInt(id),
-        asset_id: 1,
-        title: 'Missing Content-Security-Policy Header',
-        severity: 'medium',
-        category: 'security_headers',
-        description: 'Content Security Policy not set. This header helps prevent XSS attacks by specifying which dynamic resources are allowed to load.',
-        recommendation: 'Implement a restrictive Content-Security-Policy header. Start with a report-only policy to identify violations before enforcing.',
-        created_at: '2024-01-20T10:00:00Z',
-      })
-    } catch (error) {
-      console.error('Failed to load finding:', error)
+      const data = await api.getFinding(Number(id))
+      setFinding(data)
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to load finding', message: error.message })
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => { fetchFinding() }, [id])
-
-  const severityIcons = {
-    critical: AlertTriangle,
-    high: AlertTriangle,
-    medium: AlertCircle,
-    low: MinusCircle,
-    info: Info,
-  }
 
   const severityColors = {
     critical: 'badge-critical',
@@ -78,8 +61,6 @@ export function FindingDetail() {
       </div>
     )
   }
-
-  const Icon = severityIcons[finding.severity as keyof typeof severityIcons] || Info
 
   return (
     <div className="space-y-6">
