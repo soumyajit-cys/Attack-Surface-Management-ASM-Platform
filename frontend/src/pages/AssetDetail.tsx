@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { Server, AlertTriangle, Scan, ExternalLink, ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
-import { AssetGraph } from '../components/AssetGraph'
+import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
+import { AssetGraph } from '../AssetGraph'
 
 interface AssetDetailData {
   id: number
   name: string
   criticality: string
+  exposure: string | null
   created_at: string
   updated_at: string
+  risk_score: { id: number; score: number; exposure: string; severity: string } | null
+  domains_count: number
+  findings_count: number
+  open_ports: number
   domains: Array<{
     id: number
     domain: string
@@ -50,49 +54,16 @@ export function AssetDetail() {
   const [loading, setLoading] = useState(true)
   const [graphData, setGraphData] = useState<any>(null)
   const [graphLoading, setGraphLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('Info')
 
   const fetchAsset = async () => {
     if (!id) return
     setLoading(true)
     try {
-      // Mock data
-      setAsset({
-        id: 1,
-        name: 'example.com',
-        criticality: 'prod',
-        created_at: '2024-01-15T10:00:00Z',
-        updated_at: '2024-01-20T10:00:00Z',
-        domains: [
-          {
-            id: 1,
-            domain: 'example.com',
-            registrar: 'RESERVED-Internet Assigned Numbers Authority',
-            asn: 'AS15133',
-            subdomains: [
-              {
-                id: 1,
-                subdomain: 'example.com',
-                ip_address: '93.184.216.34',
-                source: 'primary',
-                ports: [
-                  { id: 1, port: 80, protocol: 'tcp', service: 'http', status: 'open', banner: 'nginx/1.18.0' },
-                  { id: 2, port: 443, protocol: 'tcp', service: 'https', status: 'open', banner: 'nginx/1.18.0' },
-                ],
-                ssl: {
-                  issuer: 'CN=Let\'s Encrypt R3',
-                  tls_version: 'TLSv1.3',
-                  cipher: 'TLS_AES_256_GCM_SHA384',
-                  expires_at: '2024-07-15T12:00:00Z',
-                  self_signed: false,
-                  risk_level: 'low',
-                },
-              },
-            ],
-          },
-        ],
-      })
-    } catch (error) {
-      console.error('Failed to load asset:', error)
+      const data = await api.getAsset(Number(id))
+      setAsset(data)
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to load asset', message: error.message })
     } finally {
       setLoading(false)
     }
@@ -102,27 +73,10 @@ export function AssetDetail() {
     if (!id) return
     setGraphLoading(true)
     try {
-      // Mock graph data
-      setGraphData({
-        asset_id: 1,
-        nodes: [
-          { id: 'asset-1', type: 'asset', label: 'example.com', data: { id: 1, name: 'example.com', criticality: 'prod' } },
-          { id: 'domain-1', type: 'domain', label: 'example.com', data: { id: 1, domain: 'example.com', registrar: 'IANA', asn: 'AS15133' } },
-          { id: 'subdomain-1', type: 'subdomain', label: 'example.com', data: { id: 1, subdomain: 'example.com', ip_address: '93.184.216.34', source: 'primary' } },
-          { id: 'port-1', type: 'port', label: '80/tcp', data: { id: 1, port: 80, service: 'http', status: 'open' } },
-          { id: 'port-2', type: 'port', label: '443/tcp', data: { id: 2, port: 443, service: 'https', status: 'open' } },
-          { id: 'ssl-1', type: 'ssl', label: 'TLSv1.3', data: { issuer: 'Let\'s Encrypt R3', risk_level: 'low' } },
-        ],
-        edges: [
-          { source: 'asset-1', target: 'domain-1', type: 'contains' },
-          { source: 'domain-1', target: 'subdomain-1', type: 'resolves_to' },
-          { source: 'subdomain-1', target: 'port-1', type: 'exposes' },
-          { source: 'subdomain-1', target: 'port-2', type: 'exposes' },
-          { source: 'subdomain-1', target: 'ssl-1', type: 'secured_by' },
-        ],
-      })
-    } catch (error) {
-      console.error('Failed to load graph:', error)
+      const data = await api.getAssetGraph(Number(id))
+      setGraphData(data)
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to load graph', message: error.message })
     } finally {
       setGraphLoading(false)
     }
@@ -194,10 +148,25 @@ export function AssetDetail() {
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="card p-6">
+          <p className="text-sm text-gray-500">Risk Score</p>
+          {asset.risk_score ? (
+            <p className="text-3xl font-bold text-gray-900 mt-1">{asset.risk_score.score.toFixed(0)}</p>
+          ) : (
+            <p className="text-3xl font-bold text-gray-400 mt-1">—</p>
+          )}
+          {asset.risk_score && (
+            <p className="text-sm text-gray-500 mt-1">Severity: {asset.risk_score.severity}</p>
+          )}
+        </div>
         <div className="card p-6">
           <p className="text-sm text-gray-500">Domains</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{asset.domains.length}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{asset.domains_count}</p>
+        </div>
+        <div className="card p-6">
+          <p className="text-sm text-gray-500">Findings</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{asset.findings_count}</p>
         </div>
         <div className="card p-6">
           <p className="text-sm text-gray-500">Subdomains</p>
@@ -222,15 +191,34 @@ export function AssetDetail() {
       {/* Tabs */}
       <div className="card">
         <div className="border-b border-gray-200">
-          <nav className="flex gap-8 px-6" aria-label="Tabs">
-            <button className="py-4 px-1 border-b-2 border-primary-600 font-medium text-primary-600 text-sm">Overview</button>
-            <button className="py-4 px-1 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-700 text-sm">Domains & Subdomains</button>
-            <button className="py-4 px-1 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-700 text-sm">Ports & Services</button>
-            <button className="py-4 px-1 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-700 text-sm">SSL/TLS</button>
-            <button className="py-4 px-1 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-700 text-sm">Graph</button>
-          </nav>
+          <div className="flex gap-1 px-6" role="tablist">
+            {['Info', 'Graph'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`py-4 px-4 border-b-2 font-medium text-sm ${
+                  activeTab === tab
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {activeTab === 'Graph' ? (
+          <div className="p-6 overflow-x-auto">
+            {graphLoading ? (
+              <div className="flex items-center justify-center h-96">
+                <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+              </div>
+            ) : (
+              <AssetGraph data={graphData} width={900} height={600} />
+            )}
+          </div>
+        ) : (
         <div className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Domains & Subdomains</h2>
           {asset.domains.map((domain) => (
@@ -272,6 +260,7 @@ export function AssetDetail() {
             </div>
           ))}
         </div>
+        )}
       </div>
     </div>
   )

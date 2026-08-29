@@ -7,6 +7,7 @@ import { Search, Filter, Loader2, AlertTriangle, ChevronLeft, ChevronRight, Aler
 interface Finding {
   id: number
   asset_id: number
+  asset_name?: string
   title: string
   severity: string
   category: string
@@ -45,22 +46,17 @@ export function Findings() {
   const fetchFindings = async () => {
     setLoading(true)
     try {
-      // Mock data
-      setFindings([
-        { id: 1, asset_id: 1, title: 'Open Port 443', severity: 'low', category: 'network_exposure', description: 'Port 443 (https) is open', recommendation: 'Ensure this port is intentionally exposed', created_at: '2024-01-20T10:00:00Z' },
-        { id: 2, asset_id: 1, title: 'Missing CSP Header', severity: 'medium', category: 'security_headers', description: 'Content Security Policy not set', recommendation: 'Implement a restrictive Content-Security-Policy header', created_at: '2024-01-20T10:00:00Z' },
-        { id: 3, asset_id: 1, title: 'SSL Certificate Expiring Soon', severity: 'high', category: 'tls', description: 'Certificate expires within 30 days', recommendation: 'Renew the SSL certificate before expiration', created_at: '2024-01-20T10:00:00Z' },
-        { id: 4, asset_id: 2, title: 'Open Port 22', severity: 'critical', category: 'network_exposure', description: 'Port 22 (ssh) is open', recommendation: 'Restrict SSH access to authorized IPs only', created_at: '2024-01-19T10:00:00Z' },
-      ])
-      setTotal(4)
-    } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load findings' })
+      const data = await api.getFindings({ page, page_size: pageSize, severity: severityFilter || undefined })
+      setFindings(data.items)
+      setTotal(data.total)
+    } catch (error: any) {
+      addToast({ type: 'error', title: 'Failed to load findings', message: error.message })
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchFindings() }, [page, severityFilter])
+  useEffect(() => { fetchFindings() }, [page, pageSize, severityFilter])
 
   const severityBadges: Record<string, string> = {
     critical: 'badge-critical',
@@ -135,7 +131,7 @@ export function Findings() {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-gray-500 capitalize">{finding.category.replace('_', ' ')}</td>
-                  <td className="px-4 py-4 text-gray-500">Asset #{finding.asset_id}</td>
+                  <td className="px-4 py-4 text-gray-500">{finding.asset_name || `Asset #${finding.asset_id}`}</td>
                   <td className="px-4 py-4 text-gray-500">{new Date(finding.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-4">
                     <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" onClick={(e) => { e.stopPropagation(); setSelectedFinding(finding); }}>
