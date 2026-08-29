@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
@@ -6,20 +6,14 @@ import {
   Server,
   AlertTriangle,
   Scan,
-  TrendingUp,
-  TrendingDown,
   Clock,
   Plus,
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
-  Minus,
-  ExternalLink,
   CheckCircle,
 } from 'lucide-react'
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -27,8 +21,6 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
