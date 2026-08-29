@@ -115,8 +115,13 @@ export function Alerting() {
         recipient_emails: digestConfig.recipient_emails,
         min_severity: digestConfig.min_severity,
       }
-      await api.updateDigestConfig({ ...payload, is_active: digestConfig.is_active })
+      if (digestExists) {
+        await api.updateDigestConfig({ ...payload, is_active: digestConfig.is_active })
+      } else {
+        await api.createDigestConfig(payload)
+      }
       setShowDigestModal(false)
+      setDigestExists(true)
       addToast({ type: 'success', title: 'Digest config saved' })
     } catch (error: any) {
       addToast({ type: 'error', title: 'Failed to save', message: error.message })
@@ -189,7 +194,7 @@ export function Alerting() {
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Email Digest</h2>
-            <button className="btn-primary text-sm" onClick={() => setShowDigestModal(true)}>
+            <button className="btn-primary text-sm" onClick={() => { if (!digestConfig) setDigestConfig({ frequency: 'weekly', day_of_week: 1, hour_utc: 9, recipient_emails: '', min_severity: 'medium', is_active: true }); setShowDigestModal(true); }}>
               {digestConfig ? 'Configure' : 'Set Up Digest'}
             </button>
           </div>
