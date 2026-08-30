@@ -12,7 +12,7 @@ interface AssetDetailData {
   exposure: string | null
   created_at: string
   updated_at: string
-  risk_score: { id: number; score: number; exposure: string; severity: string } | null
+  risk_score: number
   domains_count: number
   findings_count: number
   open_ports: number
@@ -141,14 +141,12 @@ export function AssetDetail() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="card p-6">
           <p className="text-sm text-gray-500">Risk Score</p>
-          {asset.risk_score ? (
-            <p className="text-3xl font-bold text-gray-900 mt-1">{asset.risk_score.score.toFixed(0)}</p>
+          {asset.risk_score > 0 ? (
+            <p className="text-3xl font-bold text-gray-900 mt-1">{asset.risk_score.toFixed(0)}</p>
           ) : (
             <p className="text-3xl font-bold text-gray-400 mt-1">—</p>
           )}
-          {asset.risk_score && (
-            <p className="text-sm text-gray-500 mt-1">Severity: {asset.risk_score.severity}</p>
-          )}
+          <p className="text-sm text-gray-500 mt-1">{asset.risk_score > 0 ? '/10' : 'No score yet'}</p>
         </div>
         <div className="card p-6">
           <p className="text-sm text-gray-500">Domains</p>
@@ -166,9 +164,7 @@ export function AssetDetail() {
         </div>
         <div className="card p-6">
           <p className="text-sm text-gray-500">Open Ports</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">
-            {asset.domains.reduce((acc, d) => acc + d.subdomains.reduce((s, sub) => s + sub.ports.filter(p => p.status === 'open').length, 0), 0)}
-          </p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{asset.open_ports}</p>
         </div>
         <div className="card p-6">
           <p className="text-sm text-gray-500">SSL Certificates</p>
