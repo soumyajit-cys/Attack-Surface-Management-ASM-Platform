@@ -14,7 +14,6 @@ interface AuthContextType {
   register: (data: { username: string; email: string; password: string; organization: string }) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
-  hasPermission: (permission: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -31,8 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const user = await api.getMe()
-      applyUser(user)
+      const response = await api.getMe()
+      applyUser(response)
     } catch {
       setUser(null)
       setOrganization(null)
@@ -66,13 +65,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOrganization(null)
   }
 
-  const hasPermission = useCallback(
-    (permission: string) => (user?.permissions || []).includes(permission),
-    [user]
-  )
-
   return (
-    <AuthContext.Provider value={{ user, organization, loading, login, register, logout, refreshUser, hasPermission }}>
+    <AuthContext.Provider value={{ user, organization, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
