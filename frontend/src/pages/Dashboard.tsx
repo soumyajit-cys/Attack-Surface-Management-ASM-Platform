@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { DashboardData, Scan } from '../lib/types'
 import {
   Server,
   AlertTriangle,
-  Scan,
+  Scan as ScanIcon,
   FileText,
   Clock,
-  Plus,
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
   CheckCircle,
+  AlertCircle,
 } from 'lucide-react'
 import {
   XAxis,
@@ -19,27 +21,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  AreaChart,
-  Area,
   PieChart,
   Pie,
   Cell,
 } from 'recharts'
-
-interface DashboardData {
-  assets: number
-  findings: number
-  critical: number
-  high: number
-  medium: number
-  low: number
-  info: number
-}
-
-interface RiskTrendPoint {
-  date: string
-  score: number
-}
 
 interface FindingSeverity {
   severity: string
@@ -48,46 +33,28 @@ interface FindingSeverity {
 }
 
 export function Dashboard() {
+  const navigate = useNavigate()
   const { addToast } = useToast()
   const [data, setData] = useState<DashboardData | null>(null)
-  const [riskTrend, setRiskTrend] = useState<RiskTrendPoint[]>([])
+  const [recentScans, setRecentScans] = useState<Scan[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
   const fetchDashboard = async () => {
     try {
-      const data = await api.getDashboard()
-      setData(data)
+      const dashData = await api.getDashboard()
+      setData(dashData)
+      const scansData = await api.getScans({ page: 1, page_size: 5 })
+      setRecentScans(scansData.items)
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load dashboard', message: 'Please try again' })
+      addToast({ type: 'error', title: 'Failed to load dashboard', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
   }
 
-  const fetchRiskTrend = async () => {
-    try {
-      // Mock data for now - in production this would come from an API endpoint
-      const mockTrend: RiskTrendPoint[] = []
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date()
-        date.setDate(date.getDate() - i)
-        mockTrend.push({
-          date: date.toISOString().split('T')[0],
-          score: Math.max(0, Math.min(10, 4 + Math.random() * 3 + Math.sin(i / 5) * 1.5)),
-        })
-      }
-      setRiskTrend(mockTrend)
-    } catch (error) {
-      console.error('Failed to load risk trend:', error)
-    }
-  }
-
-  useEffect(() => {
-    fetchDashboard()
-    fetchRiskTrend()
-  }, [])
+  useEffect(() => { fetchDashboard() }, [])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -105,11 +72,21 @@ export function Dashboard() {
     : []
 
   const stats = [
-    { label: 'Total Assets', value: data?.assets ?? 0, icon: Server, color: 'bg-primary-100 text-primary-600', trend: '+2', trendUp: true },
-    { label: 'Total Findings', value: data?.findings ?? 0, icon: AlertTriangle, color: 'bg-danger-100 text-danger-600', trend: '+5', trendUp: false },
-    { label: 'Critical', value: data?.critical ?? 0, icon: AlertTriangle, color: 'bg-danger-100 text-danger-600', trend: '0', trendUp: null },
-    { label: 'High', value: data?.high ?? 0, icon: AlertTriangle, color: 'bg-warning-100 text-warning-600', trend: '+2', trendUp: false },
+    { label: 'Total Assets', value: data?.assets ?? 0, icon: Server, color: 'bg-primary-100 text-primary-600' },
+    { label: 'Total Findings', value: data?.findings ?? 0, icon: AlertTriangle, color: 'bg-danger-100 text-danger-600' },
+    { label: 'Critical', value: data?.critical ?? 0, icon: AlertTriangle, color: 'bg-danger-100 text-danger-600' },
+    { label: 'Scans Completed', value: data?.scans_completed ?? 0, icon: ScanIcon, color: 'bg-success-100 text-success-600' },
   ]
+
+  const getScanStatusProps = (status: string) => {
+    switch (status) {
+      case 'completed': return { color: 'bg-green-100', iconColor: 'text-green-600', Icon: CheckCircle, label: 'Completed' }
+      case 'running': return { color: 'bg-blue-100', iconColor: 'text-blue-600', Icon: Clock, label: 'Running' }
+      case 'pending': return { color: 'bg-yellow-100', iconColor: 'text-yellow-600', Icon: Clock, label: 'Pending' }
+      case 'failed': return { color: 'bg-red-100', iconColor: 'text-red-600', Icon: AlertCircle, label: 'Failed' }
+      default: return { color: 'bg-gray-100', iconColor: 'text-gray-600', Icon: AlertCircle, label: status }
+    }
+  }
 
   if (loading) {
     return (
@@ -121,7 +98,6 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
@@ -137,7 +113,6 @@ export function Dashboard() {
         </button>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <div key={stat.label} className="card p-6">
@@ -145,23 +120,6 @@ export function Dashboard() {
               <div>
                 <p className="text-sm text-gray-500">{stat.label}</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                <div className="flex items-center gap-1 mt-2">
-                  {stat.trendUp !== null && (
-                    <>
-                      {stat.trendUp ? (
-                        <ArrowUpRight className="w-4 h-4 text-danger-600" />
-                      ) : (
-                        <ArrowDownRight className="w-4 h-4 text-success-600" />
-                      )}
-                      <span className={`text-sm font-medium ${stat.trendUp ? 'text-danger-600' : 'text-success-600'}`}>
-                        {stat.trend} vs last week
-                      </span>
-                    </>
-                  )}
-                  {stat.trendUp === null && (
-                    <span className="text-sm text-gray-500">No change</span>
-                  )}
-                </div>
               </div>
               <div className={`p-3 rounded-xl ${stat.color}`}>
                 <stat.icon className="w-6 h-6" />
@@ -171,44 +129,7 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Risk Trend */}
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Risk Score Trend (30 days)</h3>
-            <span className="text-sm text-gray-500">Avg: {riskTrend.length ? (riskTrend.reduce((a, b) => a + b.score, 0) / riskTrend.length).toFixed(1) : '0'}/10</span>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={riskTrend}>
-                <defs>
-                  <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#dc2626" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="date" stroke="#9ca3af" tick={{ fill: '#6b7280', fontSize: 11 }} interval="preserveStartEnd" tickCount={6} />
-                <YAxis stroke="#9ca3af" tick={{ fill: '#6b7280', fontSize: 11 }} domain={[0, 10]} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  formatter={(value: number) => [value.toFixed(1), 'Risk Score']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#dc2626"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#riskGradient)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Findings by Severity */}
         <div className="card p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Findings by Severity</h3>
           <div className="h-64 flex items-center justify-center">
@@ -243,90 +164,46 @@ export function Dashboard() {
           <div className="mt-4 flex flex-wrap gap-3">
             {severityData.map((s) => (
               <div key={s.severity} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: s.color }} />
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
                 <span className="text-sm text-gray-600">{s.severity}: {s.count}</span>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity & Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <button className="btn-secondary flex flex-col items-center gap-2 p-4">
-              <Plus className="w-6 h-6" />
-              <span className="text-sm font-medium">Add Asset</span>
-            </button>
-            <button className="btn-secondary flex flex-col items-center gap-2 p-4">
-              <Scan className="w-6 h-6" />
-              <span className="text-sm font-medium">Start Scan</span>
-            </button>
-            <button className="btn-secondary flex flex-col items-center gap-2 p-4">
-              <FileText className="w-6 h-6" />
-              <span className="text-sm font-medium">Generate Report</span>
-            </button>
-            <button className="btn-secondary flex flex-col items-center gap-2 p-4">
-              <AlertTriangle className="w-6 h-6" />
-              <span className="text-sm font-medium">View Findings</span>
-            </button>
           </div>
         </div>
 
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Recent Scans</h3>
-            <span className="text-sm text-gray-500">Last 5 scans</span>
+            <button onClick={() => navigate('/scans')} className="text-sm text-primary-600 hover:text-primary-700">View all</button>
           </div>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+            {recentScans.length > 0 ? recentScans.map((scan) => {
+              const props = getScanStatusProps(scan.status)
+              return (
+                <div key={scan.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg ${props.color} flex items-center justify-center`}>
+                      <props.Icon className={`w-5 h-5 ${props.iconColor}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{scan.target}</p>
+                      <p className="text-sm text-gray-500">{props.label}</p>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {scan.completed_at
+                      ? `${Math.round((new Date(scan.completed_at).getTime() - new Date(scan.started_at).getTime()) / 1000)}s`
+                      : scan.started_at
+                        ? 'In progress'
+                        : 'Queued'}
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-gray-900">example.com</p>
-                  <p className="text-sm text-gray-500">Full scan completed</p>
-                </div>
+              )
+            }) : (
+              <div className="text-center py-8 text-gray-500">
+                No scans yet. <button onClick={() => navigate('/scans')} className="text-primary-600 hover:underline">Start one</button>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="w-4 h-4" />
-                <span>2 hours ago</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">api.example.com</p>
-                  <p className="text-sm text-gray-500">Scan in progress...</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">Running</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">web.example.com</p>
-                  <p className="text-sm text-gray-500">Passive scan completed</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="w-4 h-4" />
-                <span>1 day ago</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
