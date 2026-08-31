@@ -54,6 +54,9 @@
   .badge-info {
     @apply badge bg-gray-100 text-gray-700;
   }
+  .badge-success {
+    @apply badge bg-success-100 text-success-700;
+  }
 }
 
 @layer utilities {

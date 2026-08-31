@@ -49,7 +49,7 @@ export function Assets() {
     }
   }
 
-  const filteredAssets = assets
+  const filteredAssets = [...assets]
     .sort((a, b) => {
       const key: 'name' | 'criticality' | 'findings_count' | 'risk_score' =
         sortBy === 'findings' ? 'findings_count' : sortBy === 'risk' ? 'risk_score' : sortBy

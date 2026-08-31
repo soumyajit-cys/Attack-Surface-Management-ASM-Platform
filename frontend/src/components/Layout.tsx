@@ -26,7 +26,6 @@ const navigation = [
   { name: 'Alerting', href: '/alerting', icon: Bell },
   { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'Organization', href: '/organizations', icon: Users },
-  { name: 'Alerting', href: '/alerting', icon: Bell },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
