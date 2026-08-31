@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
+import type { Asset, Finding, Scan, ScanPolicy, AlertIntegration, Invitation, APIKey, DigestConfig, PaginatedResponse, DashboardData } from './types'
 
 export const API_PREFIX = import.meta.env.VITE_API_BASE || '/api/v1'
 
@@ -142,21 +143,19 @@ class ApiClient {
     this.failedQueue = []
   }
 
-  // Response interceptors unwrap `response.data`, so these helpers type the
-  // public methods as returning the payload directly.
-  private get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  private get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.client.get<T, T>(url, config) as Promise<T>
   }
 
-  private post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  private post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return this.client.post<T, T>(url, data, config) as Promise<T>
   }
 
-  private patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  private patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return this.client.patch<T, T>(url, data, config) as Promise<T>
   }
 
-  private delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  private delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.client.delete<T, T>(url, config) as Promise<T>
   }
 
@@ -177,16 +176,6 @@ class ApiClient {
       })
   }
 
-  async refresh() {
-    return this.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
-      refresh_token: this.refreshToken,
-    })
-      .then((data) => {
-        this.setTokens(data.access_token, data.refresh_token)
-        return data
-      })
-  }
-
   async logout() {
     await this.post('/auth/logout', {
       refresh_token: this.refreshToken,
@@ -194,42 +183,34 @@ class ApiClient {
     this.clearTokens()
   }
 
-  async forgotPassword(email: string) {
-    return this.post('/auth/forgot-password', { email })
-  }
-
-  async resetPassword(token: string, newPassword: string) {
-    return this.post('/auth/reset-password', { token, new_password: newPassword })
-  }
-
-  async getMe() {
-    return this.get('/auth/me')
+  async getMe(): Promise<AuthUser> {
+    return this.get<AuthUser>('/auth/me')
   }
 
   // ── dashboard / assets ─────────────────────────────────────────────────────
-  async getDashboard() {
-    return this.get('/dashboard')
+  async getDashboard(): Promise<DashboardData> {
+    return this.get<DashboardData>('/dashboard')
   }
 
-  async getAssets(params?: { page?: number; page_size?: number; search?: string; criticality?: string }) {
-    return this.get('/assets', { params })
+  async getAssets(params?: { page?: number; page_size?: number; search?: string; criticality?: string }): Promise<PaginatedResponse<Asset>> {
+    return this.get<PaginatedResponse<Asset>>('/assets', { params })
   }
 
-  async getAsset(assetId: number) {
+  async getAsset(assetId: number): Promise<Asset & { domains: unknown[] }> {
     return this.get(`/assets/${assetId}`)
   }
 
-  async getAssetGraph(assetId: number) {
+  async getAssetGraph(assetId: number): Promise<{ asset_id: number; nodes: unknown[]; edges: unknown[] }> {
     return this.get(`/assets/${assetId}/graph`)
   }
 
   // ── findings ───────────────────────────────────────────────────────────────
-  async getFindings(params?: { page?: number; page_size?: number; severity?: string; category?: string; asset_id?: number }) {
-    return this.get('/findings', { params })
+  async getFindings(params?: { page?: number; page_size?: number; severity?: string; category?: string; asset_id?: number }): Promise<PaginatedResponse<Finding>> {
+    return this.get<PaginatedResponse<Finding>>('/findings', { params })
   }
 
-  async getFinding(findingId: number) {
-    return this.get(`/findings/${findingId}`)
+  async getFinding(findingId: number): Promise<Finding> {
+    return this.get<Finding>(`/findings/${findingId}`)
   }
 
   // ── scans ──────────────────────────────────────────────────────────────────
@@ -237,29 +218,17 @@ class ApiClient {
     return this.post('/scans', { domain })
   }
 
-  async getScans(params?: { page?: number; page_size?: number; status?: string }) {
-    return this.get('/scans', { params })
-  }
-
-  async getScanStatus(scanId: number) {
-    return this.get(`/scans/${scanId}`)
-  }
-
-  async verifyOwnershipChallenge(domain: string) {
-    return this.post('/scans/verify-ownership', { domain })
-  }
-
-  async checkOwnership(domain: string, token: string) {
-    return this.get('/scans/verify-ownership/check', { params: { domain, token } })
+  async getScans(params?: { page?: number; page_size?: number; status?: string }): Promise<PaginatedResponse<Scan>> {
+    return this.get<PaginatedResponse<Scan>>('/scans', { params })
   }
 
   // ── scan policies ──────────────────────────────────────────────────────────
-  async getScanPolicies() {
-    return this.get('/scan-policies')
+  async getScanPolicies(): Promise<ScanPolicy[]> {
+    return this.get<ScanPolicy[]>('/scan-policies')
   }
 
-  async createScanPolicy(data: { name: string; asset_id: number; frequency: string; scope: string; cron_expression?: string | null }) {
-    return this.post('/scan-policies', data)
+  async createScanPolicy(data: { name: string; asset_id: number; frequency: string; scope: string; cron_expression?: string | null }): Promise<ScanPolicy> {
+    return this.post<ScanPolicy>('/scan-policies', data)
   }
 
   async updateScanPolicy(policyId: number, data: Partial<{ name: string; frequency: string; scope: string; cron_expression: string; is_active: boolean }>) {
@@ -275,32 +244,28 @@ class ApiClient {
   }
 
   // ── organizations ──────────────────────────────────────────────────────────
-  async getOrganizations() {
+  async getOrganization() {
     return this.get('/organizations/me')
+  }
+
+  async listInvitations(): Promise<Invitation[]> {
+    return this.get<Invitation[]>('/organizations/invitations')
   }
 
   async createInvitation(email: string, role: string) {
     return this.post('/organizations/invitations', { email, role })
   }
 
-  async listInvitations() {
-    return this.get('/organizations/invitations')
-  }
-
   async revokeInvitation(id: number) {
     return this.post(`/organizations/invitations/${id}/revoke`)
   }
 
-  async createApiKey(data: { name: string; scopes: string; expires_days?: number }) {
+  async listApiKeys(): Promise<APIKey[]> {
+    return this.get<APIKey[]>('/organizations/api-keys')
+  }
+
+  async createApiKey(data: { name: string; scopes: string; expires_days?: number }): Promise<APIKey & { key: string }> {
     return this.post('/organizations/api-keys', data)
-  }
-
-  async listApiKeys() {
-    return this.get('/organizations/api-keys')
-  }
-
-  async updateApiKey(id: number, data: Partial<{ name: string; scopes: string; is_active: boolean }>) {
-    return this.patch(`/organizations/api-keys/${id}`, data)
   }
 
   async deleteApiKey(id: number) {
@@ -312,8 +277,8 @@ class ApiClient {
     return this.post('/alerting/integrations', data)
   }
 
-  async listAlertIntegrations() {
-    return this.get('/alerting/integrations')
+  async listAlertIntegrations(): Promise<AlertIntegration[]> {
+    return this.get<AlertIntegration[]>('/alerting/integrations')
   }
 
   async deleteAlertIntegration(id: number) {
@@ -324,12 +289,12 @@ class ApiClient {
     return this.post(`/alerting/integrations/${id}/test`)
   }
 
-  async createDigestConfig(data: { frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string }) {
-    return this.post('/alerting/digest', data)
+  async getDigestConfig(): Promise<DigestConfig> {
+    return this.get<DigestConfig>('/alerting/digest')
   }
 
-  async getDigestConfig() {
-    return this.get('/alerting/digest')
+  async createDigestConfig(data: { frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string }) {
+    return this.post('/alerting/digest', data)
   }
 
   async updateDigestConfig(data: Partial<{ frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string; is_active: boolean }>) {
