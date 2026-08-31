@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
+import { api } from '../lib/api'
 import { User, Lock, Bell, Shield, Palette, Moon, Sun, Globe, Loader2, AlertTriangle } from 'lucide-react'
 
 export function Settings() {
@@ -14,11 +15,8 @@ export function Settings() {
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    // Mock save
-    setTimeout(() => {
-      setSaving(false)
-      addToast({ type: 'success', title: 'Profile updated' })
-    }, 500)
+    addToast({ type: 'info', title: 'Profile update not yet available', message: 'Profile editing will be available in a future release.' })
+    setSaving(false)
   }
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -32,12 +30,9 @@ export function Settings() {
       return
     }
     setSaving(true)
-    // Mock
-    setTimeout(() => {
-      setSaving(false)
-      setPasswordData({ current: '', new: '', confirm: '' })
-      addToast({ type: 'success', title: 'Password changed' })
-    }, 500)
+    addToast({ type: 'info', title: 'Password change not yet available', message: 'Password change will be available in a future release.' })
+    setPasswordData({ current: '', new: '', confirm: '' })
+    setSaving(false)
   }
 
   const tabs = [
@@ -57,10 +52,13 @@ export function Settings() {
 
       <div className="card">
         <div className="border-b border-gray-200">
-          <nav className="flex gap-8 px-6" aria-label="Settings tabs">
+          <nav className="flex gap-8 px-6" aria-label="Settings tabs" role="tablist">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-controls={`panel-${tab.id}`}
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === tab.id
@@ -77,7 +75,7 @@ export function Settings() {
           </nav>
         </div>
 
-        <div className="p-6">
+        <div className="p-6" role="tabpanel" id={`panel-${activeTab}`}>
           {activeTab === 'profile' && (
             <form onSubmit={handleProfileSave} className="space-y-6 max-w-md">
               <h3 className="text-lg font-semibold text-gray-900">Profile Information</h3>
@@ -166,6 +164,7 @@ export function Settings() {
           {activeTab === 'notifications' && (
             <div className="space-y-6 max-w-md">
               <h3 className="text-lg font-semibold text-gray-900">Email Notifications</h3>
+              <p className="text-sm text-gray-500">Notification preferences are managed through the Alerting page. Configure integrations and email digests there.</p>
               <div className="space-y-4">
                 {[
                   { id: 'scan_complete', label: 'Scan completed', description: 'Receive notification when a scan finishes' },
@@ -179,10 +178,7 @@ export function Settings() {
                       <p className="font-medium text-gray-900">{notif.label}</p>
                       <p className="text-sm text-gray-500">{notif.description}</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
+                    <span className="text-xs text-gray-400">Configured via Alerting</span>
                   </div>
                 ))}
               </div>
@@ -194,18 +190,20 @@ export function Settings() {
               <h3 className="text-lg font-semibold text-gray-900">Theme</h3>
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { id: 'light', label: 'Light', icon: Sun },
-                  { id: 'dark', label: 'Dark', icon: Moon },
-                  { id: 'system', label: 'System', icon: Globe },
+                  { id: 'light', label: 'Light', icon: Sun, active: true },
+                  { id: 'dark', label: 'Dark', icon: Moon, active: false },
+                  { id: 'system', label: 'System', icon: Globe, active: false },
                 ].map((theme) => (
                   <button
                     key={theme.id}
+                    disabled={!theme.active}
                     className={`p-4 border-2 rounded-lg text-center transition-colors ${
-                      theme.id === 'light' ? 'border-primary-600 bg-primary-50' : 'border-gray-200 hover:border-gray-300'
+                      theme.active ? 'border-primary-600 bg-primary-50' : 'border-gray-200 opacity-50 cursor-not-allowed'
                     }`}
                   >
                     <theme.icon className="w-6 h-6 mx-auto mb-2 text-gray-600" />
                     <p className="font-medium">{theme.label}</p>
+                    {!theme.active && <p className="text-xs text-gray-400 mt-1">Coming soon</p>}
                   </button>
                 ))}
               </div>
@@ -233,7 +231,12 @@ export function Settings() {
                       <h4 className="font-medium text-gray-900">Delete Account</h4>
                       <p className="text-sm text-gray-500">Permanently delete your account and all associated data</p>
                     </div>
-                    <button className="btn-danger">Delete Account</button>
+                    <button
+                      className="btn-danger"
+                      onClick={() => addToast({ type: 'info', title: 'Not available', message: 'Account deletion will be available in a future release.' })}
+                    >
+                      Delete Account
+                    </button>
                   </div>
                 </div>
 
@@ -243,7 +246,22 @@ export function Settings() {
                       <h4 className="font-medium text-gray-900">Revoke All Sessions</h4>
                       <p className="text-sm text-gray-500">Log out from all devices and revoke all API keys</p>
                     </div>
-                    <button className="btn-secondary">Revoke All</button>
+                    <button
+                      className="btn-secondary"
+                      onClick={async () => {
+                        try {
+                          const keys = await api.listApiKeys()
+                          for (const key of keys) {
+                            if (key.is_active) await api.deleteApiKey(key.id)
+                          }
+                          addToast({ type: 'success', title: 'All API keys revoked' })
+                        } catch {
+                          addToast({ type: 'error', title: 'Failed to revoke keys' })
+                        }
+                      }}
+                    >
+                      Revoke All
+                    </button>
                   </div>
                 </div>
               </div>
