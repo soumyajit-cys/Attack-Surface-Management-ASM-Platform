@@ -1,26 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { Finding } from '../lib/types'
+import { SEVERITY_COLORS } from '../lib/types'
 import { ArrowLeft } from 'lucide-react'
-
-interface FindingDetailData {
-  id: number
-  asset_id: number
-  asset_name?: string | null
-  title: string
-  severity: string
-  category: string
-  description: string
-  recommendation: string
-  created_at: string
-}
 
 export function FindingDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { addToast } = useToast()
-  const [finding, setFinding] = useState<FindingDetailData | null>(null)
+  const [finding, setFinding] = useState<Finding | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetchFinding = async () => {
@@ -29,22 +19,14 @@ export function FindingDetail() {
     try {
       const data = await api.getFinding(Number(id))
       setFinding(data)
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to load finding', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load finding', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => { fetchFinding() }, [id])
-
-  const severityColors = {
-    critical: 'badge-critical',
-    high: 'badge-high',
-    medium: 'badge-medium',
-    low: 'badge-low',
-    info: 'badge-info',
-  }
 
   if (loading) {
     return (
@@ -66,13 +48,13 @@ export function FindingDetail() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/findings')} className="p-2 rounded-lg hover:bg-gray-100">
+          <button onClick={() => navigate('/findings')} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Back to findings">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{finding.title}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className={`badge ${severityColors[finding.severity as keyof typeof severityColors] || 'badge-info'}`}>
+              <span className={`badge ${SEVERITY_COLORS[finding.severity] || 'badge-info'}`}>
                 {finding.severity.toUpperCase()}
               </span>
               <span className="text-sm text-gray-500 capitalize">{finding.category.replace('_', ' ')}</span>
@@ -103,13 +85,20 @@ export function FindingDetail() {
             <dl className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <dt className="text-sm text-gray-500">Asset ID</dt>
-                  <dd className="font-medium text-gray-900">{finding.asset_id}</dd>
+                  <dt className="text-sm text-gray-500">Asset</dt>
+                  <dd className="font-medium text-gray-900">
+                    {finding.asset_name && (
+                      <button onClick={() => navigate(`/assets/${finding.asset_id}`)} className="text-primary-600 hover:underline">
+                        {finding.asset_name}
+                      </button>
+                    )}
+                    {!finding.asset_name && `Asset #${finding.asset_id}`}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500">Severity</dt>
                   <dd className="font-medium text-gray-900">
-                    <span className={`badge ${severityColors[finding.severity as keyof typeof severityColors] || 'badge-info'}`}>
+                    <span className={`badge ${SEVERITY_COLORS[finding.severity] || 'badge-info'}`}>
                       {finding.severity.toUpperCase()}
                     </span>
                   </dd>
