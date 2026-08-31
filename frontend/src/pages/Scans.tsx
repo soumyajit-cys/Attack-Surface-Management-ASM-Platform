@@ -1,16 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
-import { Scan, Loader2, Play, Clock, CheckCircle, AlertCircle, MinusCircle } from 'lucide-react'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { Scan } from '../lib/types'
+import { Scan as ScanIcon, Loader2, Play, Clock, CheckCircle, AlertCircle, MinusCircle } from 'lucide-react'
 
-interface Scan {
-  id: number
-  target: string
-  status: string
-  error: string | null
-  started_at: string
-  completed_at: string | null
-}
+const PAGE_SIZE = 50
 
 export function Scans() {
   const { addToast } = useToast()
@@ -22,10 +16,10 @@ export function Scans() {
   const fetchScans = async () => {
     setLoading(true)
     try {
-      const data = await api.getScans({ page: 1, page_size: 50 })
+      const data = await api.getScans({ page: 1, page_size: PAGE_SIZE })
       setScans(data.items)
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to load scans', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load scans', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }
@@ -42,8 +36,8 @@ export function Scans() {
       addToast({ type: 'success', title: 'Scan started', message: `Scanning ${scanDomain}` })
       setScanDomain('')
       fetchScans()
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to start scan', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to start scan', message: getApiErrorMessage(error) })
     } finally {
       setStartingScan(false)
     }
@@ -82,7 +76,7 @@ export function Scans() {
         <div className="p-6 border-b border-gray-200">
           <form onSubmit={handleStartScan} className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
-              <Scan className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <ScanIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
                 value={scanDomain}
