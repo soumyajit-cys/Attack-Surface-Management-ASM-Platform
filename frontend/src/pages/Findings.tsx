@@ -1,47 +1,31 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { Finding } from '../lib/types'
+import { SEVERITY_COLORS } from '../lib/types'
 import { Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 
-interface Finding {
-  id: number
-  asset_id: number
-  asset_name?: string
-  title: string
-  severity: string
-  category: string
-  description: string
-  recommendation: string
-  created_at: string
-}
-
-const severityColors: Record<string, string> = {
-  critical: 'badge-critical',
-  high: 'badge-high',
-  medium: 'badge-medium',
-  low: 'badge-low',
-  info: 'badge-info',
-}
+const PAGE_SIZE = 20
 
 export function Findings() {
+  const navigate = useNavigate()
   const { addToast } = useToast()
   const [findings, setFindings] = useState<Finding[]>([])
   const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const pageSize = 20
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('')
-  const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
 
   const fetchFindings = async () => {
     setLoading(true)
     try {
-      const data = await api.getFindings({ page, page_size: pageSize, severity: severityFilter || undefined })
+      const data = await api.getFindings({ page, page_size: PAGE_SIZE, severity: severityFilter || undefined })
       setFindings(data.items)
       setTotal(data.total)
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to load findings', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load findings', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }
@@ -76,7 +60,7 @@ export function Findings() {
           </div>
           <select
             value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
+            onChange={(e) => { setSeverityFilter(e.target.value); setPage(1) }}
             className="input w-40"
           >
             <option value="">All Severities</option>
@@ -97,41 +81,42 @@ export function Findings() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredFindings.map((finding) => (
-                <tr key={finding.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedFinding(finding)}>
+                <tr
+                  key={finding.id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/findings/${finding.id}`)}
+                  role="link"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/findings/${finding.id}`) }}
+                >
                   <td className="px-4 py-4">
                     <p className="font-medium text-gray-900">{finding.title}</p>
                     <p className="text-sm text-gray-500 truncate max-w-xs">{finding.description}</p>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`badge ${severityColors[finding.severity] || 'badge-info'}`}>
+                    <span className={`badge ${SEVERITY_COLORS[finding.severity] || 'badge-info'}`}>
                       {finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1)}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-gray-500 capitalize">{finding.category.replace('_', ' ')}</td>
                   <td className="px-4 py-4 text-gray-500">{finding.asset_name || `Asset #${finding.asset_id}`}</td>
                   <td className="px-4 py-4 text-gray-500">{new Date(finding.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-4">
-                    <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" onClick={(e) => { e.stopPropagation(); setSelectedFinding(finding); }}>
-                      View
-                    </button>
-                  </td>
                 </tr>
               ))}
               {loading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={5} className="px-4 py-12 text-center text-gray-500">
                     <Loader2 className="w-6 h-6 animate-spin inline-block text-primary-600" />
                   </td>
                 </tr>
               )}
               {!loading && filteredFindings.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={5} className="px-4 py-12 text-center text-gray-500">
                     No findings found
                   </td>
                 </tr>
@@ -140,53 +125,9 @@ export function Findings() {
           </table>
         </div>
 
-        {selectedFinding && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-                <h2 className="text-xl font-bold">Finding Details</h2>
-                <button onClick={() => setSelectedFinding(null)} className="p-2 rounded-lg hover:bg-gray-100">Close</button>
-              </div>
-              <div className="p-6 space-y-6">
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <h3 className="text-xl font-bold text-gray-900">{selectedFinding.title}</h3>
-                    <span className={`badge ${severityColors[selectedFinding.severity] || 'badge-info'}`}>
-                      {selectedFinding.severity.toUpperCase()}
-                    </span>
-                  </div>
-                  <span className="text-sm text-gray-500">{selectedFinding.category.replace('_', ' ')}</span>
-                </div>
-
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Description</h4>
-                  <p className="text-gray-600">{selectedFinding.description || 'No description provided'}</p>
-                </div>
-
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Recommendation</h4>
-                  <p className="text-gray-600 bg-gray-50 p-4 rounded-lg">{selectedFinding.recommendation || 'No recommendation provided'}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                  <div><span className="text-gray-500">Asset ID:</span> {selectedFinding.asset_id}</div>
-                  <div><span className="text-gray-500">Created:</span> {new Date(selectedFinding.created_at).toLocaleString()}</div>
-                  <div><span className="text-gray-500">Severity:</span> {selectedFinding.severity}</div>
-                  <div><span className="text-gray-500">Category:</span> {selectedFinding.category}</div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
-                  <button onClick={() => setSelectedFinding(null)} className="btn-secondary">Close</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Pagination */}
         <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200">
           <p className="text-sm text-gray-500">
-            Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, total)} of {total} findings
+            Showing {((page - 1) * PAGE_SIZE) + 1} to {Math.min(page * PAGE_SIZE, total)} of {total} findings
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -197,11 +138,11 @@ export function Findings() {
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="px-3 py-1 text-sm font-medium text-gray-700">
-              Page {page} of {Math.ceil(total / pageSize)}
+              Page {page} of {Math.ceil(total / PAGE_SIZE)}
             </span>
             <button
               onClick={() => setPage(page + 1)}
-              disabled={page >= Math.ceil(total / pageSize)}
+              disabled={page >= Math.ceil(total / PAGE_SIZE)}
               className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
             >
               <ChevronRight className="w-4 h-4" />
