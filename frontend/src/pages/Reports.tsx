@@ -42,7 +42,7 @@ export function Reports() {
       downloadBlob(blob, `assets_${new Date().toISOString().split('T')[0]}.csv`)
       addToast({ type: 'success', title: 'Export complete', message: 'Assets CSV downloaded' })
     } catch (error) {
-      addToast({ type: 'error', title: 'Export failed' })
+      addToast({ type: 'error', title: 'Export failed', message: getApiErrorMessage(error) })
     } finally {
       setExporting(null)
     }
@@ -55,7 +55,7 @@ export function Reports() {
       downloadBlob(blob, `scans_${new Date().toISOString().split('T')[0]}.csv`)
       addToast({ type: 'success', title: 'Export complete', message: 'Scans CSV downloaded' })
     } catch (error) {
-      addToast({ type: 'error', title: 'Export failed' })
+      addToast({ type: 'error', title: 'Export failed', message: getApiErrorMessage(error) })
     } finally {
       setExporting(null)
     }
@@ -68,7 +68,7 @@ export function Reports() {
       downloadBlob(blob, `domains_${new Date().toISOString().split('T')[0]}.csv`)
       addToast({ type: 'success', title: 'Export complete', message: 'Domains CSV downloaded' })
     } catch (error) {
-      addToast({ type: 'error', title: 'Export failed' })
+      addToast({ type: 'error', title: 'Export failed', message: getApiErrorMessage(error) })
     } finally {
       setExporting(null)
     }
@@ -81,7 +81,7 @@ export function Reports() {
       downloadBlob(blob, `sentinelasm_export_${new Date().toISOString().split('T')[0]}.zip`)
       addToast({ type: 'success', title: 'Export complete', message: 'Full export downloaded' })
     } catch (error) {
-      addToast({ type: 'error', title: 'Export failed' })
+      addToast({ type: 'error', title: 'Export failed', message: getApiErrorMessage(error) })
     } finally {
       setExporting(null)
     }
@@ -93,7 +93,7 @@ export function Reports() {
       const blob = await api.getExecutiveSummaryPdf(assetId || undefined)
       downloadBlob(blob, `executive_summary_${new Date().toISOString().split('T')[0]}.pdf`)
       addToast({ type: 'success', title: 'PDF generated', message: 'Executive summary downloaded' })
-    } catch (error: any) {
+    } catch (error) {
       const message = getApiErrorMessage(error)
       if (message.includes('fpdf2')) {
         addToast({ type: 'error', title: 'PDF unavailable', message: 'PDF generation requires fpdf2 to be installed on the backend' })
