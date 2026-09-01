@@ -29,7 +29,7 @@ export function Reports() {
       downloadBlob(blob, `findings_${new Date().toISOString().split('T')[0]}.csv`)
       addToast({ type: 'success', title: 'Export complete', message: 'Findings CSV downloaded' })
     } catch (error) {
-      addToast({ type: 'error', title: 'Export failed' })
+      addToast({ type: 'error', title: 'Export failed', message: getApiErrorMessage(error) })
     } finally {
       setExporting(null)
     }
