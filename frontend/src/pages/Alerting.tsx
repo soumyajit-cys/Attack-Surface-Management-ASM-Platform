@@ -1,27 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { AlertIntegration, DigestConfig } from '../lib/types'
 import { MessageSquare, Plus, Trash2, Check, AlertTriangle, Zap, TestTube2 } from 'lucide-react'
 
-interface AlertIntegration {
-  id: number
-  name: string
-  channel: string
-  webhook_url: string
-  min_severity: string
-  is_active: boolean
-  last_triggered_at: string | null
-  created_at: string
-}
-
-interface DigestConfig {
-  frequency: string
-  day_of_week: number
-  hour_utc: number
-  recipient_emails: string
-  min_severity: string
-  is_active: boolean
-}
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 
 export function Alerting() {
   const { addToast } = useToast()
@@ -30,7 +14,6 @@ export function Alerting() {
   const [digestExists, setDigestExists] = useState(false)
   const [showIntegrationModal, setShowIntegrationModal] = useState(false)
   const [showDigestModal, setShowDigestModal] = useState(false)
-  const [editingIntegration, setEditingIntegration] = useState<AlertIntegration | null>(null)
   const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState({
     name: '',
@@ -55,8 +38,8 @@ export function Alerting() {
         setDigestConfig(null)
         setDigestExists(false)
       }
-    } catch {
-      addToast({ type: 'error', title: 'Failed to load alerting config' })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load alerting config', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }
@@ -78,8 +61,8 @@ export function Alerting() {
       setFormData({ name: '', channel: 'slack', webhook_url: '', secret: '', min_severity: 'high' })
       addToast({ type: 'success', title: 'Integration created' })
       fetchData()
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to create', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to create', message: getApiErrorMessage(error) })
     }
   }
 
@@ -87,8 +70,8 @@ export function Alerting() {
     try {
       await api.testAlertIntegration(integration.id)
       addToast({ type: 'success', title: 'Test sent', message: `Test alert sent to ${integration.name}` })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Test failed', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Test failed', message: getApiErrorMessage(error) })
     }
   }
 
@@ -98,8 +81,8 @@ export function Alerting() {
       await api.deleteAlertIntegration(id)
       setIntegrations(integrations.filter(i => i.id !== id))
       addToast({ type: 'success', title: 'Integration deleted' })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to delete', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to delete', message: getApiErrorMessage(error) })
     }
   }
 
@@ -122,13 +105,13 @@ export function Alerting() {
       setShowDigestModal(false)
       setDigestExists(true)
       addToast({ type: 'success', title: 'Digest config saved' })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to save', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to save', message: getApiErrorMessage(error) })
     }
   }
 
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const severities = ['critical', 'high', 'medium', 'low', 'info']
+  const resetIntegrationForm = () =>
+    setFormData({ name: '', channel: 'slack', webhook_url: '', secret: '', min_severity: 'high' })
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent" /></div>
@@ -144,11 +127,10 @@ export function Alerting() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Integrations */}
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Notification Integrations</h2>
-            <button className="btn-primary text-sm" onClick={() => { setEditingIntegration(null); setShowIntegrationModal(true); }}>
+            <button className="btn-primary text-sm" onClick={() => { resetIntegrationForm(); setShowIntegrationModal(true); }}>
               <Plus className="w-4 h-4" />
               Add Integration
             </button>
@@ -174,10 +156,10 @@ export function Alerting() {
                     {integration.is_active ? <Check className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
                     {integration.is_active ? 'Active' : 'Inactive'}
                   </span>
-                  <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" onClick={() => handleTestIntegration(integration)} title="Test">
+                  <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" onClick={() => handleTestIntegration(integration)} aria-label={`Test ${integration.name}`} title="Test">
                     <TestTube2 className="w-4 h-4" />
                   </button>
-                  <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" onClick={() => handleDeleteIntegration(integration.id)} title="Delete">
+                  <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" onClick={() => handleDeleteIntegration(integration.id)} aria-label={`Delete ${integration.name}`} title="Delete">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -189,7 +171,6 @@ export function Alerting() {
           </div>
         </div>
 
-        {/* Email Digest */}
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Email Digest</h2>
@@ -202,7 +183,7 @@ export function Alerting() {
               <div className="space-y-3 text-sm">
                 <p><span className="font-medium">Status:</span> {digestConfig.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-low">Inactive</span>}</p>
                 <p><span className="font-medium">Frequency:</span> {digestConfig.frequency}</p>
-                <p><span className="font-medium">Day:</span> {days[digestConfig.day_of_week]}</p>
+                <p><span className="font-medium">Day:</span> {DAYS[digestConfig.day_of_week]}</p>
                 <p><span className="font-medium">Time (UTC):</span> {digestConfig.hour_utc}:00</p>
                 <p><span className="font-medium">Min Severity:</span> {digestConfig.min_severity}</p>
                 <p><span className="font-medium">Recipients:</span> {digestConfig.recipient_emails}</p>
@@ -215,12 +196,11 @@ export function Alerting() {
         </div>
       </div>
 
-      {/* Modals */}
       {showIntegrationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl max-w-md w-full mx-4 p-6">
-            <h2 className="text-xl font-bold mb-4">{editingIntegration ? 'Edit Integration' : 'Add Integration'}</h2>
-            <form onSubmit={(e) => { e.preventDefault(); handleCreateIntegration(e); }} className="space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">Add Integration</h2>
+            <form onSubmit={handleCreateIntegration} className="space-y-4">
               <div>
                 <label className="label">Name</label>
                 <input type="text" className="input" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Security Team Slack" required />
@@ -243,11 +223,11 @@ export function Alerting() {
               <div>
                 <label className="label">Minimum Severity</label>
                 <select className="input" value={formData.min_severity} onChange={(e) => setFormData({...formData, min_severity: e.target.value})}>
-                  {severities.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                  {SEVERITIES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <button type="button" onClick={() => { setShowIntegrationModal(false); setFormData({ name: '', channel: 'slack', webhook_url: '', secret: '', min_severity: 'high' }); }} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => { setShowIntegrationModal(false); resetIntegrationForm(); }} className="btn-secondary">Cancel</button>
                 <button type="submit" className="btn-primary">Save</button>
               </div>
             </form>
@@ -256,13 +236,13 @@ export function Alerting() {
       )}
 
       {showDigestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl max-w-md w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">{digestConfig ? 'Edit Digest Config' : 'Configure Email Digest'}</h2>
-            <form onSubmit={(e) => { e.preventDefault(); handleSaveDigest(e); }} className="space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">{digestExists ? 'Edit Digest Config' : 'Configure Email Digest'}</h2>
+            <form onSubmit={handleSaveDigest} className="space-y-4">
               <div>
                 <label className="label">Frequency</label>
-                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, frequency: e.target.value})}>
+                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...digestConfig, frequency: e.target.value} as DigestConfig)}>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -270,26 +250,26 @@ export function Alerting() {
               </div>
               <div>
                 <label className="label">Day of Week</label>
-                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, day_of_week: parseInt(e.target.value)})}>
-                  {days.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...digestConfig, day_of_week: parseInt(e.target.value)} as DigestConfig)}>
+                  {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Hour (UTC)</label>
-                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, hour_utc: parseInt(e.target.value)})} />
+                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...digestConfig, hour_utc: parseInt(e.target.value)} as DigestConfig)} />
               </div>
               <div>
                 <label className="label">Recipient Emails (comma-separated)</label>
-                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, recipient_emails: e.target.value})} placeholder="security@example.com,admin@example.com" required />
+                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...digestConfig, recipient_emails: e.target.value} as DigestConfig)} placeholder="security@example.com,admin@example.com" required />
               </div>
               <div>
                 <label className="label">Minimum Severity</label>
-                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, min_severity: e.target.value})}>
-                  {severities.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...digestConfig, min_severity: e.target.value} as DigestConfig)}>
+                  {SEVERITIES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, is_active: e.target.checked})} />
+                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active ?? false} onChange={(e) => setDigestConfig({...digestConfig, is_active: e.target.checked} as DigestConfig)} />
                 <label htmlFor="digest-active" className="text-sm text-gray-700">Active</label>
               </div>
               <div className="flex justify-end gap-2 pt-4">
