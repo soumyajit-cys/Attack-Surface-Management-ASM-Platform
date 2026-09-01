@@ -14,7 +14,7 @@ interface GraphEdge {
   type: string;
 }
 
-interface AssetGraphData {
+export interface AssetGraphData {
   asset_id: number;
   nodes: GraphNode[];
   edges: GraphEdge[];
