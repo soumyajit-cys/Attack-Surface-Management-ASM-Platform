@@ -1,37 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { Invitation, APIKey, DigestConfig } from '../lib/types'
 import { Plus, Trash2, Copy } from 'lucide-react'
 
-interface Invitation {
-  id: number
-  email: string
-  role: string
-  status: string
-  created_at: string
-  expires_at: string
-}
-
-interface APIKey {
-  id: number
-  name: string
-  key_prefix: string
-  scopes: string
-  is_active: boolean
-  last_used_at: string | null
-  expires_at: string | null
-  created_at: string
-  key?: string
-}
-
-interface DigestConfig {
-  frequency: string
-  day_of_week: number
-  hour_utc: number
-  recipient_emails: string
-  min_severity: string
-  is_active: boolean
-}
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
 
 export function Organizations() {
   const { addToast } = useToast()
@@ -67,8 +41,8 @@ export function Organizations() {
         setDigestConfig(null)
         setDigestExists(false)
       }
-    } catch {
-      addToast({ type: 'error', title: 'Failed to load organization settings' })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load organization settings', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }
@@ -84,8 +58,8 @@ export function Organizations() {
       setNewInviteEmail('')
       addToast({ type: 'success', title: 'Invitation sent', message: `Invited ${newInviteEmail} as ${newInviteRole}` })
       fetchData()
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to create invitation', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to create invitation', message: getApiErrorMessage(error) })
     }
   }
 
@@ -98,14 +72,12 @@ export function Organizations() {
         expires_days: newKeyExpiresDays ? parseInt(newKeyExpiresDays) : undefined,
       })
       setNewKey(response.key)
-      setShowKeyModal(false)
-      setShowKeyModal(true)
       setNewKeyName('')
       setNewKeyExpiresDays('')
       fetchData()
       addToast({ type: 'success', title: 'API key created', message: "Copy the key now - it won't be shown again" })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to create API key', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to create API key', message: getApiErrorMessage(error) })
     }
   }
 
@@ -115,8 +87,8 @@ export function Organizations() {
       await api.deleteApiKey(keyId)
       setApiKeys(apiKeys.filter(k => k.id !== keyId))
       addToast({ type: 'success', title: 'API key revoked' })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to revoke key', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to revoke key', message: getApiErrorMessage(error) })
     }
   }
 
@@ -144,12 +116,10 @@ export function Organizations() {
       setShowDigestModal(false)
       setDigestExists(true)
       addToast({ type: 'success', title: 'Digest config saved' })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to save', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to save', message: getApiErrorMessage(error) })
     }
   }
-
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent" /></div>
@@ -165,7 +135,6 @@ export function Organizations() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Invitations */}
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Team Invitations</h2>
@@ -190,7 +159,6 @@ export function Organizations() {
           </div>
         </div>
 
-        {/* API Keys */}
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">API Keys</h2>
@@ -204,7 +172,7 @@ export function Organizations() {
               <div key={key.id} className="p-4 flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900">{key.name}</p>
-                  <p className="text-sm text-gray-500 font-mono text-sm">{key.key_prefix}_••••••••</p>
+                  <p className="text-sm text-gray-500 font-mono">{key.key_prefix}_••••••••</p>
                   <p className="text-xs text-gray-400 mt-1">
                     Scopes: {key.scopes} · {key.is_active ? 'Active' : 'Revoked'} · {key.last_used_at ? `Last used: ${new Date(key.last_used_at).toLocaleDateString()}` : 'Never used'}
                   </p>
@@ -225,7 +193,6 @@ export function Organizations() {
           </div>
         </div>
 
-        {/* Email Digest */}
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Email Digest</h2>
@@ -238,7 +205,7 @@ export function Organizations() {
               <div className="space-y-3 text-sm">
                 <p><span className="font-medium">Status:</span> {digestConfig.is_active ? 'Active' : 'Inactive'}</p>
                 <p><span className="font-medium">Frequency:</span> {digestConfig.frequency}</p>
-                <p><span className="font-medium">Day:</span> {days[digestConfig.day_of_week]}</p>
+                <p><span className="font-medium">Day:</span> {DAYS[digestConfig.day_of_week]}</p>
                 <p><span className="font-medium">Time (UTC):</span> {digestConfig.hour_utc}:00</p>
                 <p><span className="font-medium">Min Severity:</span> {digestConfig.min_severity}</p>
                 <p><span className="font-medium">Recipients:</span> {digestConfig.recipient_emails}</p>
@@ -253,11 +220,13 @@ export function Organizations() {
         </div>
       </div>
 
-      {/* Modals */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl max-w-md w-full mx-4 p-6">
-            <h2 className="text-xl font-bold mb-4">Invite Team Member</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Invite Team Member</h2>
+              <button onClick={() => setShowInviteModal(false)} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">✕</button>
+            </div>
             <form onSubmit={handleCreateInvitation} className="space-y-4">
               <div>
                 <label className="label">Email</label>
@@ -281,8 +250,8 @@ export function Organizations() {
       )}
 
       {showKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl max-w-md w-full mx-4 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
             {newKey ? (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold mb-4">API Key Created</h2>
@@ -298,7 +267,10 @@ export function Organizations() {
               </div>
             ) : (
               <div className="space-y-4">
-                <h2 className="text-xl font-bold mb-4">Create API Key</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold">Create API Key</h2>
+                  <button onClick={() => setShowKeyModal(false)} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">✕</button>
+                </div>
                 <form onSubmit={handleCreateApiKey} className="space-y-4">
                   <div>
                     <label className="label">Key Name</label>
@@ -314,7 +286,7 @@ export function Organizations() {
                   </div>
                   <div>
                     <label className="label">Expires In (days, optional)</label>
-                    <input type="number" className="input" value={newKeyExpiresDays} onChange={(e) => setNewKeyExpiresDays(e.target.value)} placeholder="365" />
+                    <input type="number" className="input" value={newKeyExpiresDays} onChange={(e) => setNewKeyExpiresDays(e.target.value)} placeholder="365" min="1" />
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <button type="button" onClick={() => setShowKeyModal(false)} className="btn-secondary">Cancel</button>
@@ -328,13 +300,16 @@ export function Organizations() {
       )}
 
       {showDigestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl max-w-md w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">{digestConfig ? 'Edit Digest Config' : 'Configure Email Digest'}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">{digestExists ? 'Edit Digest Config' : 'Configure Email Digest'}</h2>
+              <button onClick={() => setShowDigestModal(false)} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">✕</button>
+            </div>
             <form onSubmit={handleSaveDigest} className="space-y-4">
               <div>
                 <label className="label">Frequency</label>
-                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, frequency: e.target.value})}>
+                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...digestConfig, frequency: e.target.value} as DigestConfig)}>
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -342,29 +317,26 @@ export function Organizations() {
               </div>
               <div>
                 <label className="label">Day of Week</label>
-                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, day_of_week: parseInt(e.target.value)})}>
-                  {days.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...digestConfig, day_of_week: parseInt(e.target.value)} as DigestConfig)}>
+                  {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Hour (UTC)</label>
-                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, hour_utc: parseInt(e.target.value)})} />
+                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...digestConfig, hour_utc: parseInt(e.target.value)} as DigestConfig)} />
               </div>
               <div>
                 <label className="label">Recipient Emails (comma-separated)</label>
-                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, recipient_emails: e.target.value})} placeholder="security@example.com,admin@example.com" required />
+                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...digestConfig, recipient_emails: e.target.value} as DigestConfig)} placeholder="security@example.com,admin@example.com" required />
               </div>
               <div>
                 <label className="label">Minimum Severity</label>
-                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, min_severity: e.target.value})}>
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
+                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...digestConfig, min_severity: e.target.value} as DigestConfig)}>
+                  {SEVERITIES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active} onChange={(e) => setDigestConfig({...(digestConfig || {}) as DigestConfig, is_active: e.target.checked})} />
+                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active ?? false} onChange={(e) => setDigestConfig({...digestConfig, is_active: e.target.checked} as DigestConfig)} />
                 <label htmlFor="digest-active" className="text-sm text-gray-700">Active</label>
               </div>
               <div className="flex justify-end gap-2 pt-4">
