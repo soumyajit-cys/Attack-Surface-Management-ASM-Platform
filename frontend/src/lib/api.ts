@@ -198,19 +198,7 @@ class ApiClient {
   }
 
   async getAsset(assetId: number) {
-    return this.get<{
-      id: number
-      name: string
-      criticality: string
-      exposure: string | null
-      created_at: string
-      updated_at: string
-      risk_score: number
-      domains_count: number
-      findings_count: number
-      open_ports: number
-      domains: Array<Record<string, unknown>>
-    }>(`/assets/${assetId}`)
+    return this.get<AssetDetailData>(`/assets/${assetId}`)
   }
 
   async getAssetGraph(assetId: number) {

@@ -43,6 +43,55 @@ export interface Asset {
   risk_score: number
 }
 
+export interface AssetPort {
+  id: number
+  port: number
+  protocol: string
+  service: string
+  status: string
+  banner: string
+}
+
+export interface AssetSsl {
+  issuer: string
+  tls_version: string
+  cipher: string
+  expires_at: string | null
+  self_signed: boolean
+  risk_level: string
+}
+
+export interface AssetSubdomain {
+  id: number
+  subdomain: string
+  ip_address: string
+  source: string
+  ports: AssetPort[]
+  ssl: AssetSsl | null
+}
+
+export interface AssetDomain {
+  id: number
+  domain: string
+  registrar: string
+  asn: string
+  subdomains: AssetSubdomain[]
+}
+
+export interface AssetDetailData {
+  id: number
+  name: string
+  criticality: string
+  exposure: string | null
+  created_at: string
+  updated_at: string
+  risk_score: number
+  domains_count: number
+  findings_count: number
+  open_ports: number
+  domains: AssetDomain[]
+}
+
 export interface ScanPolicy {
   id: number
   name: string
