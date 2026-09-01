@@ -1,19 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { Asset, ScanPolicy } from '../lib/types'
 import { Plus, Loader2, Play, Trash2, Edit } from 'lucide-react'
-
-interface ScanPolicy {
-  id: number
-  asset_id: number
-  name: string
-  frequency: string
-  cron_expression: string | null
-  scope: string
-  is_active: boolean
-  last_run_at: string | null
-  next_run_at: string | null
-}
 
 interface AssetOption {
   id: number

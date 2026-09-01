@@ -21,7 +21,7 @@ export function Login() {
       await login(username, password)
       addToast({ type: 'success', title: 'Welcome back!', message: `Logged in as ${username}` })
       navigate('/')
-    } catch (error: any) {
+    } catch (error) {
       addToast({ type: 'error', title: 'Login failed', message: getApiErrorMessage(error) || 'Invalid credentials' })
     } finally {
       setLoading(false)

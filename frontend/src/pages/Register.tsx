@@ -44,7 +44,7 @@ export function Register() {
       })
       addToast({ type: 'success', title: 'Account created!', message: 'Welcome to SentinelASM' })
       navigate('/')
-    } catch (error: any) {
+    } catch (error) {
       addToast({ type: 'error', title: 'Registration failed', message: getApiErrorMessage(error) || 'Please try again' })
     } finally {
       setLoading(false)
