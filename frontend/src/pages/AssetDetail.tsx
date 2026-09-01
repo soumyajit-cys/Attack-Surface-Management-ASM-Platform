@@ -7,47 +7,6 @@ import type { AssetGraphData } from '../AssetGraph'
 import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
 import { AssetGraph } from '../AssetGraph'
 
-interface AssetDetailData {
-  id: number
-  name: string
-  criticality: string
-  exposure: string | null
-  created_at: string
-  updated_at: string
-  risk_score: number
-  domains_count: number
-  findings_count: number
-  open_ports: number
-  domains: Array<{
-    id: number
-    domain: string
-    registrar: string
-    asn: string
-    subdomains: Array<{
-      id: number
-      subdomain: string
-      ip_address: string
-      source: string
-      ports: Array<{
-        id: number
-        port: number
-        protocol: string
-        service: string
-        status: string
-        banner: string
-      }>
-      ssl: {
-        issuer: string
-        tls_version: string
-        cipher: string
-        expires_at: string
-        self_signed: boolean
-        risk_level: string
-      } | null
-    }>
-  }>
-}
-
 export function AssetDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
