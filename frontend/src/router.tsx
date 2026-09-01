@@ -1,20 +1,29 @@
-import React from 'react'
+import React, { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { Layout } from './components/Layout'
-import { Login } from './pages/Login'
-import { Register } from './pages/Register'
-import { Dashboard } from './pages/Dashboard'
-import { Assets } from './pages/Assets'
-import { AssetDetail } from './pages/AssetDetail'
-import { Findings } from './pages/Findings'
-import { FindingDetail } from './pages/FindingDetail'
-import { Scans } from './pages/Scans'
-import { ScanPolicies } from './pages/ScanPolicies'
-import { Organizations } from './pages/Organizations'
-import { Alerting } from './pages/Alerting'
-import { Reports } from './pages/Reports'
-import { Settings } from './pages/Settings'
+
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })))
+const Register = lazy(() => import('./pages/Register').then(m => ({ default: m.Register })))
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const Assets = lazy(() => import('./pages/Assets').then(m => ({ default: m.Assets })))
+const AssetDetail = lazy(() => import('./pages/AssetDetail').then(m => ({ default: m.AssetDetail })))
+const Findings = lazy(() => import('./pages/Findings').then(m => ({ default: m.Findings })))
+const FindingDetail = lazy(() => import('./pages/FindingDetail').then(m => ({ default: m.FindingDetail })))
+const Scans = lazy(() => import('./pages/Scans').then(m => ({ default: m.Scans })))
+const ScanPolicies = lazy(() => import('./pages/ScanPolicies').then(m => ({ default: m.ScanPolicies })))
+const Organizations = lazy(() => import('./pages/Organizations').then(m => ({ default: m.Organizations })))
+const Alerting = lazy(() => import('./pages/Alerting').then(m => ({ default: m.Alerting })))
+const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })))
+const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
+
+function PageLoader() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-600 border-t-transparent" />
+    </div>
+  )
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -22,11 +31,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : <Navigate to="/login" replace />
 }
 
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>
+}
+
 export default function Router() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={<LazyPage><Login /></LazyPage>} />
+      <Route path="/register" element={<LazyPage><Register /></LazyPage>} />
       <Route
         path="/"
         element={
@@ -35,17 +48,17 @@ export default function Router() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Dashboard />} />
-        <Route path="assets" element={<Assets />} />
-        <Route path="assets/:id" element={<AssetDetail />} />
-        <Route path="findings" element={<Findings />} />
-        <Route path="findings/:id" element={<FindingDetail />} />
-        <Route path="scans" element={<Scans />} />
-        <Route path="scan-policies" element={<ScanPolicies />} />
-        <Route path="organizations" element={<Organizations />} />
-        <Route path="alerting" element={<Alerting />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="settings" element={<Settings />} />
+        <Route index element={<LazyPage><Dashboard /></LazyPage>} />
+        <Route path="assets" element={<LazyPage><Assets /></LazyPage>} />
+        <Route path="assets/:id" element={<LazyPage><AssetDetail /></LazyPage>} />
+        <Route path="findings" element={<LazyPage><Findings /></LazyPage>} />
+        <Route path="findings/:id" element={<LazyPage><FindingDetail /></LazyPage>} />
+        <Route path="scans" element={<LazyPage><Scans /></LazyPage>} />
+        <Route path="scan-policies" element={<LazyPage><ScanPolicies /></LazyPage>} />
+        <Route path="organizations" element={<LazyPage><Organizations /></LazyPage>} />
+        <Route path="alerting" element={<LazyPage><Alerting /></LazyPage>} />
+        <Route path="reports" element={<LazyPage><Reports /></LazyPage>} />
+        <Route path="settings" element={<LazyPage><Settings /></LazyPage>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
