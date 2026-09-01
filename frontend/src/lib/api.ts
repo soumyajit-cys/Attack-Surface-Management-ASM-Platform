@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 import type { Asset, Finding, Scan, ScanPolicy, AlertIntegration, Invitation, APIKey, DigestConfig, PaginatedResponse, DashboardData } from './types'
+import type { AssetGraphData } from '../AssetGraph'
 
 export const API_PREFIX = import.meta.env.VITE_API_BASE || '/api/v1'
 
