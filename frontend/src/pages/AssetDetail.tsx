@@ -63,8 +63,8 @@ export function AssetDetail() {
     try {
       const data = await api.getAsset(Number(id))
       setAsset(data)
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to load asset', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load asset', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }
@@ -76,8 +76,8 @@ export function AssetDetail() {
     try {
       const data = await api.getAssetGraph(Number(id))
       setGraphData(data)
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to load graph', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load graph', message: getApiErrorMessage(error) })
     } finally {
       setGraphLoading(false)
     }
