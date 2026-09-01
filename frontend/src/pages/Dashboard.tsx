@@ -7,18 +7,12 @@ import {
   Server,
   AlertTriangle,
   Scan as ScanIcon,
-  FileText,
   Clock,
   RefreshCw,
-  ArrowUpRight,
-  ArrowDownRight,
   CheckCircle,
   AlertCircle,
 } from 'lucide-react'
 import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   PieChart,
