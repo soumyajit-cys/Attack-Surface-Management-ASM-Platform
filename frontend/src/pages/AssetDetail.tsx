@@ -178,10 +178,14 @@ export function AssetDetail() {
       {/* Tabs */}
       <div className="card">
         <div className="border-b border-gray-200">
-          <div className="flex gap-1 px-6" role="tablist">
+          <div className="flex gap-1 px-6" role="tablist" aria-label="Asset details">
             {['Info', 'Graph'].map((tab) => (
               <button
                 key={tab}
+                role="tab"
+                aria-selected={activeTab === tab}
+                aria-controls={`asset-${tab.toLowerCase()}-panel`}
+                id={`asset-${tab.toLowerCase()}-tab`}
                 onClick={() => setActiveTab(tab)}
                 className={`py-4 px-4 border-b-2 font-medium text-sm ${
                   activeTab === tab
@@ -196,7 +200,7 @@ export function AssetDetail() {
         </div>
 
         {activeTab === 'Graph' ? (
-          <div className="p-6 overflow-x-auto">
+          <div id="asset-graph-panel" role="tabpanel" aria-labelledby="asset-graph-tab" className="p-6 overflow-x-auto">
             {graphLoading ? (
               <div className="flex items-center justify-center h-96">
                 <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
@@ -206,7 +210,7 @@ export function AssetDetail() {
             )}
           </div>
         ) : (
-        <div className="p-6">
+        <div id="asset-info-panel" role="tabpanel" aria-labelledby="asset-info-tab" className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Domains & Subdomains</h2>
           {asset.domains.map((domain) => (
             <div key={domain.id} className="mb-6">

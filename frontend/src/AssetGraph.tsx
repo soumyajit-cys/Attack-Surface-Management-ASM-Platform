@@ -152,13 +152,17 @@ export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, heigh
         ref={svgRef}
         width={width}
         height={height}
-        style={{ background: '#f9fafb', borderRadius: '8px' }}
+        role="img"
+        aria-label="Network graph showing the asset, its domains, subdomains, ports, and SSL certificates"
+        className="rounded-lg"
+        style={{ background: '#f9fafb' }}
       />
-      <div className="mt-4 flex flex-wrap gap-4 text-sm">
+      <div className="mt-4 flex flex-wrap gap-4 text-sm" aria-label="Graph legend">
         {Object.entries(NODE_COLORS).map(([type, color]) => (
           <span key={type} className="flex items-center gap-1">
             <span
               className="w-3 h-3 rounded-full"
+              aria-hidden="true"
               style={{ backgroundColor: color }}
             />
             {type.charAt(0).toUpperCase() + type.slice(1)}
