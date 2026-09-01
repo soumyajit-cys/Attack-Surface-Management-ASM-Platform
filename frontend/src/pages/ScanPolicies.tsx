@@ -29,8 +29,8 @@ export function ScanPolicies() {
     try {
       const data = await api.getScanPolicies()
       setPolicies(data)
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to load scan policies', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to load scan policies', message: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }
@@ -39,7 +39,7 @@ export function ScanPolicies() {
   const fetchAssets = async () => {
     try {
       const data = await api.getAssets({ page: 1, page_size: 100 })
-      setAssets(data.items)
+      setAssets(data.items.map((a: Asset) => ({ id: a.id, name: a.name })))
     } catch {
       setAssets([])
     }
@@ -51,8 +51,8 @@ export function ScanPolicies() {
     try {
       await api.runScanPolicy(policyId)
       addToast({ type: 'success', title: 'Scan triggered', message: 'Scan has been queued' })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to run scan', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to run scan', message: getApiErrorMessage(error) })
     }
   }
 
