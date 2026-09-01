@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
-import { api } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
+import type { AssetGraphData } from '../AssetGraph'
 import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react'
 import { AssetGraph } from '../AssetGraph'
 
@@ -52,7 +53,7 @@ export function AssetDetail() {
   const { addToast } = useToast()
   const [asset, setAsset] = useState<AssetDetailData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [graphData, setGraphData] = useState<any>(null)
+  const [graphData, setGraphData] = useState<AssetGraphData | null>(null)
   const [graphLoading, setGraphLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('Info')
 
