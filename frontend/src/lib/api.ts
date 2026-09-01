@@ -196,12 +196,24 @@ class ApiClient {
     return this.get<PaginatedResponse<Asset>>('/assets', { params })
   }
 
-  async getAsset(assetId: number): Promise<Asset & { domains: unknown[] }> {
-    return this.get(`/assets/${assetId}`)
+  async getAsset(assetId: number) {
+    return this.get<{
+      id: number
+      name: string
+      criticality: string
+      exposure: string | null
+      created_at: string
+      updated_at: string
+      risk_score: number
+      domains_count: number
+      findings_count: number
+      open_ports: number
+      domains: Array<Record<string, unknown>>
+    }>(`/assets/${assetId}`)
   }
 
-  async getAssetGraph(assetId: number): Promise<{ asset_id: number; nodes: unknown[]; edges: unknown[] }> {
-    return this.get(`/assets/${assetId}/graph`)
+  async getAssetGraph(assetId: number) {
+    return this.get<AssetGraphData>(`/assets/${assetId}/graph`)
   }
 
   // ── findings ───────────────────────────────────────────────────────────────
