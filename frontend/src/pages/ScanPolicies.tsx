@@ -62,8 +62,8 @@ export function ScanPolicies() {
       await api.deleteScanPolicy(policyId)
       setPolicies(policies.filter(p => p.id !== policyId))
       addToast({ type: 'success', title: 'Policy deleted' })
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to delete', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to delete', message: getApiErrorMessage(error) })
     }
   }
 
@@ -111,8 +111,8 @@ export function ScanPolicies() {
       setShowModal(false)
       addToast({ type: 'success', title: editingPolicy ? 'Policy updated' : 'Policy created' })
       fetchPolicies()
-    } catch (error: any) {
-      addToast({ type: 'error', title: 'Failed to save policy', message: error.message })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to save policy', message: getApiErrorMessage(error) })
     } finally {
       setSaving(false)
     }
