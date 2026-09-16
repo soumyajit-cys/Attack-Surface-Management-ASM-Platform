@@ -340,6 +340,8 @@ async def test_integration(
         success = await send_slack_alert(str(integration.webhook_url), test_finding, test_asset)
     elif integration.channel == AlertChannel.DISCORD:
         success = await send_discord_alert(str(integration.webhook_url), test_finding, test_asset)
+    elif integration.channel == AlertChannel.JIRA:
+        success = await send_jira_alert(integration, test_finding, test_asset)
 
     if not success:
         raise AppError(

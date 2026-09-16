@@ -20,9 +20,14 @@ router = APIRouter(
 class AlertIntegrationCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     channel: AlertChannel
-    webhook_url: HttpUrl
+    webhook_url: Optional[HttpUrl] = None
     secret: Optional[str] = None
     min_severity: AlertSeverity = AlertSeverity.HIGH
+    jira_base_url: Optional[HttpUrl] = None
+    jira_project_key: Optional[str] = Field(default=None, min_length=1, max_length=16)
+    jira_email: Optional[str] = None
+    jira_api_token: Optional[str] = None
+    jira_issue_type: Optional[str] = Field(default=None, min_length=1, max_length=64)
 
 
 class AlertIntegrationUpdate(BaseModel):
@@ -31,6 +36,11 @@ class AlertIntegrationUpdate(BaseModel):
     secret: Optional[str] = None
     min_severity: Optional[AlertSeverity] = None
     is_active: Optional[bool] = None
+    jira_base_url: Optional[HttpUrl] = None
+    jira_project_key: Optional[str] = Field(default=None, min_length=1, max_length=16)
+    jira_email: Optional[str] = None
+    jira_api_token: Optional[str] = None
+    jira_issue_type: Optional[str] = Field(default=None, min_length=1, max_length=64)
 
 
 class AlertIntegrationResponse(BaseModel):
@@ -38,13 +48,17 @@ class AlertIntegrationResponse(BaseModel):
     organization_id: int
     name: str
     channel: AlertChannel
-    webhook_url: str
+    webhook_url: Optional[str] = None
     min_severity: AlertSeverity
     is_active: bool
     last_triggered_at: Optional[datetime]
     created_by: Optional[int]
     created_at: datetime
     updated_at: datetime
+    jira_base_url: Optional[str] = None
+    jira_project_key: Optional[str] = None
+    jira_email: Optional[str] = None
+    jira_issue_type: Optional[str] = None
 
     class Config:
         from_attributes = True
