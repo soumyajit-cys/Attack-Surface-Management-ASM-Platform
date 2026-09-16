@@ -28,3 +28,6 @@ pytest
 pytest-asyncio
 
 prometheus-client
+
+# Compose-contract tests parse docker-compose.yml
+pyyaml
