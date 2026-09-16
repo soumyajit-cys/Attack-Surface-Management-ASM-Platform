@@ -145,6 +145,9 @@ def run_discovery(self, scan_id: int) -> dict:
 
         db.commit()
 
+        # ── Phase 4b: CVE enrichment (best-effort, never fails the scan) ──
+        _dispatch_enrichment(scan, asset_id)
+
         # ── Phase 5: External alert dispatch ──────────────────────────────
         _dispatch_alerts_for_findings(db, new_findings, asset_id, scan.organization_id)
 
@@ -500,6 +503,22 @@ def _generate_and_persist_findings(
 def _persist_risk_score(db: Session, asset_id: int) -> None:
     from services.scoring.risk_engine import recalculate_asset_risk_score
     recalculate_asset_risk_score(db, asset_id)
+
+
+def _dispatch_enrichment(scan: ScanHistory, asset_id: int) -> None:
+    """Queue OSV.dev CVE enrichment for *asset_id* (best-effort).
+
+    Enrichment runs in its own task/session: OSV outages or unparseable
+    banners must never fail an otherwise completed scan.
+    """
+    try:
+        from tasks.cve_tasks import enrich_asset_findings
+        enrich_asset_findings.delay(asset_id=asset_id)
+    except Exception:
+        logger.warning(
+            "CVE enrichment dispatch failed for asset %s (scan %s)",
+            asset_id, scan.id,
+        )
 
 
 def _dispatch_alerts_for_findings(
