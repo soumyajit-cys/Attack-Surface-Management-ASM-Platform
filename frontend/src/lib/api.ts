@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
-import type { Asset, Finding, Scan, ScanPolicy, AlertIntegration, Invitation, APIKey, DigestConfig, PaginatedResponse, DashboardData, AssetDetailData } from './types'
+import type { Asset, Finding, Scan, ScanPolicy, AlertIntegration, Invitation, APIKey, DigestConfig, PaginatedResponse, DashboardData, AssetDetailData, ChangeEvent } from './types'
 import type { AssetGraphData } from '../AssetGraph'
 
 export const API_PREFIX = import.meta.env.VITE_API_BASE || '/api/v1'
@@ -212,6 +212,11 @@ class ApiClient {
 
   async getFinding(findingId: number): Promise<Finding> {
     return this.get<Finding>(`/findings/${findingId}`)
+  }
+
+  // ── change events (asset history) ────────────────────────────────────────
+  async getRecentChanges(params?: { page?: number; page_size?: number; severity?: string; asset_id?: number }): Promise<PaginatedResponse<ChangeEvent>> {
+    return this.get<PaginatedResponse<ChangeEvent>>('/alerts', { params })
   }
 
   // ── scans ──────────────────────────────────────────────────────────────────

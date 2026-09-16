@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
-import type { DashboardData, Scan } from '../lib/types'
+import type { ChangeEvent, DashboardData, Scan } from '../lib/types'
 import {
   Server,
   AlertTriangle,
@@ -11,6 +11,7 @@ import {
   RefreshCw,
   CheckCircle,
   AlertCircle,
+  History,
 } from 'lucide-react'
 import {
   Tooltip,
@@ -31,6 +32,7 @@ export function Dashboard() {
   const { addToast } = useToast()
   const [data, setData] = useState<DashboardData | null>(null)
   const [recentScans, setRecentScans] = useState<Scan[]>([])
+  const [recentChanges, setRecentChanges] = useState<ChangeEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -40,6 +42,12 @@ export function Dashboard() {
       setData(dashData)
       const scansData = await api.getScans({ page: 1, page_size: 5 })
       setRecentScans(scansData.items)
+      try {
+        const changesData = await api.getRecentChanges({ page: 1, page_size: 8 })
+        setRecentChanges(changesData.items)
+      } catch {
+        setRecentChanges([])
+      }
     } catch (error) {
       addToast({ type: 'error', title: 'Failed to load dashboard', message: getApiErrorMessage(error) })
     } finally {
