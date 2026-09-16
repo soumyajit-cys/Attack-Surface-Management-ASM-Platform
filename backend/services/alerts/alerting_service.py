@@ -143,6 +143,91 @@ async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> 
     return await _post_with_retry(webhook_url, payload)
 
 
+def assert_https_host_safe(url: str) -> str:
+    """Resolve *url*'s hostname and fail closed on blocked targets.
+
+    Complements :func:`utils.ssrf_guard.is_allowed_target` (which only
+    inspects literal IPs): the hostname is resolved and the resulting IP is
+    checked, so DNS pointing a connector at a private/cloud-metadata address
+    refuses delivery. Returns the resolved IP. Raises ``ValueError`` for
+    non-HTTPS URLs, unresolvable hosts, or blocked IPs.
+    """
+    parsed = urlparse(url or "")
+    if parsed.scheme != "https":
+        raise ValueError(f"Connector URL must use https: {url!r}")
+    host = parsed.hostname
+    if not host:
+        raise ValueError(f"Connector URL has no hostname: {url!r}")
+    try:
+        ip = socket.gethostbyname(host)
+    except socket.gaierror as exc:
+        raise ValueError(f"Connector host {host!r} does not resolve: {exc}") from exc
+    if not is_allowed_target(ip):
+        raise ValueError(f"Connector host {host!r} resolved to blocked IP {ip!r}")
+    return ip
+
+
+def _adf_paragraph(text: str) -> dict:
+    return {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{"type": "text", "text": (text or "")[:2000]}],
+            }
+        ],
+    }
+
+
+async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset: Asset) -> bool:
+    """Create a Jira issue for *finding* via the Jira Cloud REST API (v3).
+
+    Connection details come from the per-organisation *integration* row
+    (base URL, project key, email + API token); the token is only ever used
+    as HTTP Basic auth and never logged. Returns True on issue creation.
+    """
+    base_url = (integration.jira_base_url or "").rstrip("/")
+    project_key = (integration.jira_project_key or "").strip().upper()
+    email = (integration.jira_email or "").strip()
+    api_token = integration.jira_api_token or ""
+    issue_type = (integration.jira_issue_type or "Task").strip() or "Task"
+
+    if not (base_url and project_key and email and api_token):
+        logger.warning("Jira integration %s is missing connection settings", integration.id)
+        return False
+
+    try:
+        assert_https_host_safe(base_url)
+    except ValueError as exc:
+        logger.warning("Jira base URL blocked by SSRF guard: %s", exc)
+        return False
+
+    severity = (finding.severity or "info").lower()
+    summary = f"[SentinelASM:{severity.upper()}] {finding.title} on {asset.name}"
+    body = (
+        f"Asset: {asset.name}\n"
+        f"Finding: {finding.title}\n"
+        f"Severity: {severity.upper()}\n"
+        f"Category: {finding.category or 'N/A'}\n\n"
+        f"Description:\n{finding.description or 'N/A'}\n\n"
+        f"Recommendation:\n{finding.recommendation or 'N/A'}"
+    )
+    payload = {
+        "fields": {
+            "project": {"key": project_key},
+            "summary": summary[:255],
+            "description": _adf_paragraph(body),
+            "issuetype": {"name": issue_type},
+            "labels": ["sentinelasm", f"severity-{severity}"],
+        }
+    }
+
+    return await _post_with_retry(
+        f"{base_url}/rest/api/3/issue", payload, auth=(email, api_token)
+    )
+
+
 async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
     if not is_allowed_target(webhook_url):
         logger.warning("Discord webhook URL blocked by SSRF guard: %s", webhook_url)
@@ -192,6 +277,8 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
             success = await send_slack_alert(integration.webhook_url, finding, asset)
         elif integration.channel == AlertChannel.DISCORD:
             success = await send_discord_alert(integration.webhook_url, finding, asset)
+        elif integration.channel == AlertChannel.JIRA:
+            success = await send_jira_alert(integration, finding, asset)
 
         if success:
             integration.last_triggered_at = datetime.now(timezone.utc)
@@ -242,6 +329,8 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
                 success = await send_slack_alert(integration.webhook_url, finding_like, asset)
             elif integration.channel == AlertChannel.DISCORD:
                 success = await send_discord_alert(integration.webhook_url, finding_like, asset)
+            elif integration.channel == AlertChannel.JIRA:
+                success = await send_jira_alert(integration, finding_like, asset)
 
             if success:
                 integration.last_triggered_at = datetime.now(timezone.utc)
