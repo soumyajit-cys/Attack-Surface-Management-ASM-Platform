@@ -71,6 +71,31 @@ export function FindingDetail() {
             <p className="text-gray-600 whitespace-pre-wrap">{finding.description}</p>
           </div>
 
+          {(finding.cve_ids?.length || finding.cvss_score != null) && (
+            <div className="card p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">CVE Enrichment</h2>
+              {finding.cvss_score != null && (
+                <p className="text-sm text-gray-600 mb-3">
+                  CVSS base score:{' '}
+                  <span className="font-semibold text-gray-900">{finding.cvss_score.toFixed(1)}</span>
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {(finding.cve_ids ?? []).map((cve) => (
+                  <a
+                    key={cve}
+                    href={`https://osv.dev/vulnerability/${cve}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="badge badge-high hover:underline"
+                  >
+                    {cve}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="card p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Recommendation</h2>
             <div className="bg-gray-50 p-4 rounded-lg">
