@@ -79,13 +79,18 @@ class AlertIntegrationResponse(BaseModel):
     organization_id: int
     name: str
     channel: AlertChannel
-    webhook_url: str
+    webhook_url: str | None
     min_severity: AlertSeverity
     is_active: bool
     last_triggered_at: datetime | None
     created_by: int | None
     created_at: datetime | None
     updated_at: datetime | None
+    # Jira connection (API token is never returned).
+    jira_base_url: str | None = None
+    jira_project_key: str | None = None
+    jira_email: str | None = None
+    jira_issue_type: str | None = None
 
     class Config:
         from_attributes = True
@@ -115,6 +120,34 @@ def _check_webhook(url: str) -> None:
             "Webhook URL not allowed (private/cloud metadata IP)",
             code="webhook_target_not_allowed",
         )
+
+
+def _validate_create(data: AlertIntegrationCreate) -> None:
+    """Enforce per-channel required settings (400 with a stable code)."""
+    if data.channel == AlertChannel.JIRA:
+        missing = [
+            field for field, value in (
+                ("jira_base_url", data.jira_base_url),
+                ("jira_project_key", data.jira_project_key),
+                ("jira_email", data.jira_email),
+                ("jira_api_token", data.jira_api_token),
+            )
+            if not value
+        ]
+        if missing:
+            raise BadRequestError(
+                "Jira integrations require base URL, project key, email and API token",
+                code="jira_settings_required",
+                details={"missing": missing},
+            )
+        _check_webhook(str(data.jira_base_url))
+    else:
+        if not data.webhook_url:
+            raise BadRequestError(
+                "Webhook URL is required for this channel",
+                code="webhook_url_required",
+            )
+        _check_webhook(str(data.webhook_url))
 
 
 @router.post("/integrations", response_model=AlertIntegrationResponse, status_code=status.HTTP_201_CREATED)
