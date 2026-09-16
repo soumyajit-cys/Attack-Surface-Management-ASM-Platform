@@ -69,7 +69,6 @@ def calculate_risk(
             cvss = None
         if cvss is not None:
             base = max(base, cvss)
-    base = SEVERITY_BASE_SCORE.get(base_severity.lower(), 2.0)
 
     exposure_mult = EXPOSURE_MULTIPLIER.get(exposure.lower(), 1.0)
     criticality_mult = CRITICALITY_MULTIPLIER.get(asset_criticality.lower(), 1.0)
