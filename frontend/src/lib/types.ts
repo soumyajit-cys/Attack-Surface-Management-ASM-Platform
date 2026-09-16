@@ -17,6 +17,8 @@ export interface Finding {
   category: string
   description: string
   recommendation: string
+  cve_ids?: string[] | null
+  cvss_score?: number | null
   created_at: string
 }
 

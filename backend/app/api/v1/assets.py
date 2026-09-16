@@ -23,6 +23,7 @@ from app.db.session import get_db
 router = APIRouter(prefix="/assets", tags=["assets"])
 
 _READ_DEP = require_permissions_dep(Permission.FINDING_READ)
+_SCAN_DEP = require_permissions_dep(Permission.SCAN_CREATE)
 
 
 def _ssl_data(ssl) -> dict:
@@ -198,6 +199,37 @@ async def get_asset(
         **counts,
         "domains": [_domain_data(d) for d in asset.domains],
     }
+
+
+@router.post("/{asset_id}/enrich", status_code=202)
+async def enrich_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_SCAN_DEP),
+):
+    """Queue OSV.dev CVE enrichment for one asset (analyst+).
+
+    Matches banner-grabbed software versions against OSV.dev, attaches
+    CVEs/CVSS to new ``vulnerability`` findings, and refreshes risk scores.
+    Scoped to the caller's organisation like every other asset route.
+    """
+    from utils.logger import logger
+
+    asset = db.query(Asset).filter(
+        Asset.id == asset_id,
+        Asset.organization_id == principal.organization_id,
+    ).first()
+    if not asset:
+        raise NotFoundError("Asset not found", code="asset_not_found")
+
+    try:
+        from tasks.cve_tasks import enrich_asset_findings
+
+        enrich_asset_findings.delay(asset_id=asset_id)
+    except Exception as exc:
+        logger.warning("CVE enrichment dispatch failed for asset %s: %s", asset_id, exc)
+
+    return {"asset_id": asset_id, "status": "queued"}
 
 
 @router.get("/{asset_id}/graph")
