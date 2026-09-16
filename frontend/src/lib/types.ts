@@ -120,6 +120,17 @@ export interface AlertIntegration {
   created_at: string
 }
 
+export interface ChangeEvent {
+  id: number
+  asset_id: number | null
+  asset_name: string | null
+  title: string
+  severity: string
+  message: string | null
+  read: boolean
+  created_at: string
+}
+
 export interface Invitation {
   id: number
   email: string
