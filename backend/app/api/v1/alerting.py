@@ -240,6 +240,17 @@ async def update_integration(
         integration.webhook_url = str(data.webhook_url)
     if data.secret is not None:
         integration.secret = data.secret
+    if data.jira_base_url is not None:
+        _check_webhook(str(data.jira_base_url))
+        integration.jira_base_url = str(data.jira_base_url)
+    if data.jira_project_key is not None:
+        integration.jira_project_key = data.jira_project_key.upper()
+    if data.jira_email is not None:
+        integration.jira_email = data.jira_email
+    if data.jira_api_token is not None:
+        integration.jira_api_token = data.jira_api_token
+    if data.jira_issue_type is not None:
+        integration.jira_issue_type = data.jira_issue_type
     if data.min_severity is not None:
         integration.min_severity = data.min_severity
     if data.is_active is not None:
@@ -299,6 +310,7 @@ async def test_integration(
     from models import Asset, Finding
     from services.alerts.alerting_service import (
         send_discord_alert,
+        send_jira_alert,
         send_slack_alert,
     )
 
