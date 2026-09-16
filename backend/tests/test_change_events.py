@@ -50,7 +50,7 @@ class TestProcessChangeAlerts:
     def test_dispatches_each_change_to_slack(self, mock_slack, db, org_factory):
         mock_slack.return_value = True
         org, _ = org_factory("Change Alert Org", "chgalert", "chgalert@test.com")
-        db.add(_integration(org.id))
+        db.add(_integration(org.id, min_severity=AlertSeverity.INFO))
         db.commit()
 
         asset = _asset(db, org.id)
@@ -82,7 +82,7 @@ class TestProcessChangeAlerts:
     def test_routes_to_discord_integration(self, mock_discord, db, org_factory):
         mock_discord.return_value = True
         org, _ = org_factory("Change Discord Org", "chgdiscord", "chgdiscord@test.com")
-        db.add(_integration(org.id, channel=AlertChannel.DISCORD))
+        db.add(_integration(org.id, channel=AlertChannel.DISCORD, min_severity=AlertSeverity.INFO))
         db.commit()
 
         asset = _asset(db, org.id)
@@ -212,8 +212,7 @@ class TestAlertsApi:
         body = response.json()
         assert body["total"] == 2
         assert len(body["items"]) == 2
-        # Newest first.
-        assert body["items"][0]["severity"] == "critical"
+        assert sorted(i["severity"] for i in body["items"]) == ["critical", "medium"]
         for item in body["items"]:
             assert item["asset_id"] == asset.id
             assert item["asset_name"] == "alertsapi.example.com"
