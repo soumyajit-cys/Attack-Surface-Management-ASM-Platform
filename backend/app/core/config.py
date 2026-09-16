@@ -86,6 +86,12 @@ class Settings(BaseSettings):
 
     kev_cache_dir: str = ""
 
+    # CVE enrichment (OSV.dev). The feed hostname is resolved and validated
+    # against the SSRF guard before every request (see services.enrichment).
+    osv_api_url: str = "https://api.osv.dev/v1/query"
+    osv_timeout_seconds: float = 10.0
+    osv_enabled: bool = True
+
     log_level: str = "INFO"
     log_format: str = "json"
 

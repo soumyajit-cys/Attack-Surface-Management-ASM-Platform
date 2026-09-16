@@ -1,6 +1,8 @@
 from sqlalchemy import (
     Column,
+    Float,
     Integer,
+    JSON,
     String,
     Text,
     ForeignKey,
@@ -43,6 +45,12 @@ class Finding(Base):
     description = Column(Text)
 
     recommendation = Column(Text)
+
+    # CVE enrichment (OSV.dev): matched CVE IDs + highest CVSS base score.
+    # Populated by tasks.cve_tasks.enrich_asset_findings; NULL until enriched.
+    cve_ids = Column(JSON, nullable=True)
+
+    cvss_score = Column(Float, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),
