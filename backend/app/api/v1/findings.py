@@ -57,6 +57,8 @@ async def list_findings(
                 "category": f.category,
                 "description": f.description,
                 "recommendation": f.recommendation,
+                "cve_ids": getattr(f, "cve_ids", None),
+                "cvss_score": getattr(f, "cvss_score", None),
                 "created_at": f.created_at,
                 "asset_name": _asset_name(db, f.asset_id, principal.organization_id),
             }
@@ -100,6 +102,8 @@ async def get_finding(
         "category": finding.category,
         "description": finding.description,
         "recommendation": finding.recommendation,
+        "cve_ids": getattr(finding, "cve_ids", None),
+        "cvss_score": getattr(finding, "cvss_score", None),
         "created_at": finding.created_at,
         "updated_at": finding.updated_at,
     }
