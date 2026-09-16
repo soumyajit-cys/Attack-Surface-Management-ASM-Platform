@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
 import type { AlertIntegration, DigestConfig } from '../lib/types'
-import { MessageSquare, Plus, Trash2, Check, AlertTriangle, Zap, TestTube2 } from 'lucide-react'
+import { MessageSquare, Plus, Trash2, Check, AlertTriangle, Zap, TestTube2, KanbanSquare } from 'lucide-react'
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info']
