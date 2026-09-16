@@ -81,7 +81,7 @@ async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None
     return False
 
 
-async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
+async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
     if not is_allowed_target(webhook_url):
         logger.warning("Slack webhook URL blocked by SSRF guard: %s", webhook_url)
         return False
