@@ -23,6 +23,7 @@ class AlertChannel(str, Enum):
     SLACK = "slack"
     DISCORD = "discord"
     EMAIL = "email"
+    JIRA = "jira"
 
 
 class AlertSeverity(str, Enum):
@@ -53,9 +54,22 @@ class AlertIntegration(Base):
         nullable=False,
     )
 
-    webhook_url = Column(String, nullable=False)
+    webhook_url = Column(String, nullable=True)
 
     secret = Column(String, nullable=True)
+
+    # Jira native connector (channel == "jira"): issue creation via the
+    # Jira Cloud REST API. ``webhook_url`` is unused for Jira; the API token
+    # is stored in ``jira_api_token`` and never returned by the API.
+    jira_base_url = Column(String, nullable=True)
+
+    jira_project_key = Column(String, nullable=True)
+
+    jira_email = Column(String, nullable=True)
+
+    jira_api_token = Column(String, nullable=True)
+
+    jira_issue_type = Column(String, nullable=True, default="Task")
 
     min_severity = Column(
         SQLEnum(AlertSeverity),

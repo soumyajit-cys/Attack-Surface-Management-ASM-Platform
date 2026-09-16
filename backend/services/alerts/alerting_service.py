@@ -9,6 +9,9 @@ Chunk 2 changes:
 import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from urllib.parse import urlparse
+
+import socket
 
 from sqlalchemy.orm import Session
 
@@ -42,13 +45,13 @@ def severity_meets_threshold(finding_severity: str, min_severity: AlertSeverity)
     return finding_level >= min_level
 
 
-async def _post_with_retry(url: str, payload: dict) -> bool:
+async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None = None) -> bool:
     """POST to *url* with exponential-backoff retry on transient failures."""
     last_error = None
     for attempt in range(_WEBHOOK_MAX_RETRIES + 1):
         try:
             async with httpx.AsyncClient(timeout=_WEBHOOK_TIMEOUT) as client:
-                resp = await client.post(url, json=payload)
+                resp = await client.post(url, json=payload, auth=auth)
                 resp.raise_for_status()
                 return True
         except httpx.HTTPStatusError as exc:
@@ -78,7 +81,7 @@ async def _post_with_retry(url: str, payload: dict) -> bool:
     return False
 
 
-async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
+async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
     if not is_allowed_target(webhook_url):
         logger.warning("Slack webhook URL blocked by SSRF guard: %s", webhook_url)
         return False
