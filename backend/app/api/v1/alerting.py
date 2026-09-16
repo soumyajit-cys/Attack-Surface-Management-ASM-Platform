@@ -157,15 +157,20 @@ async def create_integration(
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ALERT_ADMIN_DEP),
 ):
-    _check_webhook(str(data.webhook_url))
+    _validate_create(data)
 
     integration = AlertIntegration(
         organization_id=principal.organization_id,
         name=data.name,
         channel=data.channel,
-        webhook_url=str(data.webhook_url),
+        webhook_url=str(data.webhook_url) if data.webhook_url else None,
         secret=data.secret,
         min_severity=data.min_severity,
+        jira_base_url=str(data.jira_base_url) if data.jira_base_url else None,
+        jira_project_key=data.jira_project_key.upper() if data.jira_project_key else None,
+        jira_email=data.jira_email,
+        jira_api_token=data.jira_api_token,
+        jira_issue_type=data.jira_issue_type or "Task",
         created_by=principal.user.id,
     )
     db.add(integration)
