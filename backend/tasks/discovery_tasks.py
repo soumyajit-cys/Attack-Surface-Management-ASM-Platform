@@ -507,7 +507,7 @@ def _persist_risk_score(db: Session, asset_id: int) -> None:
     recalculate_asset_risk_score(db, asset_id)
 
 
-def _dispatch_alerts_for_findings(
+def _dispatch_enrichment(scan: ScanHistory, asset_id: int) -> None:
     """Queue OSV.dev CVE enrichment for *asset_id* (best-effort).
 
     Enrichment runs in its own task/session: OSV outages or unparseable
@@ -546,6 +546,35 @@ def _dispatch_alerts_for_findings(
                 "Alert dispatch failed for finding %s on asset %s",
                 finding.title, asset.name,
             )
+
+
+def _dispatch_alerts_for_changes(
+    db: Session,
+    change_alerts: list,
+    asset_id: int,
+    org_id: int,
+) -> None:
+    """Dispatch external alerts for change-detection events (best-effort)."""
+    if not change_alerts:
+        return
+
+    from models.asset import Asset
+    from services.alerts.alerting_service import process_change_alerts
+
+    asset = db.query(Asset).filter(
+        Asset.id == asset_id,
+        Asset.organization_id == org_id,
+    ).first()
+    if asset is None:
+        return
+
+    try:
+        _run_async(lambda: process_change_alerts(db, change_alerts, asset))
+    except Exception:
+        logger.warning(
+            "Change-alert dispatch failed for asset %s",
+            asset.name,
+        )
 
 
 def _run_async(coro_factory):
