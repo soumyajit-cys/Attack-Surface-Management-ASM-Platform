@@ -19,7 +19,7 @@ celery = Celery(
     "sentinelasm",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["tasks.discovery_tasks", "tasks.scheduler_tasks"],
+    include=["tasks.discovery_tasks", "tasks.scheduler_tasks", "tasks.cve_tasks"],
 )
 
 # ── Exchange / Queue definitions ──────────────────────────────────────────────
@@ -61,6 +61,7 @@ celery.conf.update(
     task_default_queue="celery",
     task_routes={
         "tasks.discovery_tasks.*": {"queue": "scans"},
+        "tasks.cve.*": {"queue": "scans"},
         "tasks.scheduler.*": {"queue": "scans"},
         "tasks.scheduler.process_due_scan_policies": {"queue": "scans"},
         "tasks.scheduler.send_due_email_digests": {"queue": "celery"},
