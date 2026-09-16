@@ -21,6 +21,11 @@ export function Alerting() {
     webhook_url: '',
     secret: '',
     min_severity: 'high',
+    jira_base_url: '',
+    jira_project_key: '',
+    jira_email: '',
+    jira_api_token: '',
+    jira_issue_type: 'Task',
   })
 
   const fetchData = async () => {
