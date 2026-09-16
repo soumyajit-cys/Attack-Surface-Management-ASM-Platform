@@ -55,15 +55,25 @@ export function Alerting() {
   const handleCreateIntegration = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
+      const isJira = formData.channel === 'jira'
       await api.createAlertIntegration({
         name: formData.name,
         channel: formData.channel,
-        webhook_url: formData.webhook_url,
+        webhook_url: isJira ? undefined : formData.webhook_url,
         min_severity: formData.min_severity,
         secret: formData.secret || undefined,
+        ...(isJira
+          ? {
+              jira_base_url: formData.jira_base_url,
+              jira_project_key: formData.jira_project_key,
+              jira_email: formData.jira_email,
+              jira_api_token: formData.jira_api_token || undefined,
+              jira_issue_type: formData.jira_issue_type || undefined,
+            }
+          : {}),
       })
       setShowIntegrationModal(false)
-      setFormData({ name: '', channel: 'slack', webhook_url: '', secret: '', min_severity: 'high' })
+      resetIntegrationForm()
       addToast({ type: 'success', title: 'Integration created' })
       fetchData()
     } catch (error) {
@@ -116,7 +126,19 @@ export function Alerting() {
   }
 
   const resetIntegrationForm = () =>
-    setFormData({ name: '', channel: 'slack', webhook_url: '', secret: '', min_severity: 'high' })
+    setFormData({
+      name: '', channel: 'slack', webhook_url: '', secret: '', min_severity: 'high',
+      jira_base_url: '', jira_project_key: '', jira_email: '', jira_api_token: '', jira_issue_type: 'Task',
+    })
+
+  const channelIcon = (channel: string) => {
+    if (channel === 'slack') return <Zap className="w-5 h-5 text-blue-600" />
+    if (channel === 'jira') return <KanbanSquare className="w-5 h-5 text-indigo-600" />
+    return <MessageSquare className="w-5 h-5 text-purple-600" />
+  }
+
+  const channelBadge = (channel: string) =>
+    channel === 'slack' ? 'bg-blue-100' : channel === 'jira' ? 'bg-indigo-100' : 'bg-purple-100'
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent" /></div>
@@ -144,16 +166,16 @@ export function Alerting() {
             {integrations.map((integration) => (
               <div key={integration.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-lg ${integration.channel === 'slack' ? 'bg-blue-100' : 'bg-purple-100'}`}>
-                    {integration.channel === 'slack' ? (
-                      <Zap className="w-5 h-5 text-blue-600" />
-                    ) : (
-                      <MessageSquare className="w-5 h-5 text-purple-600" />
-                    )}
+                  <div className={`p-3 rounded-lg ${channelBadge(integration.channel)}`}>
+                    {channelIcon(integration.channel)}
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{integration.name}</p>
-                    <p className="text-sm text-gray-500 capitalize">{integration.channel} · {integration.min_severity} severity</p>
+                    <p className="text-sm text-gray-500 capitalize">
+                      {integration.channel}
+                      {integration.channel === 'jira' && integration.jira_project_key ? ` · ${integration.jira_project_key}` : ''}
+                      {' · '}{integration.min_severity} severity
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -215,16 +237,46 @@ export function Alerting() {
                 <select className="input" value={formData.channel} onChange={(e) => setFormData({...formData, channel: e.target.value})}>
                   <option value="slack">Slack</option>
                   <option value="discord">Discord</option>
+                  <option value="jira">Jira</option>
                 </select>
               </div>
-              <div>
-                <label className="label">Webhook URL</label>
-                <input type="url" className="input" value={formData.webhook_url} onChange={(e) => setFormData({...formData, webhook_url: e.target.value})} placeholder="https://hooks.slack.com/services/..." required />
-              </div>
-              <div>
-                <label className="label">Secret (optional)</label>
-                <input type="text" className="input" value={formData.secret} onChange={(e) => setFormData({...formData, secret: e.target.value})} placeholder="Webhook secret for verification" />
-              </div>
+              {formData.channel === 'jira' ? (
+                <>
+                  <div>
+                    <label className="label">Jira Base URL</label>
+                    <input type="url" className="input" value={formData.jira_base_url} onChange={(e) => setFormData({...formData, jira_base_url: e.target.value})} placeholder="https://your-org.atlassian.net" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Project Key</label>
+                      <input type="text" className="input" value={formData.jira_project_key} onChange={(e) => setFormData({...formData, jira_project_key: e.target.value})} placeholder="SEC" required />
+                    </div>
+                    <div>
+                      <label className="label">Issue Type</label>
+                      <input type="text" className="input" value={formData.jira_issue_type} onChange={(e) => setFormData({...formData, jira_issue_type: e.target.value})} placeholder="Task" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Jira Email</label>
+                    <input type="email" className="input" value={formData.jira_email} onChange={(e) => setFormData({...formData, jira_email: e.target.value})} placeholder="security@example.com" required />
+                  </div>
+                  <div>
+                    <label className="label">API Token</label>
+                    <input type="password" className="input" value={formData.jira_api_token} onChange={(e) => setFormData({...formData, jira_api_token: e.target.value})} placeholder="Atlassian API token" required />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="label">Webhook URL</label>
+                    <input type="url" className="input" value={formData.webhook_url} onChange={(e) => setFormData({...formData, webhook_url: e.target.value})} placeholder="https://hooks.slack.com/services/..." required />
+                  </div>
+                  <div>
+                    <label className="label">Secret (optional)</label>
+                    <input type="text" className="input" value={formData.secret} onChange={(e) => setFormData({...formData, secret: e.target.value})} placeholder="Webhook secret for verification" />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="label">Minimum Severity</label>
                 <select className="input" value={formData.min_severity} onChange={(e) => setFormData({...formData, min_severity: e.target.value})}>
