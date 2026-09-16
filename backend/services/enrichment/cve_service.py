@@ -18,7 +18,6 @@ Outbound-request safety (same posture as the rest of the codebase):
 
 from __future__ import annotations
 
-import math
 import re
 import socket
 from urllib.parse import urlparse
@@ -251,11 +250,15 @@ _CIA = {"H": 0.56, "L": 0.22, "N": 0.0}
 
 
 def _roundup(value: float) -> float:
-    """Smallest 1-decimal number >= value (CVSS spec Roundup)."""
-    scaled = math.ceil(value * 100000) / 100000
-    if scaled == int(scaled):
-        return float(scaled)
-    return math.ceil(scaled * 10) / 10
+    """CVSS spec Roundup: smallest 1-decimal number >= value.
+
+    Mirrors the FIRST.org reference implementation (round to 5 decimals
+    first so float noise like 4.1000000001 still yields 4.1, not 4.2).
+    """
+    scaled = round(value * 100000)
+    if scaled % 10000 == 0:
+        return scaled / 100000
+    return (scaled // 10000 + 1) / 10
 
 
 def cvss_v31_base_score(vector: str) -> float | None:
@@ -273,7 +276,9 @@ def cvss_v31_base_score(vector: str) -> float | None:
                 return None
             key, val = part.split(":", 1)
             metrics[key] = val
-        scope_changed = metrics.get("S") == "C"
+        if metrics.get("S") not in ("U", "C"):
+            return None
+        scope_changed = metrics["S"] == "C"
         pr_table = _PR_C if scope_changed else _PR_U
         av = _AV[metrics["AV"]]
         ac = _AC[metrics["AC"]]

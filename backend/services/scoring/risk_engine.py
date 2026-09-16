@@ -50,7 +50,25 @@ def calculate_risk(
     finding_age_days: float = 0,
     is_kev: bool = False,
     confidence: float = DEFAULT_CONFIDENCE,
+    cvss_score: float | None = None,
 ) -> float:
+    """Score a finding on a 0-10 scale.
+
+    ``cvss_score`` (from OSV.dev CVE enrichment, see
+    ``services.enrichment.cve_service``) raises the severity base when the
+    matched CVE is scored higher than the heuristic severity label:
+    ``effective_base = max(severity_base, cvss)``. ``None`` (unenriched
+    findings) preserves the legacy behaviour exactly.
+    """
+    base = SEVERITY_BASE_SCORE.get(base_severity.lower(), 2.0)
+
+    if cvss_score is not None:
+        try:
+            cvss = min(max(float(cvss_score), 0.0), 10.0)
+        except (TypeError, ValueError):
+            cvss = None
+        if cvss is not None:
+            base = max(base, cvss)
     base = SEVERITY_BASE_SCORE.get(base_severity.lower(), 2.0)
 
     exposure_mult = EXPOSURE_MULTIPLIER.get(exposure.lower(), 1.0)
@@ -180,6 +198,7 @@ def recalculate_asset_risk_score(
             finding_age_days=age_days,
             is_kev=kev,
             confidence=confidence,
+            cvss_score=getattr(finding, "cvss_score", None),
         )
         total_score += score
         count += 1
