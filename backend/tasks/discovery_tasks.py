@@ -141,7 +141,9 @@ def run_discovery(self, scan_id: int) -> dict:
         create_asset_snapshot(db, asset_id)
         changes = detect_changes(db, asset_id)
         if changes:
-            persist_alerts(db, changes, scan.organization_id)
+            created_alerts = persist_alerts(db, changes, scan.organization_id)
+            db.commit()
+            _dispatch_alerts_for_changes(db, created_alerts, asset_id, scan.organization_id)
 
         db.commit()
 
@@ -505,7 +507,7 @@ def _persist_risk_score(db: Session, asset_id: int) -> None:
     recalculate_asset_risk_score(db, asset_id)
 
 
-def _dispatch_enrichment(scan: ScanHistory, asset_id: int) -> None:
+def _dispatch_alerts_for_findings(
     """Queue OSV.dev CVE enrichment for *asset_id* (best-effort).
 
     Enrichment runs in its own task/session: OSV outages or unparseable

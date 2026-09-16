@@ -195,6 +195,56 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
             db.commit()
 
 
+def _change_alert_as_finding(alert) -> Finding:
+    """Adapt a change-detection :class:`Alert` to the finding shape.
+
+    Lets change events reuse the exact Slack/Discord block builders without
+    duplicating formatting logic. Only attribute access is used downstream.
+    """
+    return Finding(
+        organization_id=alert.organization_id,
+        asset_id=alert.asset_id,
+        title=alert.title,
+        severity=alert.severity or "info",
+        category="asset_change",
+        description=alert.message or alert.title,
+        recommendation=(
+            "Review this asset change in the dashboard. If it was unexpected, "
+            "investigate the asset for misconfiguration or compromise."
+        ),
+    )
+
+
+async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None:
+    """Dispatch change-detection alerts to all matching integrations.
+
+    ``alerts`` are :class:`Alert` rows created by
+    :func:`services.history.change_detector.persist_alerts`. Severity
+    thresholds, channel routing, and retry behavior are identical to
+    :func:`process_finding_alerts`.
+    """
+    integrations = db.query(AlertIntegration).filter(
+        AlertIntegration.organization_id == asset.organization_id,
+        AlertIntegration.is_active == True,
+    ).all()
+
+    for alert in alerts:
+        finding_like = _change_alert_as_finding(alert)
+        for integration in integrations:
+            if not severity_meets_threshold(finding_like.severity, integration.min_severity):
+                continue
+
+            success = False
+            if integration.channel == AlertChannel.SLACK:
+                success = await send_slack_alert(integration.webhook_url, finding_like, asset)
+            elif integration.channel == AlertChannel.DISCORD:
+                success = await send_discord_alert(integration.webhook_url, finding_like, asset)
+
+            if success:
+                integration.last_triggered_at = datetime.now(timezone.utc)
+                db.commit()
+
+
 async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
     from models import Finding as FindingModel, Asset as AssetModel
 
