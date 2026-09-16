@@ -279,7 +279,18 @@ class ApiClient {
   }
 
   // ── alerting ───────────────────────────────────────────────────────────────
-  async createAlertIntegration(data: { name: string; channel: string; webhook_url: string; min_severity: string; secret?: string }) {
+  async createAlertIntegration(data: {
+    name: string
+    channel: string
+    webhook_url?: string
+    min_severity: string
+    secret?: string
+    jira_base_url?: string
+    jira_project_key?: string
+    jira_email?: string
+    jira_api_token?: string
+    jira_issue_type?: string
+  }) {
     return this.post('/alerting/integrations', data)
   }
 

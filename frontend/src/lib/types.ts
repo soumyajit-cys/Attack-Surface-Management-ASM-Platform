@@ -113,11 +113,15 @@ export interface AlertIntegration {
   id: number
   name: string
   channel: string
-  webhook_url: string
+  webhook_url: string | null
   min_severity: string
   is_active: boolean
   last_triggered_at: string | null
   created_at: string
+  jira_base_url?: string | null
+  jira_project_key?: string | null
+  jira_email?: string | null
+  jira_issue_type?: string | null
 }
 
 export interface ChangeEvent {
