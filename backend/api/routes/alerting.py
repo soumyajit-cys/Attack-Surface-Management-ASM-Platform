@@ -262,7 +262,7 @@ async def test_integration(
     user: User = Depends(require_roles(ROLE_ADMIN)),
 ):
     from models import Finding, Asset
-    from services.alerts.alerting_service import send_slack_alert, send_discord_alert, severity_meets_threshold
+    from services.alerts.alerting_service import send_jira_alert, send_slack_alert, send_discord_alert, severity_meets_threshold
 
     integration = db.query(AlertIntegration).filter(
         AlertIntegration.id == integration_id,
