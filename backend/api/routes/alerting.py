@@ -105,19 +105,41 @@ async def create_integration(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(ROLE_ADMIN)),
 ):
-    if not is_allowed_target(str(data.webhook_url)):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Webhook URL not allowed (private/cloud metadata IP)",
-        )
+    if data.channel == AlertChannel.JIRA:
+        if not (data.jira_base_url and data.jira_project_key and data.jira_email and data.jira_api_token):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Jira integrations require base URL, project key, email and API token",
+            )
+        if not is_allowed_target(str(data.jira_base_url)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Jira base URL not allowed (private/cloud metadata IP)",
+            )
+    else:
+        if not data.webhook_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Webhook URL is required for this channel",
+            )
+        if not is_allowed_target(str(data.webhook_url)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Webhook URL not allowed (private/cloud metadata IP)",
+            )
 
     integration = AlertIntegration(
         organization_id=user.organization_id,
         name=data.name,
         channel=data.channel,
-        webhook_url=str(data.webhook_url),
+        webhook_url=str(data.webhook_url) if data.webhook_url else None,
         secret=data.secret,
         min_severity=data.min_severity,
+        jira_base_url=str(data.jira_base_url) if data.jira_base_url else None,
+        jira_project_key=data.jira_project_key.upper() if data.jira_project_key else None,
+        jira_email=data.jira_email,
+        jira_api_token=data.jira_api_token,
+        jira_issue_type=data.jira_issue_type or "Task",
         created_by=user.id,
     )
     db.add(integration)
@@ -184,6 +206,21 @@ async def update_integration(
         integration.webhook_url = str(data.webhook_url)
     if data.secret is not None:
         integration.secret = data.secret
+    if data.jira_base_url is not None:
+        if not is_allowed_target(str(data.jira_base_url)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Jira base URL not allowed (private/cloud metadata IP)",
+            )
+        integration.jira_base_url = str(data.jira_base_url)
+    if data.jira_project_key is not None:
+        integration.jira_project_key = data.jira_project_key.upper()
+    if data.jira_email is not None:
+        integration.jira_email = data.jira_email
+    if data.jira_api_token is not None:
+        integration.jira_api_token = data.jira_api_token
+    if data.jira_issue_type is not None:
+        integration.jira_issue_type = data.jira_issue_type
     if data.min_severity is not None:
         integration.min_severity = data.min_severity
     if data.is_active is not None:
