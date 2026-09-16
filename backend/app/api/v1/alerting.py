@@ -33,9 +33,15 @@ _ALERT_ADMIN_DEP = require_permissions_dep(Permission.ALERT_MANAGE)
 class AlertIntegrationCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     channel: AlertChannel
-    webhook_url: HttpUrl
+    webhook_url: HttpUrl | None = None
     secret: str | None = None
     min_severity: AlertSeverity = AlertSeverity.HIGH
+    # Jira native connector (channel == "jira").
+    jira_base_url: HttpUrl | None = None
+    jira_project_key: str | None = Field(default=None, min_length=1, max_length=16)
+    jira_email: str | None = None
+    jira_api_token: str | None = None
+    jira_issue_type: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class AlertIntegrationUpdate(BaseModel):
@@ -44,6 +50,11 @@ class AlertIntegrationUpdate(BaseModel):
     secret: str | None = None
     min_severity: AlertSeverity | None = None
     is_active: bool | None = None
+    jira_base_url: HttpUrl | None = None
+    jira_project_key: str | None = Field(default=None, min_length=1, max_length=16)
+    jira_email: str | None = None
+    jira_api_token: str | None = None
+    jira_issue_type: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class EmailDigestConfigCreate(BaseModel):
