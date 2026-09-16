@@ -219,6 +219,40 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <History className="w-5 h-5 text-gray-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Recent Changes</h3>
+          </div>
+          <span className="text-sm text-gray-500">Asset change history across scans</span>
+        </div>
+        <div className="space-y-3">
+          {recentChanges.length > 0 ? recentChanges.map((change) => (
+            <div key={change.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full uppercase ${severityBadge(change.severity)}`}>
+                  {change.severity}
+                </span>
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 truncate">{change.title}</p>
+                  <p className="text-sm text-gray-500">
+                    {change.asset_name ?? (change.asset_id ? `Asset #${change.asset_id}` : 'Global')}
+                    {' · '}
+                    {new Date(change.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              {!change.read && <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" title="Unread" />}
+            </div>
+          )) : (
+            <div className="text-center py-8 text-gray-500">
+              No asset changes detected yet. Changes appear here after consecutive scans.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
