@@ -210,7 +210,7 @@ class TestJiraApi:
         assert response.status_code == 201, response.text
         body = response.json()
         assert body["channel"] == "jira"
-        assert body["jira_base_url"] == "https://sec-example.atlassian.net"
+        assert body["jira_base_url"] == "https://sec-example.atlassian.net/"
         assert body["jira_project_key"] == "SEC"  # normalized to upper case
         assert body["jira_email"] == "security@example.com"
         assert body["jira_issue_type"] == "Task"
