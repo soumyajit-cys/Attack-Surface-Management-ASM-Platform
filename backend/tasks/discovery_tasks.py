@@ -21,6 +21,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy.orm import Session
 
 from app.core.ssrf import pin_ip, pinned_resolve, PinnedResolutionMissing
+from app.scanning import scope as scope_policy
 from metrics.prometheus import (
     ACTIVE_SCANS,
     FINDINGS_PER_SCAN,
@@ -83,7 +84,7 @@ RETRYABLE_ERRORS = (
 # ── Main task ─────────────────────────────────────────────────────────────────
 
 @celery.task(bind=True, name="tasks.run_discovery")
-def run_discovery(self, scan_id: int) -> dict:
+def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
     """Run a full ASM scan for *scan_id*.
 
     Execution is split into discrete phases.  Transient errors (network,
@@ -106,6 +107,8 @@ def run_discovery(self, scan_id: int) -> dict:
             return {"scan_id": scan_id, "status": "not_found"}
 
         org_label = str(scan.organization_id)
+        scope = scope_policy.normalize_scope(scope)
+        scan.scope = scope
         _set_status(db, scan, "running")
         ACTIVE_SCANS.labels(organization=org_label).inc()
         SCAN_COUNTER.labels(status="started", organization=org_label).inc()
@@ -129,7 +132,7 @@ def run_discovery(self, scan_id: int) -> dict:
         # ── Phase 2: Port / SSL / Header scanning ─────────────────────────
         scan_summary = _with_retry(
             self, scan_id, "scanning",
-            lambda: _scan_targets(db, scan, persisted, domain_name, resolved_ip),
+            lambda: _scan_targets(db, scan, persisted, domain_name, resolved_ip, scope),
         )
 
         # ── Phase 3: Finding synthesis + risk scoring ─────────────────────
@@ -148,7 +151,7 @@ def run_discovery(self, scan_id: int) -> dict:
         db.commit()
 
         # ── Phase 4b: CVE enrichment (best-effort, never fails the scan) ──
-        _dispatch_enrichment(scan, asset_id)
+        _dispatch_enrichment(scan, asset_id, scope)
 
         # ── Phase 5: External alert dispatch ──────────────────────────────
         _dispatch_alerts_for_findings(db, new_findings, asset_id, scan.organization_id)
@@ -320,6 +323,7 @@ def _scan_targets(
     persisted: dict,
     domain_name: str,
     resolved_ip: str | None,
+    scope: str = "full",
 ) -> dict:
     from models.subdomain import Subdomain
     from app.scanning.context import ScanContext
@@ -337,14 +341,53 @@ def _scan_targets(
     }
     org_label = str(scan.organization_id)
 
+    can_port = scope_policy.phase_allowed(scope, ScanPhase.PORT)
+    can_ssl = scope_policy.phase_allowed(scope, ScanPhase.SSL)
+    can_headers = scope_policy.phase_allowed(scope, ScanPhase.HEADER)
+    if not (can_port or can_ssl or can_headers):
+        logger.debug(
+            "Skipping active probing for %s targets (scope=%s)",
+            len(targets), scope,
+        )
+        return summary
+
     for sub in targets[:MAX_PORT_SUBDOMAINS]:
         host = sub.subdomain
 
         try:
             pinned_ip = pinned_resolve(host)
         except PinnedResolutionMissing:
-            try:
-                ports = _run_async(lambda h=host: scan_ports(h))
+            if can_port:
+                try:
+                    ports = _run_async(lambda h=host: scan_ports(h))
+                    open_ports = [p for p in ports if p.get("status") == "open"]
+                    summary["ports_total"] += len(ports)
+                    summary["ports_open"] += len(open_ports)
+                    summary["open_port_numbers"].extend(p["port"] for p in open_ports)
+                    persist_port_results(db, sub, ports)
+                    for p in ports:
+                        PORTS_SCANNED.labels(
+                            organization=org_label,
+                            status=p.get("status", "unknown"),
+                        ).inc()
+                except Exception:
+                    continue
+            _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None, scope=scope)
+            continue
+
+        ctx = ScanContext(
+            domain=host,
+            pinned_ip=pinned_ip,
+            org_id=scan.organization_id,
+            scan_id=scan.id,
+            db=db,
+            scope=scope,
+        )
+
+        if can_port:
+            port_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.PORT))
+            ports = [p for p in port_results.get("ports", [])]
+            if ports:
                 open_ports = [p for p in ports if p.get("status") == "open"]
                 summary["ports_total"] += len(ports)
                 summary["ports_open"] += len(open_ports)
@@ -355,54 +398,30 @@ def _scan_targets(
                         organization=org_label,
                         status=p.get("status", "unknown"),
                     ).inc()
-            except Exception:
-                continue
-            _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None)
-            continue
 
-        ctx = ScanContext(
-            domain=host,
-            pinned_ip=pinned_ip,
-            org_id=scan.organization_id,
-            scan_id=scan.id,
-            db=db,
-        )
-
-        port_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.PORT))
-        ports = [p for p in port_results.get("ports", [])]
-        if ports:
-            open_ports = [p for p in ports if p.get("status") == "open"]
-            summary["ports_total"] += len(ports)
-            summary["ports_open"] += len(open_ports)
-            summary["open_port_numbers"].extend(p["port"] for p in open_ports)
-            persist_port_results(db, sub, ports)
-            for p in ports:
-                PORTS_SCANNED.labels(
+        if can_ssl:
+            ssl_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.SSL))
+            ssl_data = ssl_results.get("ssl")
+            if ssl_data:
+                persist_ssl_result(db, sub, ssl_data)
+                summary["ssl"]["scanned"] += 1
+                SSL_CERTS_ANALYZED.labels(
                     organization=org_label,
-                    status=p.get("status", "unknown"),
+                    risk_level=ssl_results.get("risk_level", "unknown"),
                 ).inc()
+                if ssl_results.get("risk_level") in ("high", "critical"):
+                    summary["ssl"]["issues"] += 1
+                for finding in ssl_results.get("findings", []):
+                    summary["ssl_findings"].append(finding)
 
-        ssl_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.SSL))
-        ssl_data = ssl_results.get("ssl")
-        if ssl_data:
-            persist_ssl_result(db, sub, ssl_data)
-            summary["ssl"]["scanned"] += 1
-            SSL_CERTS_ANALYZED.labels(
-                organization=org_label,
-                risk_level=ssl_results.get("risk_level", "unknown"),
-            ).inc()
-            if ssl_results.get("risk_level") in ("high", "critical"):
-                summary["ssl"]["issues"] += 1
-            for finding in ssl_results.get("findings", []):
-                summary["ssl_findings"].append(finding)
-
-        header_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.HEADER))
-        issues = header_results.get("issues", [])
-        if issues:
-            summary["headers"]["scanned"] += 1
-            summary["headers"]["issues"] += len(issues)
-            for issue in issues:
-                summary["header_findings"].append(issue)
+        if can_headers:
+            header_results = _run_in_context(ctx, registry.get_modules(phase=ScanPhase.HEADER))
+            issues = header_results.get("issues", [])
+            if issues:
+                summary["headers"]["scanned"] += 1
+                summary["headers"]["issues"] += len(issues)
+                for issue in issues:
+                    summary["header_findings"].append(issue)
 
     return summary
 
@@ -421,20 +440,30 @@ def _run_in_context(ctx, modules) -> dict:
     return merged
 
 
-def _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None):
-    """Fallback SSL + header scan when no pinned IP exists for *host*."""
-    try:
-        target = pinned_ip if pinned_ip else host
-        ssl_data = _run_async(lambda h=target: analyze_ssl(h))
-        ssl_assessment = assess_ssl_risk(ssl_data)
-        persist_ssl_result(db, sub, ssl_data)
-        summary["ssl"]["scanned"] += 1
-        if ssl_assessment["risk_level"] in ("high", "critical"):
-            summary["ssl"]["issues"] += 1
-        for finding in ssl_assessment["findings"]:
-            summary["ssl_findings"].append(finding)
-    except Exception:
-        logger.debug("SSL analysis failed for %s", host)
+def _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None, scope: str = "full"):
+    """Fallback SSL + header scan when no pinned IP exists for *host*.
+
+    Phase-gated like the registry path (task 1.3 removes this raw-host
+    fallback entirely).
+    """
+    from app.scanning.registry import ScanPhase
+
+    if scope_policy.phase_allowed(scope, ScanPhase.SSL):
+        try:
+            target = pinned_ip if pinned_ip else host
+            ssl_data = _run_async(lambda h=target: analyze_ssl(h))
+            ssl_assessment = assess_ssl_risk(ssl_data)
+            persist_ssl_result(db, sub, ssl_data)
+            summary["ssl"]["scanned"] += 1
+            if ssl_assessment["risk_level"] in ("high", "critical"):
+                summary["ssl"]["issues"] += 1
+            for finding in ssl_assessment["findings"]:
+                summary["ssl_findings"].append(finding)
+        except Exception:
+            logger.debug("SSL analysis failed for %s", host)
+
+    if not scope_policy.phase_allowed(scope, ScanPhase.HEADER):
+        return
 
     try:
         header_issues = _run_async(lambda h=host: analyze_headers(f"https://{h}"))
