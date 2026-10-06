@@ -104,7 +104,7 @@ def org_factory(db):
 def auth_headers(client):
     def _headers(username, password="password123"):
         response = client.post(
-            "/auth/login",
+            "/api/v1/auth/login",
             json={"username": username, "password": password},
         )
         assert response.status_code == 200, response.text
