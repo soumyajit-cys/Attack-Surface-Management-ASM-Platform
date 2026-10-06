@@ -3,7 +3,8 @@ from sqlalchemy import (
     Integer,
     String,
     ForeignKey,
-    DateTime
+    DateTime,
+    UniqueConstraint
 )
 
 from sqlalchemy.sql import func
@@ -16,6 +17,10 @@ from models.base import Base
 class Domain(Base):
 
     __tablename__ = "domains"
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "domain", name="uq_domains_org_domain"),
+    )
 
     id = Column(Integer, primary_key=True)
 
@@ -32,7 +37,7 @@ class Domain(Base):
         index=True
     )
 
-    domain = Column(String, unique=True, nullable=False)
+    domain = Column(String, nullable=False)
 
     registrar = Column(String)
 
