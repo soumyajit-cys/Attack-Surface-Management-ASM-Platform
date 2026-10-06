@@ -13,6 +13,7 @@ from schemas.organization import (
     InvitationAccept,
     InvitationCreate,
     InvitationResponse,
+    OrganizationCreate,
     OrganizationResponse,
 )
 
@@ -21,6 +22,7 @@ from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
+from auth.roles import ROLE_ADMIN
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -34,6 +36,47 @@ def _org_response(db: Session, org) -> dict:
         "created_at": org.created_at,
         "updated_at": org.updated_at,
     }
+
+
+@router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
+async def create_organization(
+    request: Request,
+    data: OrganizationCreate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_ORG_ADMIN_DEP),
+):
+    """Create a new organization and move the caller into it as admin.
+
+    Ported from the legacy surface; behavior unchanged (name conflict → 409).
+    """
+    existing = db.query(Organization).filter(
+        Organization.name == data.name
+    ).first()
+    if existing:
+        raise ConflictError(
+            "Organization name already taken", code="organization_taken"
+        )
+
+    org = Organization(name=data.name)
+    db.add(org)
+    db.flush()
+
+    user = principal.user
+    user.organization_id = org.id
+    user.role = ROLE_ADMIN
+
+    record_audit(
+        db,
+        organization_id=org.id,
+        actor=user.username,
+        action="org.created",
+        details={"name": data.name},
+        request=request,
+    )
+    db.commit()
+    db.refresh(org)
+
+    return org
 
 
 @router.get("/me", response_model=OrganizationResponse)
