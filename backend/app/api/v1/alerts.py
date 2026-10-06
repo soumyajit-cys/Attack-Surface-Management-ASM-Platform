@@ -71,7 +71,7 @@ async def list_alerts(
                 "title": a.title,
                 "severity": a.severity,
                 "message": a.message,
-                "read": bool(a.read),
+                "read": a.read,
                 "created_at": a.created_at,
             }
             for a in items
