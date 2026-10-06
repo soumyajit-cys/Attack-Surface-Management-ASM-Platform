@@ -1,15 +1,9 @@
 """Asset & domain repositories (v2, tenant-scoped).
 
-Fixes the cross-tenant hijack bug: the legacy
-``services.scanner.persistence.get_or_create_domain`` looked domains up
-globally (the ``domains.domain`` column is globally unique) and reassigned an
-existing row into the scanning tenant's asset. Here the lookup is org-scoped
-first, and a collision with *another* tenant's domain raises
-:class:`DomainOwnedByAnotherOrgError` instead of silently stealing the row.
-
-NOTE: the schema still enforces global uniqueness on ``domains.domain``; the
-migration to ``unique(organization_id, domain)`` lands with the data-model
-chunk. Until then, scanning a domain owned by another org fails loudly.
+Domains are unique per organization (``uq_domains_org_domain``). Lookups are
+org-scoped, so two orgs may each own the same domain name as separate rows.
+``DomainOwnedByAnotherOrgError`` is kept for backwards compatibility but is no
+longer raised by :meth:`DomainRepository.get_or_create`.
 """
 
 from typing import Optional
@@ -49,8 +43,8 @@ class DomainRepository(OrgScopedRepository[Domain]):
     def get_or_create(self, name: str, asset: Asset) -> Domain:
         """Fetch this org's domain by name, creating it under ``asset`` if absent.
 
-        Raises :class:`DomainOwnedByAnotherOrgError` when the domain exists
-        globally but belongs to a different organization.
+        Each organization gets its own row: a domain owned by another org does
+        not affect this org's lookup.
         """
         existing = self.get_by_name(name)
         if existing is not None:
@@ -58,12 +52,6 @@ class DomainRepository(OrgScopedRepository[Domain]):
                 existing.asset_id = asset.id  # same org, re-point to scanning asset
                 self.db.flush()
             return existing
-
-        global_row = (
-            self.db.query(Domain).filter(Domain.domain == name).first()
-        )
-        if global_row is not None:
-            raise DomainOwnedByAnotherOrgError(name)
 
         domain = Domain(
             organization_id=self.scope.organization_id,
