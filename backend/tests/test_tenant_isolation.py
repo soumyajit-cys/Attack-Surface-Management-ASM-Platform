@@ -31,8 +31,8 @@ def test_tenant_isolation_findings(client, db, org_factory, auth_headers):
     headers_a = auth_headers("alice_a")
     headers_b = auth_headers("bob_b")
 
-    findings_a = client.get("/findings/", headers=headers_a).json()
-    findings_b = client.get("/findings/", headers=headers_b).json()
+    findings_a = client.get("/api/v1/findings", headers=headers_a).json()
+    findings_b = client.get("/api/v1/findings", headers=headers_b).json()
 
     assert findings_a["total"] == 4
     assert findings_b["total"] == 4
@@ -51,11 +51,11 @@ def test_tenant_isolation_dashboard(client, db, org_factory, auth_headers):
     _seed_org_data(db, org_factory, "OrgD", "dave_d")
 
     dash_a = client.get(
-        "/dashboard/",
+        "/api/v1/dashboard",
         headers=auth_headers("carol_c"),
     ).json()
     dash_b = client.get(
-        "/dashboard/",
+        "/api/v1/dashboard",
         headers=auth_headers("dave_d"),
     ).json()
 
@@ -82,13 +82,13 @@ def test_scan_status_is_org_scoped(client, db, org_factory, auth_headers):
     db.refresh(scan)
 
     own = client.get(
-        f"/scan/{scan.id}",
+        f"/api/v1/scans/{scan.id}",
         headers=auth_headers("erin_e"),
     )
     assert own.status_code == 200
 
     other = client.get(
-        f"/scan/{scan.id}",
+        f"/api/v1/scans/{scan.id}",
         headers=auth_headers("frank_f"),
     )
     assert other.status_code == 404
