@@ -21,20 +21,30 @@ export function Findings() {
   const fetchFindings = async () => {
     setLoading(true)
     try {
-      const data = await api.getFindings({ page, page_size: PAGE_SIZE, severity: severityFilter || undefined })
+      const data = await api.getFindings({
+        page,
+        page_size: PAGE_SIZE,
+        severity: severityFilter || undefined,
+      })
       setFindings(data.items)
       setTotal(data.total)
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load findings', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to load findings',
+        message: getApiErrorMessage(error),
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchFindings() }, [page, severityFilter])
+  useEffect(() => {
+    fetchFindings()
+  }, [page, severityFilter])
 
-  const filteredFindings = findings.filter(f =>
-    f.title.toLowerCase().includes(search.toLowerCase())
+  const filteredFindings = findings.filter((f) =>
+    f.title.toLowerCase().includes(search.toLowerCase()),
   )
 
   return (
@@ -60,7 +70,10 @@ export function Findings() {
           </div>
           <select
             value={severityFilter}
-            onChange={(e) => { setSeverityFilter(e.target.value); setPage(1) }}
+            onChange={(e) => {
+              setSeverityFilter(e.target.value)
+              setPage(1)
+            }}
             className="input w-40"
           >
             <option value="">All Severities</option>
@@ -76,11 +89,21 @@ export function Findings() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Title
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Severity
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Category
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Asset
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Created
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -91,7 +114,9 @@ export function Findings() {
                   onClick={() => navigate(`/findings/${finding.id}`)}
                   role="link"
                   tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/findings/${finding.id}`) }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') navigate(`/findings/${finding.id}`)
+                  }}
                 >
                   <td className="px-4 py-4">
                     <p className="font-medium text-gray-900">{finding.title}</p>
@@ -102,9 +127,15 @@ export function Findings() {
                       {finding.severity.charAt(0).toUpperCase() + finding.severity.slice(1)}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-gray-500 capitalize">{finding.category.replace('_', ' ')}</td>
-                  <td className="px-4 py-4 text-gray-500">{finding.asset_name || `Asset #${finding.asset_id}`}</td>
-                  <td className="px-4 py-4 text-gray-500">{new Date(finding.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-4 text-gray-500 capitalize">
+                    {finding.category.replace('_', ' ')}
+                  </td>
+                  <td className="px-4 py-4 text-gray-500">
+                    {finding.asset_name || `Asset #${finding.asset_id}`}
+                  </td>
+                  <td className="px-4 py-4 text-gray-500">
+                    {new Date(finding.created_at).toLocaleDateString()}
+                  </td>
                 </tr>
               ))}
               {loading && (
@@ -127,7 +158,8 @@ export function Findings() {
 
         <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200">
           <p className="text-sm text-gray-500">
-            Showing {((page - 1) * PAGE_SIZE) + 1} to {Math.min(page * PAGE_SIZE, total)} of {total} findings
+            Showing {(page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, total)} of {total}{' '}
+            findings
           </p>
           <div className="flex items-center gap-2">
             <button

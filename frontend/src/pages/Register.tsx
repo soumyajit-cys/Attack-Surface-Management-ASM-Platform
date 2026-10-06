@@ -45,7 +45,11 @@ export function Register() {
       addToast({ type: 'success', title: 'Account created!', message: 'Welcome to SentinelASM' })
       navigate('/')
     } catch (error) {
-      addToast({ type: 'error', title: 'Registration failed', message: getApiErrorMessage(error) || 'Please try again' })
+      addToast({
+        type: 'error',
+        title: 'Registration failed',
+        message: getApiErrorMessage(error) || 'Please try again',
+      })
     } finally {
       setLoading(false)
     }
@@ -68,7 +72,9 @@ export function Register() {
         <div className="card p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="organization" className="label">Organization Name</label>
+              <label htmlFor="organization" className="label">
+                Organization Name
+              </label>
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -86,7 +92,9 @@ export function Register() {
             </div>
 
             <div>
-              <label htmlFor="username" className="label">Username</label>
+              <label htmlFor="username" className="label">
+                Username
+              </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -104,7 +112,9 @@ export function Register() {
             </div>
 
             <div>
-              <label htmlFor="email" className="label">Email</label>
+              <label htmlFor="email" className="label">
+                Email
+              </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -122,7 +132,9 @@ export function Register() {
             </div>
 
             <div>
-              <label htmlFor="password" className="label">Password</label>
+              <label htmlFor="password" className="label">
+                Password
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -147,7 +159,9 @@ export function Register() {
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="label">Confirm Password</label>
+              <label htmlFor="confirmPassword" className="label">
+                Confirm Password
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -164,16 +178,8 @@ export function Register() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              className="btn-primary w-full py-3"
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                'Create Account'
-              )}
+            <button type="submit" className="btn-primary w-full py-3" disabled={loading}>
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
             </button>
           </form>
 

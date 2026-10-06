@@ -29,7 +29,12 @@ export function Assets() {
   const fetchAssets = async () => {
     setLoading(true)
     try {
-      const data = await api.getAssets({ page: 1, page_size: 100, search: search || undefined, criticality: criticalityFilter || undefined })
+      const data = await api.getAssets({
+        page: 1,
+        page_size: 100,
+        search: search || undefined,
+        criticality: criticalityFilter || undefined,
+      })
       setAssets(data.items)
     } catch (error: any) {
       addToast({ type: 'error', title: 'Failed to load assets', message: error.message })
@@ -38,7 +43,9 @@ export function Assets() {
     }
   }
 
-  useEffect(() => { fetchAssets() }, [search, criticalityFilter])
+  useEffect(() => {
+    fetchAssets()
+  }, [search, criticalityFilter])
 
   const handleSort = (field: 'name' | 'criticality' | 'findings' | 'risk') => {
     if (sortBy === field) {
@@ -49,18 +56,17 @@ export function Assets() {
     }
   }
 
-  const filteredAssets = [...assets]
-    .sort((a, b) => {
-      const key: 'name' | 'criticality' | 'findings_count' | 'risk_score' =
-        sortBy === 'findings' ? 'findings_count' : sortBy === 'risk' ? 'risk_score' : sortBy
-      let aVal: string | number = a[key]
-      let bVal: string | number = b[key]
-      if (typeof aVal === 'string') aVal = aVal.toLowerCase()
-      if (typeof bVal === 'string') bVal = bVal.toLowerCase()
-      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
-      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
-      return 0
-    })
+  const filteredAssets = [...assets].sort((a, b) => {
+    const key: 'name' | 'criticality' | 'findings_count' | 'risk_score' =
+      sortBy === 'findings' ? 'findings_count' : sortBy === 'risk' ? 'risk_score' : sortBy
+    let aVal: string | number = a[key]
+    let bVal: string | number = b[key]
+    if (typeof aVal === 'string') aVal = aVal.toLowerCase()
+    if (typeof bVal === 'string') bVal = bVal.toLowerCase()
+    if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
+    return 0
+  })
 
   return (
     <div className="space-y-6">
@@ -101,27 +107,59 @@ export function Assets() {
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('name')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button
+                    onClick={() => handleSort('name')}
+                    className="flex items-center gap-1 hover:text-gray-700"
+                  >
                     Name
-                    {sortBy === 'name' && (sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
+                    {sortBy === 'name' &&
+                      (sortDir === 'asc' ? (
+                        <ArrowUp className="w-3 h-3" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3" />
+                      ))}
                   </button>
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('criticality')} className="flex items-center gap-1 hover:text-gray-700">
+                  <button
+                    onClick={() => handleSort('criticality')}
+                    className="flex items-center gap-1 hover:text-gray-700"
+                  >
                     Criticality
-                    {sortBy === 'criticality' && (sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
+                    {sortBy === 'criticality' &&
+                      (sortDir === 'asc' ? (
+                        <ArrowUp className="w-3 h-3" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3" />
+                      ))}
                   </button>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domains</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Findings</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Open Ports</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <button onClick={() => handleSort('risk')} className="flex items-center gap-1 hover:text-gray-700">
+                  Domains
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Findings
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Open Ports
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <button
+                    onClick={() => handleSort('risk')}
+                    className="flex items-center gap-1 hover:text-gray-700"
+                  >
                     Risk Score
-                    {sortBy === 'risk' && (sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
+                    {sortBy === 'risk' &&
+                      (sortDir === 'asc' ? (
+                        <ArrowUp className="w-3 h-3" />
+                      ) : (
+                        <ArrowDown className="w-3 h-3" />
+                      ))}
                   </button>
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -129,10 +167,14 @@ export function Assets() {
                 <tr key={asset.id} className="hover:bg-gray-50">
                   <td className="px-4 py-4">
                     <div className="font-medium text-gray-900">{asset.name}</div>
-                    <div className="text-sm text-gray-500">{new Date(asset.created_at).toLocaleDateString()}</div>
+                    <div className="text-sm text-gray-500">
+                      {new Date(asset.created_at).toLocaleDateString()}
+                    </div>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`badge ${asset.criticality === 'prod' ? 'badge-critical' : asset.criticality === 'staging' ? 'badge-high' : asset.criticality === 'dev' ? 'badge-info' : 'badge-low'}`}>
+                    <span
+                      className={`badge ${asset.criticality === 'prod' ? 'badge-critical' : asset.criticality === 'staging' ? 'badge-high' : asset.criticality === 'dev' ? 'badge-info' : 'badge-low'}`}
+                    >
                       {asset.criticality.charAt(0).toUpperCase() + asset.criticality.slice(1)}
                     </span>
                   </td>
@@ -140,7 +182,9 @@ export function Assets() {
                   <td className="px-4 py-4 text-gray-900">{asset.findings_count}</td>
                   <td className="px-4 py-4 text-gray-900">{asset.open_ports}</td>
                   <td className="px-4 py-4">
-                    <span className={`font-medium ${asset.risk_score >= 7 ? 'text-danger-600' : asset.risk_score >= 4 ? 'text-warning-600' : 'text-success-600'}`}>
+                    <span
+                      className={`font-medium ${asset.risk_score >= 7 ? 'text-danger-600' : asset.risk_score >= 4 ? 'text-warning-600' : 'text-success-600'}`}
+                    >
                       {asset.risk_score.toFixed(1)}/10
                     </span>
                   </td>

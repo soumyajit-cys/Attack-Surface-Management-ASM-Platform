@@ -42,13 +42,19 @@ export function Organizations() {
         setDigestExists(false)
       }
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load organization settings', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to load organization settings',
+        message: getApiErrorMessage(error),
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+  }, [])
 
   const handleCreateInvitation = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,10 +62,18 @@ export function Organizations() {
       await api.createInvitation(newInviteEmail, newInviteRole)
       setShowInviteModal(false)
       setNewInviteEmail('')
-      addToast({ type: 'success', title: 'Invitation sent', message: `Invited ${newInviteEmail} as ${newInviteRole}` })
+      addToast({
+        type: 'success',
+        title: 'Invitation sent',
+        message: `Invited ${newInviteEmail} as ${newInviteRole}`,
+      })
       fetchData()
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to create invitation', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to create invitation',
+        message: getApiErrorMessage(error),
+      })
     }
   }
 
@@ -75,9 +89,17 @@ export function Organizations() {
       setNewKeyName('')
       setNewKeyExpiresDays('')
       fetchData()
-      addToast({ type: 'success', title: 'API key created', message: "Copy the key now - it won't be shown again" })
+      addToast({
+        type: 'success',
+        title: 'API key created',
+        message: "Copy the key now - it won't be shown again",
+      })
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to create API key', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to create API key',
+        message: getApiErrorMessage(error),
+      })
     }
   }
 
@@ -85,7 +107,7 @@ export function Organizations() {
     if (!confirm('Revoke this API key? This cannot be undone.')) return
     try {
       await api.deleteApiKey(keyId)
-      setApiKeys(apiKeys.filter(k => k.id !== keyId))
+      setApiKeys(apiKeys.filter((k) => k.id !== keyId))
       addToast({ type: 'success', title: 'API key revoked' })
     } catch (error) {
       addToast({ type: 'error', title: 'Failed to revoke key', message: getApiErrorMessage(error) })
@@ -122,7 +144,11 @@ export function Organizations() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent" />
+      </div>
+    )
   }
 
   return (
@@ -148,7 +174,9 @@ export function Organizations() {
               <div key={inv.id} className="p-4 flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900">{inv.email}</p>
-                  <p className="text-sm text-gray-500 capitalize">{inv.role} · Expires {new Date(inv.expires_at).toLocaleDateString()}</p>
+                  <p className="text-sm text-gray-500 capitalize">
+                    {inv.role} · Expires {new Date(inv.expires_at).toLocaleDateString()}
+                  </p>
                 </div>
                 <span className="badge badge-info">{inv.status}</span>
               </div>
@@ -162,7 +190,13 @@ export function Organizations() {
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">API Keys</h2>
-            <button className="btn-primary text-sm" onClick={() => { setNewKey(''); setShowKeyModal(true); }}>
+            <button
+              className="btn-primary text-sm"
+              onClick={() => {
+                setNewKey('')
+                setShowKeyModal(true)
+              }}
+            >
               <Plus className="w-4 h-4" />
               Create Key
             </button>
@@ -174,7 +208,10 @@ export function Organizations() {
                   <p className="font-medium text-gray-900">{key.name}</p>
                   <p className="text-sm text-gray-500 font-mono">{key.key_prefix}_••••••••</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Scopes: {key.scopes} · {key.is_active ? 'Active' : 'Revoked'} · {key.last_used_at ? `Last used: ${new Date(key.last_used_at).toLocaleDateString()}` : 'Never used'}
+                    Scopes: {key.scopes} · {key.is_active ? 'Active' : 'Revoked'} ·{' '}
+                    {key.last_used_at
+                      ? `Last used: ${new Date(key.last_used_at).toLocaleDateString()}`
+                      : 'Never used'}
                   </p>
                 </div>
                 <button
@@ -196,25 +233,57 @@ export function Organizations() {
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Email Digest</h2>
-            <button className="btn-primary text-sm" onClick={() => { if (!digestConfig) setDigestConfig({ frequency: 'weekly', day_of_week: 1, hour_utc: 9, recipient_emails: '', min_severity: 'medium', is_active: true }); setShowDigestModal(true); }}>
+            <button
+              className="btn-primary text-sm"
+              onClick={() => {
+                if (!digestConfig)
+                  setDigestConfig({
+                    frequency: 'weekly',
+                    day_of_week: 1,
+                    hour_utc: 9,
+                    recipient_emails: '',
+                    min_severity: 'medium',
+                    is_active: true,
+                  })
+                setShowDigestModal(true)
+              }}
+            >
               {digestConfig ? 'Configure' : 'Set Up'}
             </button>
           </div>
           <div className="p-4">
             {digestConfig ? (
               <div className="space-y-3 text-sm">
-                <p><span className="font-medium">Status:</span> {digestConfig.is_active ? 'Active' : 'Inactive'}</p>
-                <p><span className="font-medium">Frequency:</span> {digestConfig.frequency}</p>
-                <p><span className="font-medium">Day:</span> {DAYS[digestConfig.day_of_week]}</p>
-                <p><span className="font-medium">Time (UTC):</span> {digestConfig.hour_utc}:00</p>
-                <p><span className="font-medium">Min Severity:</span> {digestConfig.min_severity}</p>
-                <p><span className="font-medium">Recipients:</span> {digestConfig.recipient_emails}</p>
-                <button className="btn-secondary text-sm mt-2" onClick={() => setShowDigestModal(true)}>
+                <p>
+                  <span className="font-medium">Status:</span>{' '}
+                  {digestConfig.is_active ? 'Active' : 'Inactive'}
+                </p>
+                <p>
+                  <span className="font-medium">Frequency:</span> {digestConfig.frequency}
+                </p>
+                <p>
+                  <span className="font-medium">Day:</span> {DAYS[digestConfig.day_of_week]}
+                </p>
+                <p>
+                  <span className="font-medium">Time (UTC):</span> {digestConfig.hour_utc}:00
+                </p>
+                <p>
+                  <span className="font-medium">Min Severity:</span> {digestConfig.min_severity}
+                </p>
+                <p>
+                  <span className="font-medium">Recipients:</span> {digestConfig.recipient_emails}
+                </p>
+                <button
+                  className="btn-secondary text-sm mt-2"
+                  onClick={() => setShowDigestModal(true)}
+                >
                   Edit Configuration
                 </button>
               </div>
             ) : (
-              <p className="text-gray-500">No digest configured. Click "Set Up" to configure weekly security digests.</p>
+              <p className="text-gray-500">
+                No digest configured. Click "Set Up" to configure weekly security digests.
+              </p>
             )}
           </div>
         </div>
@@ -225,24 +294,48 @@ export function Organizations() {
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">Invite Team Member</h2>
-              <button onClick={() => setShowInviteModal(false)} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">✕</button>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100"
+                aria-label="Close"
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleCreateInvitation} className="space-y-4">
               <div>
                 <label className="label">Email</label>
-                <input type="email" className="input" value={newInviteEmail} onChange={(e) => setNewInviteEmail(e.target.value)} required />
+                <input
+                  type="email"
+                  className="input"
+                  value={newInviteEmail}
+                  onChange={(e) => setNewInviteEmail(e.target.value)}
+                  required
+                />
               </div>
               <div>
                 <label className="label">Role</label>
-                <select className="input" value={newInviteRole} onChange={(e) => setNewInviteRole(e.target.value)}>
+                <select
+                  className="input"
+                  value={newInviteRole}
+                  onChange={(e) => setNewInviteRole(e.target.value)}
+                >
                   <option value="viewer">Viewer</option>
                   <option value="analyst">Analyst</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <button type="button" onClick={() => setShowInviteModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Send Invitation</button>
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Send Invitation
+                </button>
               </div>
             </form>
           </div>
@@ -255,30 +348,60 @@ export function Organizations() {
             {newKey ? (
               <div className="space-y-4">
                 <h2 className="text-xl font-bold mb-4">API Key Created</h2>
-                <div className="bg-gray-100 p-4 rounded-lg font-mono text-sm break-all">{newKey}</div>
+                <div className="bg-gray-100 p-4 rounded-lg font-mono text-sm break-all">
+                  {newKey}
+                </div>
                 <p className="text-sm text-gray-600">Copy this key now. It won't be shown again.</p>
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => handleCopyKey(newKey)} className="btn-secondary flex items-center gap-2">
+                  <button
+                    onClick={() => handleCopyKey(newKey)}
+                    className="btn-secondary flex items-center gap-2"
+                  >
                     <Copy className="w-4 h-4" />
                     Copy
                   </button>
-                  <button onClick={() => { setShowKeyModal(false); setNewKey(''); }} className="btn-primary">Done</button>
+                  <button
+                    onClick={() => {
+                      setShowKeyModal(false)
+                      setNewKey('')
+                    }}
+                    className="btn-primary"
+                  >
+                    Done
+                  </button>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-bold">Create API Key</h2>
-                  <button onClick={() => setShowKeyModal(false)} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">✕</button>
+                  <button
+                    onClick={() => setShowKeyModal(false)}
+                    className="p-2 rounded-lg hover:bg-gray-100"
+                    aria-label="Close"
+                  >
+                    ✕
+                  </button>
                 </div>
                 <form onSubmit={handleCreateApiKey} className="space-y-4">
                   <div>
                     <label className="label">Key Name</label>
-                    <input type="text" className="input" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="CI/CD Pipeline" required />
+                    <input
+                      type="text"
+                      className="input"
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                      placeholder="CI/CD Pipeline"
+                      required
+                    />
                   </div>
                   <div>
                     <label className="label">Scopes</label>
-                    <select className="input" value={newKeyScopes} onChange={(e) => setNewKeyScopes(e.target.value)}>
+                    <select
+                      className="input"
+                      value={newKeyScopes}
+                      onChange={(e) => setNewKeyScopes(e.target.value)}
+                    >
                       <option value="read">Read Only</option>
                       <option value="read,write">Read & Write</option>
                       <option value="read,write,admin">Full Access</option>
@@ -286,11 +409,26 @@ export function Organizations() {
                   </div>
                   <div>
                     <label className="label">Expires In (days, optional)</label>
-                    <input type="number" className="input" value={newKeyExpiresDays} onChange={(e) => setNewKeyExpiresDays(e.target.value)} placeholder="365" min="1" />
+                    <input
+                      type="number"
+                      className="input"
+                      value={newKeyExpiresDays}
+                      onChange={(e) => setNewKeyExpiresDays(e.target.value)}
+                      placeholder="365"
+                      min="1"
+                    />
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
-                    <button type="button" onClick={() => setShowKeyModal(false)} className="btn-secondary">Cancel</button>
-                    <button type="submit" className="btn-primary">Create Key</button>
+                    <button
+                      type="button"
+                      onClick={() => setShowKeyModal(false)}
+                      className="btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn-primary">
+                      Create Key
+                    </button>
                   </div>
                 </form>
               </div>
@@ -303,13 +441,27 @@ export function Organizations() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">{digestExists ? 'Edit Digest Config' : 'Configure Email Digest'}</h2>
-              <button onClick={() => setShowDigestModal(false)} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Close">✕</button>
+              <h2 className="text-xl font-bold">
+                {digestExists ? 'Edit Digest Config' : 'Configure Email Digest'}
+              </h2>
+              <button
+                onClick={() => setShowDigestModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100"
+                aria-label="Close"
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleSaveDigest} className="space-y-4">
               <div>
                 <label className="label">Frequency</label>
-                <select className="input" value={digestConfig?.frequency || 'weekly'} onChange={(e) => setDigestConfig({...digestConfig, frequency: e.target.value} as DigestConfig)}>
+                <select
+                  className="input"
+                  value={digestConfig?.frequency || 'weekly'}
+                  onChange={(e) =>
+                    setDigestConfig({ ...digestConfig, frequency: e.target.value } as DigestConfig)
+                  }
+                >
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -317,31 +469,101 @@ export function Organizations() {
               </div>
               <div>
                 <label className="label">Day of Week</label>
-                <select className="input" value={digestConfig?.day_of_week || 1} onChange={(e) => setDigestConfig({...digestConfig, day_of_week: parseInt(e.target.value)} as DigestConfig)}>
-                  {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                <select
+                  className="input"
+                  value={digestConfig?.day_of_week || 1}
+                  onChange={(e) =>
+                    setDigestConfig({
+                      ...digestConfig,
+                      day_of_week: parseInt(e.target.value),
+                    } as DigestConfig)
+                  }
+                >
+                  {DAYS.map((d, i) => (
+                    <option key={d} value={i}>
+                      {d}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="label">Hour (UTC)</label>
-                <input type="number" className="input" min="0" max="23" value={digestConfig?.hour_utc || 9} onChange={(e) => setDigestConfig({...digestConfig, hour_utc: parseInt(e.target.value)} as DigestConfig)} />
+                <input
+                  type="number"
+                  className="input"
+                  min="0"
+                  max="23"
+                  value={digestConfig?.hour_utc || 9}
+                  onChange={(e) =>
+                    setDigestConfig({
+                      ...digestConfig,
+                      hour_utc: parseInt(e.target.value),
+                    } as DigestConfig)
+                  }
+                />
               </div>
               <div>
                 <label className="label">Recipient Emails (comma-separated)</label>
-                <input type="text" className="input" value={digestConfig?.recipient_emails || ''} onChange={(e) => setDigestConfig({...digestConfig, recipient_emails: e.target.value} as DigestConfig)} placeholder="security@example.com,admin@example.com" required />
+                <input
+                  type="text"
+                  className="input"
+                  value={digestConfig?.recipient_emails || ''}
+                  onChange={(e) =>
+                    setDigestConfig({
+                      ...digestConfig,
+                      recipient_emails: e.target.value,
+                    } as DigestConfig)
+                  }
+                  placeholder="security@example.com,admin@example.com"
+                  required
+                />
               </div>
               <div>
                 <label className="label">Minimum Severity</label>
-                <select className="input" value={digestConfig?.min_severity || 'medium'} onChange={(e) => setDigestConfig({...digestConfig, min_severity: e.target.value} as DigestConfig)}>
-                  {SEVERITIES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                <select
+                  className="input"
+                  value={digestConfig?.min_severity || 'medium'}
+                  onChange={(e) =>
+                    setDigestConfig({
+                      ...digestConfig,
+                      min_severity: e.target.value,
+                    } as DigestConfig)
+                  }
+                >
+                  {SEVERITIES.map((s) => (
+                    <option key={s} value={s}>
+                      {s.charAt(0).toUpperCase() + s.slice(1)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="digest-active" checked={digestConfig?.is_active ?? false} onChange={(e) => setDigestConfig({...digestConfig, is_active: e.target.checked} as DigestConfig)} />
-                <label htmlFor="digest-active" className="text-sm text-gray-700">Active</label>
+                <input
+                  type="checkbox"
+                  id="digest-active"
+                  checked={digestConfig?.is_active ?? false}
+                  onChange={(e) =>
+                    setDigestConfig({
+                      ...digestConfig,
+                      is_active: e.target.checked,
+                    } as DigestConfig)
+                  }
+                />
+                <label htmlFor="digest-active" className="text-sm text-gray-700">
+                  Active
+                </label>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <button type="button" onClick={() => setShowDigestModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" className="btn-primary">Save</button>
+                <button
+                  type="button"
+                  onClick={() => setShowDigestModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save
+                </button>
               </div>
             </form>
           </div>

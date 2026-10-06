@@ -1,29 +1,29 @@
-import React, { useEffect, useRef } from 'react';
-import * as d3 from 'd3';
+import React, { useEffect, useRef } from 'react'
+import * as d3 from 'd3'
 
 interface GraphNode extends d3.SimulationNodeDatum {
-  id: string;
-  type: string;
-  label: string;
-  data: Record<string, unknown>;
+  id: string
+  type: string
+  label: string
+  data: Record<string, unknown>
 }
 
 interface GraphEdge {
-  source: string;
-  target: string;
-  type: string;
+  source: string
+  target: string
+  type: string
 }
 
 export interface AssetGraphData {
-  asset_id: number;
-  nodes: GraphNode[];
-  edges: GraphEdge[];
+  asset_id: number
+  nodes: GraphNode[]
+  edges: GraphEdge[]
 }
 
 interface AssetGraphProps {
-  data: AssetGraphData | null;
-  width?: number;
-  height?: number;
+  data: AssetGraphData | null
+  width?: number
+  height?: number
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -33,7 +33,7 @@ const NODE_COLORS: Record<string, string> = {
   port: '#dc2626',
   ssl: '#ea580c',
   finding: '#db2777',
-};
+}
 
 const NODE_RADIUS: Record<string, number> = {
   asset: 20,
@@ -42,100 +42,112 @@ const NODE_RADIUS: Record<string, number> = {
   port: 12,
   ssl: 12,
   finding: 10,
-};
+}
 
 export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, height = 600 }) => {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
-    if (!data || !svgRef.current) return;
+    if (!data || !svgRef.current) return
 
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
+    const svg = d3.select(svgRef.current)
+    svg.selectAll('*').remove()
 
-    const { nodes, edges } = data;
+    const { nodes, edges } = data
 
-    const simulation: d3.Simulation<GraphNode, GraphEdge> = d3.forceSimulation<GraphNode>(nodes)
-      .force('link', d3.forceLink<GraphNode, GraphEdge>(edges).id((d) => d.id).distance(80))
+    const simulation: d3.Simulation<GraphNode, GraphEdge> = d3
+      .forceSimulation<GraphNode>(nodes)
+      .force(
+        'link',
+        d3
+          .forceLink<GraphNode, GraphEdge>(edges)
+          .id((d) => d.id)
+          .distance(80),
+      )
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide<GraphNode>().radius((d) => NODE_RADIUS[d.type] + 5))
+      .force(
+        'collision',
+        d3.forceCollide<GraphNode>().radius((d) => NODE_RADIUS[d.type] + 5),
+      )
       .force('x', d3.forceX(width / 2).strength(0.05))
-      .force('y', d3.forceY(height / 2).strength(0.05));
+      .force('y', d3.forceY(height / 2).strength(0.05))
 
-    const link = svg.append('g')
+    const link = svg
+      .append('g')
       .attr('stroke', '#9ca3af')
       .attr('stroke-opacity', 0.6)
       .selectAll('line')
       .data(edges)
       .join('line')
-      .attr('stroke-width', 1.5);
+      .attr('stroke-width', 1.5)
 
     const node: d3.Selection<SVGGElement, GraphNode, SVGSVGElement, unknown> = svg
       .selectAll<SVGGElement, GraphNode>('g')
       .data(nodes)
       .join('g')
-      .call(drag(simulation));
+      .call(drag(simulation))
 
-    node.append('circle')
+    node
+      .append('circle')
       .attr('r', (d: GraphNode) => NODE_RADIUS[d.type])
       .attr('fill', (d: GraphNode) => NODE_COLORS[d.type] || '#6b7280')
       .attr('stroke', '#fff')
-      .attr('stroke-width', 2);
+      .attr('stroke-width', 2)
 
-    node.append('text')
+    node
+      .append('text')
       .attr('dy', (d: GraphNode) => NODE_RADIUS[d.type] + 14)
       .attr('text-anchor', 'middle')
       .attr('font-size', '10px')
       .attr('fill', '#374151')
       .text((d: GraphNode) => d.label)
-      .style('pointer-events', 'none');
+      .style('pointer-events', 'none')
 
-    node.append('title')
-      .text((d: GraphNode) => {
-        return Object.entries(d.data)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join('\n');
-      });
+    node.append('title').text((d: GraphNode) => {
+      return Object.entries(d.data)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n')
+    })
 
     simulation.on('tick', () => {
       link
         .attr('x1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).x ?? 0)
         .attr('y1', (d: d3.SimulationLinkDatum<GraphNode>) => (d.source as GraphNode).y ?? 0)
         .attr('x2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).x ?? 0)
-        .attr('y2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y ?? 0);
+        .attr('y2', (d: d3.SimulationLinkDatum<GraphNode>) => (d.target as GraphNode).y ?? 0)
 
-      node
-        .attr('transform', (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`);
-    });
+      node.attr('transform', (d: GraphNode) => `translate(${d.x ?? 0},${d.y ?? 0})`)
+    })
 
     return () => {
-      simulation.stop();
-    };
-  }, [data, width, height]);
+      simulation.stop()
+    }
+  }, [data, width, height])
 
   function drag(simulation: d3.Simulation<GraphNode, GraphEdge>) {
     function dragstarted(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      event.subject.fx = event.subject.x ?? 0;
-      event.subject.fy = event.subject.y ?? 0;
+      if (!event.active) simulation.alphaTarget(0.3).restart()
+      event.subject.fx = event.subject.x ?? 0
+      event.subject.fy = event.subject.y ?? 0
     }
 
     function dragged(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) {
-      event.subject.fx = event.x;
-      event.subject.fy = event.y;
+      event.subject.fx = event.x
+      event.subject.fy = event.y
     }
 
     function dragended(event: d3.D3DragEvent<SVGGElement, GraphNode, GraphNode>) {
-      if (!event.active) simulation.alphaTarget(0);
-      event.subject.fx = null;
-      event.subject.fy = null;
+      if (!event.active) simulation.alphaTarget(0)
+      event.subject.fx = null
+      event.subject.fy = null
     }
 
-    return d3.drag<SVGGElement, GraphNode>()
+    return d3
+      .drag<SVGGElement, GraphNode>()
       .on('start', dragstarted)
       .on('drag', dragged)
-      .on('end', dragended);
+      .on('end', dragended)
   }
 
   if (!data) {
@@ -143,7 +155,7 @@ export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, heigh
       <div className="flex items-center justify-center h-96 text-gray-500">
         No graph data available
       </div>
-    );
+    )
   }
 
   return (
@@ -170,7 +182,7 @@ export const AssetGraph: React.FC<AssetGraphProps> = ({ data, width = 800, heigh
         ))}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AssetGraph;
+export default AssetGraph

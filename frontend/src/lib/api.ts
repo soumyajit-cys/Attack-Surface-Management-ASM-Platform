@@ -1,5 +1,23 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
-import type { Asset, Finding, Scan, ScanPolicy, AlertIntegration, Invitation, APIKey, DigestConfig, PaginatedResponse, DashboardData, AssetDetailData, ChangeEvent } from './types'
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
+} from 'axios'
+import type {
+  Asset,
+  Finding,
+  Scan,
+  ScanPolicy,
+  AlertIntegration,
+  Invitation,
+  APIKey,
+  DigestConfig,
+  PaginatedResponse,
+  DashboardData,
+  AssetDetailData,
+  ChangeEvent,
+} from './types'
 import type { AssetGraphData } from '../AssetGraph'
 
 export const API_PREFIX = import.meta.env.VITE_API_BASE || '/api/v1'
@@ -61,7 +79,7 @@ class ApiClient {
         }
         return config
       },
-      (error) => Promise.reject(error)
+      (error) => Promise.reject(error),
     )
 
     this.client.interceptors.response.use(
@@ -104,7 +122,7 @@ class ApiClient {
         }
 
         return Promise.reject(error)
-      }
+      },
     )
   }
 
@@ -162,19 +180,22 @@ class ApiClient {
 
   // ── auth ───────────────────────────────────────────────────────────────────
   async login(username: string, password: string): Promise<TokenBundle> {
-    return this.post<TokenBundle>('/auth/login', { username, password })
-      .then((data) => {
-        this.setTokens(data.access_token, data.refresh_token)
-        return data
-      })
+    return this.post<TokenBundle>('/auth/login', { username, password }).then((data) => {
+      this.setTokens(data.access_token, data.refresh_token)
+      return data
+    })
   }
 
-  async register(data: { username: string; email: string; password: string; organization: string }): Promise<TokenBundle> {
-    return this.post<TokenBundle>('/auth/register', data)
-      .then((bundle) => {
-        this.setTokens(bundle.access_token, bundle.refresh_token)
-        return bundle
-      })
+  async register(data: {
+    username: string
+    email: string
+    password: string
+    organization: string
+  }): Promise<TokenBundle> {
+    return this.post<TokenBundle>('/auth/register', data).then((bundle) => {
+      this.setTokens(bundle.access_token, bundle.refresh_token)
+      return bundle
+    })
   }
 
   async logout() {
@@ -193,7 +214,12 @@ class ApiClient {
     return this.get<DashboardData>('/dashboard')
   }
 
-  async getAssets(params?: { page?: number; page_size?: number; search?: string; criticality?: string }): Promise<PaginatedResponse<Asset>> {
+  async getAssets(params?: {
+    page?: number
+    page_size?: number
+    search?: string
+    criticality?: string
+  }): Promise<PaginatedResponse<Asset>> {
     return this.get<PaginatedResponse<Asset>>('/assets', { params })
   }
 
@@ -206,7 +232,13 @@ class ApiClient {
   }
 
   // ── findings ───────────────────────────────────────────────────────────────
-  async getFindings(params?: { page?: number; page_size?: number; severity?: string; category?: string; asset_id?: number }): Promise<PaginatedResponse<Finding>> {
+  async getFindings(params?: {
+    page?: number
+    page_size?: number
+    severity?: string
+    category?: string
+    asset_id?: number
+  }): Promise<PaginatedResponse<Finding>> {
     return this.get<PaginatedResponse<Finding>>('/findings', { params })
   }
 
@@ -215,7 +247,12 @@ class ApiClient {
   }
 
   // ── change events (asset history) ────────────────────────────────────────
-  async getRecentChanges(params?: { page?: number; page_size?: number; severity?: string; asset_id?: number }): Promise<PaginatedResponse<ChangeEvent>> {
+  async getRecentChanges(params?: {
+    page?: number
+    page_size?: number
+    severity?: string
+    asset_id?: number
+  }): Promise<PaginatedResponse<ChangeEvent>> {
     return this.get<PaginatedResponse<ChangeEvent>>('/alerts', { params })
   }
 
@@ -224,7 +261,11 @@ class ApiClient {
     return this.post('/scans', { domain })
   }
 
-  async getScans(params?: { page?: number; page_size?: number; status?: string }): Promise<PaginatedResponse<Scan>> {
+  async getScans(params?: {
+    page?: number
+    page_size?: number
+    status?: string
+  }): Promise<PaginatedResponse<Scan>> {
     return this.get<PaginatedResponse<Scan>>('/scans', { params })
   }
 
@@ -233,11 +274,26 @@ class ApiClient {
     return this.get<ScanPolicy[]>('/scan-policies')
   }
 
-  async createScanPolicy(data: { name: string; asset_id: number; frequency: string; scope: string; cron_expression?: string | null }): Promise<ScanPolicy> {
+  async createScanPolicy(data: {
+    name: string
+    asset_id: number
+    frequency: string
+    scope: string
+    cron_expression?: string | null
+  }): Promise<ScanPolicy> {
     return this.post<ScanPolicy>('/scan-policies', data)
   }
 
-  async updateScanPolicy(policyId: number, data: Partial<{ name: string; frequency: string; scope: string; cron_expression: string; is_active: boolean }>) {
+  async updateScanPolicy(
+    policyId: number,
+    data: Partial<{
+      name: string
+      frequency: string
+      scope: string
+      cron_expression: string
+      is_active: boolean
+    }>,
+  ) {
     return this.patch(`/scan-policies/${policyId}`, data)
   }
 
@@ -270,7 +326,11 @@ class ApiClient {
     return this.get<APIKey[]>('/organizations/api-keys')
   }
 
-  async createApiKey(data: { name: string; scopes: string; expires_days?: number }): Promise<APIKey & { key: string }> {
+  async createApiKey(data: {
+    name: string
+    scopes: string
+    expires_days?: number
+  }): Promise<APIKey & { key: string }> {
     return this.post('/organizations/api-keys', data)
   }
 
@@ -310,11 +370,26 @@ class ApiClient {
     return this.get<DigestConfig>('/alerting/digest')
   }
 
-  async createDigestConfig(data: { frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string }) {
+  async createDigestConfig(data: {
+    frequency: string
+    day_of_week: number
+    hour_utc: number
+    recipient_emails: string
+    min_severity: string
+  }) {
     return this.post('/alerting/digest', data)
   }
 
-  async updateDigestConfig(data: Partial<{ frequency: string; day_of_week: number; hour_utc: number; recipient_emails: string; min_severity: string; is_active: boolean }>) {
+  async updateDigestConfig(
+    data: Partial<{
+      frequency: string
+      day_of_week: number
+      hour_utc: number
+      recipient_emails: string
+      min_severity: string
+      is_active: boolean
+    }>,
+  ) {
     return this.patch('/alerting/digest', data)
   }
 
@@ -330,9 +405,13 @@ class ApiClient {
   }
 
   async exportAssetsCsv() {
-    return this.post<Blob>('/reports/export/assets/csv', {}, {
-      responseType: 'blob',
-    })
+    return this.post<Blob>(
+      '/reports/export/assets/csv',
+      {},
+      {
+        responseType: 'blob',
+      },
+    )
   }
 
   async exportScansCsv(params?: { since?: string }) {
@@ -342,15 +421,23 @@ class ApiClient {
   }
 
   async exportDomainsCsv() {
-    return this.post<Blob>('/reports/export/domains/csv', {}, {
-      responseType: 'blob',
-    })
+    return this.post<Blob>(
+      '/reports/export/domains/csv',
+      {},
+      {
+        responseType: 'blob',
+      },
+    )
   }
 
   async exportAllCsv() {
-    return this.post<Blob>('/reports/export/all/csv', {}, {
-      responseType: 'blob',
-    })
+    return this.post<Blob>(
+      '/reports/export/all/csv',
+      {},
+      {
+        responseType: 'blob',
+      },
+    )
   }
 
   async getExecutiveSummaryPdf(assetId?: number, since?: string) {

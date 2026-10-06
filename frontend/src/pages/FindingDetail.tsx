@@ -20,13 +20,19 @@ export function FindingDetail() {
       const data = await api.getFinding(Number(id))
       setFinding(data)
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load finding', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to load finding',
+        message: getApiErrorMessage(error),
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchFinding() }, [id])
+  useEffect(() => {
+    fetchFinding()
+  }, [id])
 
   if (loading) {
     return (
@@ -39,7 +45,9 @@ export function FindingDetail() {
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold text-gray-900">Finding not found</h2>
-        <button onClick={() => navigate('/findings')} className="btn-primary mt-4">Back to Findings</button>
+        <button onClick={() => navigate('/findings')} className="btn-primary mt-4">
+          Back to Findings
+        </button>
       </div>
     )
   }
@@ -48,7 +56,11 @@ export function FindingDetail() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/findings')} className="p-2 rounded-lg hover:bg-gray-100" aria-label="Back to findings">
+          <button
+            onClick={() => navigate('/findings')}
+            className="p-2 rounded-lg hover:bg-gray-100"
+            aria-label="Back to findings"
+          >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
@@ -57,9 +69,13 @@ export function FindingDetail() {
               <span className={`badge ${SEVERITY_COLORS[finding.severity] || 'badge-info'}`}>
                 {finding.severity.toUpperCase()}
               </span>
-              <span className="text-sm text-gray-500 capitalize">{finding.category.replace('_', ' ')}</span>
+              <span className="text-sm text-gray-500 capitalize">
+                {finding.category.replace('_', ' ')}
+              </span>
             </div>
-            <p className="text-gray-500 mt-1">Created {new Date(finding.created_at).toLocaleString()}</p>
+            <p className="text-gray-500 mt-1">
+              Created {new Date(finding.created_at).toLocaleString()}
+            </p>
           </div>
         </div>
       </div>
@@ -77,7 +93,9 @@ export function FindingDetail() {
               {finding.cvss_score != null && (
                 <p className="text-sm text-gray-600 mb-3">
                   CVSS base score:{' '}
-                  <span className="font-semibold text-gray-900">{finding.cvss_score.toFixed(1)}</span>
+                  <span className="font-semibold text-gray-900">
+                    {finding.cvss_score.toFixed(1)}
+                  </span>
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
@@ -113,7 +131,10 @@ export function FindingDetail() {
                   <dt className="text-sm text-gray-500">Asset</dt>
                   <dd className="font-medium text-gray-900">
                     {finding.asset_name && (
-                      <button onClick={() => navigate(`/assets/${finding.asset_id}`)} className="text-primary-600 hover:underline">
+                      <button
+                        onClick={() => navigate(`/assets/${finding.asset_id}`)}
+                        className="text-primary-600 hover:underline"
+                      >
                         {finding.asset_name}
                       </button>
                     )}
@@ -130,11 +151,15 @@ export function FindingDetail() {
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500">Category</dt>
-                  <dd className="font-medium text-gray-900 capitalize">{finding.category.replace('_', ' ')}</dd>
+                  <dd className="font-medium text-gray-900 capitalize">
+                    {finding.category.replace('_', ' ')}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-sm text-gray-500">Created</dt>
-                  <dd className="font-medium text-gray-900">{new Date(finding.created_at).toLocaleString()}</dd>
+                  <dd className="font-medium text-gray-900">
+                    {new Date(finding.created_at).toLocaleString()}
+                  </dd>
                 </div>
               </div>
             </dl>

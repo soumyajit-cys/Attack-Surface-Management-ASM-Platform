@@ -1,7 +1,15 @@
 import { useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
-import { FileText, FileSpreadsheet, Loader2, AlertTriangle, Server, Scan, Globe } from 'lucide-react'
+import {
+  FileText,
+  FileSpreadsheet,
+  Loader2,
+  AlertTriangle,
+  Server,
+  Scan,
+  Globe,
+} from 'lucide-react'
 
 export function Reports() {
   const { addToast } = useToast()
@@ -25,7 +33,10 @@ export function Reports() {
   const handleExportFindings = async () => {
     setExporting('findings')
     try {
-      const blob = await api.exportFindingsCsv({ since: dateRange.start || undefined, severity: severityFilter || undefined })
+      const blob = await api.exportFindingsCsv({
+        since: dateRange.start || undefined,
+        severity: severityFilter || undefined,
+      })
       downloadBlob(blob, `findings_${new Date().toISOString().split('T')[0]}.csv`)
       addToast({ type: 'success', title: 'Export complete', message: 'Findings CSV downloaded' })
     } catch (error) {
@@ -96,7 +107,11 @@ export function Reports() {
     } catch (error) {
       const message = getApiErrorMessage(error)
       if (message.includes('fpdf2')) {
-        addToast({ type: 'error', title: 'PDF unavailable', message: 'PDF generation requires fpdf2 to be installed on the backend' })
+        addToast({
+          type: 'error',
+          title: 'PDF unavailable',
+          message: 'PDF generation requires fpdf2 to be installed on the backend',
+        })
       } else {
         addToast({ type: 'error', title: 'Generation failed', message })
       }
@@ -106,16 +121,63 @@ export function Reports() {
   }
 
   const exportItems = [
-    { key: 'findings', label: 'Findings', icon: AlertTriangle, description: 'All security findings with filters', action: handleExportFindings, loading: exporting === 'findings' },
-    { key: 'assets', label: 'Assets', icon: Server, description: 'Asset inventory with risk scores', action: handleExportAssets, loading: exporting === 'assets' },
-    { key: 'scans', label: 'Scans', icon: Scan, description: 'Scan history and results', action: handleExportScans, loading: exporting === 'scans' },
-    { key: 'domains', label: 'Domains', icon: Globe, description: 'Domain and subdomain inventory', action: handleExportDomains, loading: exporting === 'domains' },
-    { key: 'all', label: 'Complete Export (ZIP)', icon: FileSpreadsheet, description: 'All data in a single ZIP archive', action: handleExportAll, loading: exporting === 'all' },
+    {
+      key: 'findings',
+      label: 'Findings',
+      icon: AlertTriangle,
+      description: 'All security findings with filters',
+      action: handleExportFindings,
+      loading: exporting === 'findings',
+    },
+    {
+      key: 'assets',
+      label: 'Assets',
+      icon: Server,
+      description: 'Asset inventory with risk scores',
+      action: handleExportAssets,
+      loading: exporting === 'assets',
+    },
+    {
+      key: 'scans',
+      label: 'Scans',
+      icon: Scan,
+      description: 'Scan history and results',
+      action: handleExportScans,
+      loading: exporting === 'scans',
+    },
+    {
+      key: 'domains',
+      label: 'Domains',
+      icon: Globe,
+      description: 'Domain and subdomain inventory',
+      action: handleExportDomains,
+      loading: exporting === 'domains',
+    },
+    {
+      key: 'all',
+      label: 'Complete Export (ZIP)',
+      icon: FileSpreadsheet,
+      description: 'All data in a single ZIP archive',
+      action: handleExportAll,
+      loading: exporting === 'all',
+    },
   ]
 
   const pdfItems = [
-    { key: 'executive', label: 'Executive Summary', description: 'Risk posture overview with top findings and recommendations', action: () => handleGeneratePdf(), loading: pdfLoading },
-    { key: 'asset', label: 'Asset-Specific Report', description: 'Detailed report for a specific asset (enter Asset ID)', action: () => handleGeneratePdf(pdfAssetId ? Number(pdfAssetId) : undefined), loading: pdfLoading },
+    {
+      key: 'executive',
+      label: 'Executive Summary',
+      description: 'Risk posture overview with top findings and recommendations',
+      action: () => handleGeneratePdf(),
+      loading: pdfLoading,
+    },
+    {
+      key: 'asset',
+      label: 'Asset-Specific Report',
+      description: 'Detailed report for a specific asset (enter Asset ID)',
+      action: () => handleGeneratePdf(pdfAssetId ? Number(pdfAssetId) : undefined),
+      loading: pdfLoading,
+    },
   ]
 
   return (
@@ -136,15 +198,29 @@ export function Reports() {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <label className="label">Start Date</label>
-              <input type="date" className="input" value={dateRange.start} onChange={(e) => setDateRange({...dateRange, start: e.target.value})} />
+              <input
+                type="date"
+                className="input"
+                value={dateRange.start}
+                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+              />
             </div>
             <div className="flex-1">
               <label className="label">End Date</label>
-              <input type="date" className="input" value={dateRange.end} onChange={(e) => setDateRange({...dateRange, end: e.target.value})} />
+              <input
+                type="date"
+                className="input"
+                value={dateRange.end}
+                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+              />
             </div>
             <div className="flex-1">
               <label className="label">Severity Filter</label>
-              <select className="input" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
+              <select
+                className="input"
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+              >
                 <option value="">All Severities</option>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
@@ -188,7 +264,10 @@ export function Reports() {
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {pdfItems.map((item) => (
-              <div key={item.key} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+              <div
+                key={item.key}
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">{item.label}</p>

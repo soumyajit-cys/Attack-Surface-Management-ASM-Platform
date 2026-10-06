@@ -73,7 +73,9 @@ export function Layout() {
 
         <nav className="p-4 space-y-1">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href))
+            const isActive =
+              location.pathname === item.href ||
+              (item.href !== '/' && location.pathname.startsWith(item.href))
             return (
               <NavLink
                 key={item.name}
@@ -121,7 +123,9 @@ export function Layout() {
                       {user?.username?.charAt(0).toUpperCase()}
                     </span>
                   </div>
-                  <span className="hidden sm:block text-sm font-medium text-gray-700">{user?.username}</span>
+                  <span className="hidden sm:block text-sm font-medium text-gray-700">
+                    {user?.username}
+                  </span>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
                 </button>
 

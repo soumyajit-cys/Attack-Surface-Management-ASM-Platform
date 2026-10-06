@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
 import type { Scan } from '../lib/types'
-import { Scan as ScanIcon, Loader2, Play, Clock, CheckCircle, AlertCircle, MinusCircle } from 'lucide-react'
+import {
+  Scan as ScanIcon,
+  Loader2,
+  Play,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  MinusCircle,
+} from 'lucide-react'
 
 const PAGE_SIZE = 50
 
@@ -25,7 +33,9 @@ export function Scans() {
     }
   }
 
-  useEffect(() => { fetchScans() }, [])
+  useEffect(() => {
+    fetchScans()
+  }, [])
 
   const handleStartScan = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,21 +55,31 @@ export function Scans() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'text-success-600 bg-success-100'
-      case 'running': return 'text-primary-600 bg-primary-100'
-      case 'pending': return 'text-warning-600 bg-warning-100'
-      case 'failed': return 'text-danger-600 bg-danger-100'
-      default: return 'text-gray-600 bg-gray-100'
+      case 'completed':
+        return 'text-success-600 bg-success-100'
+      case 'running':
+        return 'text-primary-600 bg-primary-100'
+      case 'pending':
+        return 'text-warning-600 bg-warning-100'
+      case 'failed':
+        return 'text-danger-600 bg-danger-100'
+      default:
+        return 'text-gray-600 bg-gray-100'
     }
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return <CheckCircle className="w-4 h-4" />
-      case 'running': return <Loader2 className="w-4 h-4 animate-spin" />
-      case 'pending': return <Clock className="w-4 h-4" />
-      case 'failed': return <AlertCircle className="w-4 h-4" />
-      default: return <MinusCircle className="w-4 h-4" />
+      case 'completed':
+        return <CheckCircle className="w-4 h-4" />
+      case 'running':
+        return <Loader2 className="w-4 h-4 animate-spin" />
+      case 'pending':
+        return <Clock className="w-4 h-4" />
+      case 'failed':
+        return <AlertCircle className="w-4 h-4" />
+      default:
+        return <MinusCircle className="w-4 h-4" />
     }
   }
 
@@ -101,12 +121,24 @@ export function Scans() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Error</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Target
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Started
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Completed
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Duration
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Error
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -119,19 +151,25 @@ export function Scans() {
               )}
               {!loading && scans.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">No scans found. Start a scan to begin.</td>
+                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                    No scans found. Start a scan to begin.
+                  </td>
                 </tr>
               )}
               {scans.map((scan) => (
                 <tr key={scan.id} className="hover:bg-gray-50">
                   <td className="px-4 py-4 font-medium text-gray-900">{scan.target}</td>
                   <td className="px-4 py-4">
-                    <span className={`flex items-center gap-1 badge ${getStatusColor(scan.status)}`}>
+                    <span
+                      className={`flex items-center gap-1 badge ${getStatusColor(scan.status)}`}
+                    >
                       {getStatusIcon(scan.status)}
                       {scan.status.charAt(0).toUpperCase() + scan.status.slice(1)}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-gray-500">{new Date(scan.started_at).toLocaleString()}</td>
+                  <td className="px-4 py-4 text-gray-500">
+                    {new Date(scan.started_at).toLocaleString()}
+                  </td>
                   <td className="px-4 py-4 text-gray-500">
                     {scan.completed_at ? new Date(scan.completed_at).toLocaleString() : '-'}
                   </td>

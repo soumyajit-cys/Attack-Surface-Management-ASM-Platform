@@ -2,20 +2,40 @@ import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
-import { User, Lock, Bell, Shield, Palette, Moon, Sun, Globe, Loader2, AlertTriangle } from 'lucide-react'
+import {
+  User,
+  Lock,
+  Bell,
+  Shield,
+  Palette,
+  Moon,
+  Sun,
+  Globe,
+  Loader2,
+  AlertTriangle,
+} from 'lucide-react'
 
 export function Settings() {
   const { user } = useAuth()
   const { addToast } = useToast()
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'appearance' | 'danger'>('profile')
-  const [profileData, setProfileData] = useState({ username: user?.username || '', email: user?.email || '' })
+  const [activeTab, setActiveTab] = useState<
+    'profile' | 'security' | 'notifications' | 'appearance' | 'danger'
+  >('profile')
+  const [profileData, setProfileData] = useState({
+    username: user?.username || '',
+    email: user?.email || '',
+  })
   const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' })
   const [saving, setSaving] = useState(false)
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    addToast({ type: 'info', title: 'Profile update not yet available', message: 'Profile editing will be available in a future release.' })
+    addToast({
+      type: 'info',
+      title: 'Profile update not yet available',
+      message: 'Profile editing will be available in a future release.',
+    })
     setSaving(false)
   }
 
@@ -30,7 +50,11 @@ export function Settings() {
       return
     }
     setSaving(true)
-    addToast({ type: 'info', title: 'Password change not yet available', message: 'Password change will be available in a future release.' })
+    addToast({
+      type: 'info',
+      title: 'Password change not yet available',
+      message: 'Password change will be available in a future release.',
+    })
     setPasswordData({ current: '', new: '', confirm: '' })
     setSaving(false)
   }
@@ -86,7 +110,7 @@ export function Settings() {
                     type="text"
                     className="input"
                     value={profileData.username}
-                    onChange={(e) => setProfileData({...profileData, username: e.target.value})}
+                    onChange={(e) => setProfileData({ ...profileData, username: e.target.value })}
                     required
                   />
                 </div>
@@ -96,7 +120,7 @@ export function Settings() {
                     type="email"
                     className="input"
                     value={profileData.email}
-                    onChange={(e) => setProfileData({...profileData, email: e.target.value})}
+                    onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
                     required
                   />
                 </div>
@@ -108,7 +132,9 @@ export function Settings() {
                   <option value="analyst">Analyst</option>
                   <option value="viewer">Viewer</option>
                 </select>
-                <p className="text-sm text-gray-500 mt-1">Role is assigned by your organization admin</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Role is assigned by your organization admin
+                </p>
               </div>
               <div className="flex justify-end pt-4">
                 <button type="submit" className="btn-primary" disabled={saving}>
@@ -127,7 +153,7 @@ export function Settings() {
                   type="password"
                   className="input"
                   value={passwordData.current}
-                  onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
+                  onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })}
                   required
                 />
               </div>
@@ -137,7 +163,7 @@ export function Settings() {
                   type="password"
                   className="input"
                   value={passwordData.new}
-                  onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
+                  onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
                   required
                   minLength={8}
                 />
@@ -149,7 +175,7 @@ export function Settings() {
                   type="password"
                   className="input"
                   value={passwordData.confirm}
-                  onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
                   required
                 />
               </div>
@@ -164,16 +190,42 @@ export function Settings() {
           {activeTab === 'notifications' && (
             <div className="space-y-6 max-w-md">
               <h3 className="text-lg font-semibold text-gray-900">Email Notifications</h3>
-              <p className="text-sm text-gray-500">Notification preferences are managed through the Alerting page. Configure integrations and email digests there.</p>
+              <p className="text-sm text-gray-500">
+                Notification preferences are managed through the Alerting page. Configure
+                integrations and email digests there.
+              </p>
               <div className="space-y-4">
                 {[
-                  { id: 'scan_complete', label: 'Scan completed', description: 'Receive notification when a scan finishes' },
-                  { id: 'finding_critical', label: 'Critical findings', description: 'Alerted immediately when critical findings are discovered' },
-                  { id: 'finding_high', label: 'High severity findings', description: 'Daily summary of high severity findings' },
-                  { id: 'scan_failed', label: 'Scan failures', description: 'Notified when a scan fails to complete' },
-                  { id: 'weekly_digest', label: 'Weekly digest', description: 'Weekly summary of all findings and scan activity' },
+                  {
+                    id: 'scan_complete',
+                    label: 'Scan completed',
+                    description: 'Receive notification when a scan finishes',
+                  },
+                  {
+                    id: 'finding_critical',
+                    label: 'Critical findings',
+                    description: 'Alerted immediately when critical findings are discovered',
+                  },
+                  {
+                    id: 'finding_high',
+                    label: 'High severity findings',
+                    description: 'Daily summary of high severity findings',
+                  },
+                  {
+                    id: 'scan_failed',
+                    label: 'Scan failures',
+                    description: 'Notified when a scan fails to complete',
+                  },
+                  {
+                    id: 'weekly_digest',
+                    label: 'Weekly digest',
+                    description: 'Weekly summary of all findings and scan activity',
+                  },
                 ].map((notif) => (
-                  <div key={notif.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                  <div
+                    key={notif.id}
+                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
+                  >
                     <div>
                       <p className="font-medium text-gray-900">{notif.label}</p>
                       <p className="text-sm text-gray-500">{notif.description}</p>
@@ -198,7 +250,9 @@ export function Settings() {
                     key={theme.id}
                     disabled={!theme.active}
                     className={`p-4 border-2 rounded-lg text-center transition-colors ${
-                      theme.active ? 'border-primary-600 bg-primary-50' : 'border-gray-200 opacity-50 cursor-not-allowed'
+                      theme.active
+                        ? 'border-primary-600 bg-primary-50'
+                        : 'border-gray-200 opacity-50 cursor-not-allowed'
                     }`}
                   >
                     <theme.icon className="w-6 h-6 mx-auto mb-2 text-gray-600" />
@@ -219,7 +273,9 @@ export function Settings() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-danger-700">Danger Zone</h3>
-                    <p className="text-sm text-danger-600">These actions are irreversible. Please proceed with caution.</p>
+                    <p className="text-sm text-danger-600">
+                      These actions are irreversible. Please proceed with caution.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -229,11 +285,19 @@ export function Settings() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium text-gray-900">Delete Account</h4>
-                      <p className="text-sm text-gray-500">Permanently delete your account and all associated data</p>
+                      <p className="text-sm text-gray-500">
+                        Permanently delete your account and all associated data
+                      </p>
                     </div>
                     <button
                       className="btn-danger"
-                      onClick={() => addToast({ type: 'info', title: 'Not available', message: 'Account deletion will be available in a future release.' })}
+                      onClick={() =>
+                        addToast({
+                          type: 'info',
+                          title: 'Not available',
+                          message: 'Account deletion will be available in a future release.',
+                        })
+                      }
                     >
                       Delete Account
                     </button>
@@ -244,7 +308,9 @@ export function Settings() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium text-gray-900">Revoke All Sessions</h4>
-                      <p className="text-sm text-gray-500">Log out from all devices and revoke all API keys</p>
+                      <p className="text-sm text-gray-500">
+                        Log out from all devices and revoke all API keys
+                      </p>
                     </div>
                     <button
                       className="btn-secondary"

@@ -13,13 +13,7 @@ import {
   AlertCircle,
   History,
 } from 'lucide-react'
-import {
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts'
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 interface FindingSeverity {
   severity: string
@@ -49,14 +43,20 @@ export function Dashboard() {
         setRecentChanges([])
       }
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load dashboard', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to load dashboard',
+        message: getApiErrorMessage(error),
+      })
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
   }
 
-  useEffect(() => { fetchDashboard() }, [])
+  useEffect(() => {
+    fetchDashboard()
+  }, [])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -74,29 +74,79 @@ export function Dashboard() {
     : []
 
   const stats = [
-    { label: 'Total Assets', value: data?.assets ?? 0, icon: Server, color: 'bg-primary-100 text-primary-600' },
-    { label: 'Total Findings', value: data?.findings ?? 0, icon: AlertTriangle, color: 'bg-danger-100 text-danger-600' },
-    { label: 'Critical', value: data?.critical ?? 0, icon: AlertTriangle, color: 'bg-danger-100 text-danger-600' },
-    { label: 'Scans Completed', value: data?.scans_completed ?? 0, icon: ScanIcon, color: 'bg-success-100 text-success-600' },
+    {
+      label: 'Total Assets',
+      value: data?.assets ?? 0,
+      icon: Server,
+      color: 'bg-primary-100 text-primary-600',
+    },
+    {
+      label: 'Total Findings',
+      value: data?.findings ?? 0,
+      icon: AlertTriangle,
+      color: 'bg-danger-100 text-danger-600',
+    },
+    {
+      label: 'Critical',
+      value: data?.critical ?? 0,
+      icon: AlertTriangle,
+      color: 'bg-danger-100 text-danger-600',
+    },
+    {
+      label: 'Scans Completed',
+      value: data?.scans_completed ?? 0,
+      icon: ScanIcon,
+      color: 'bg-success-100 text-success-600',
+    },
   ]
 
   const getScanStatusProps = (status: string) => {
     switch (status) {
-      case 'completed': return { color: 'bg-green-100', iconColor: 'text-green-600', Icon: CheckCircle, label: 'Completed' }
-      case 'running': return { color: 'bg-blue-100', iconColor: 'text-blue-600', Icon: Clock, label: 'Running' }
-      case 'pending': return { color: 'bg-yellow-100', iconColor: 'text-yellow-600', Icon: Clock, label: 'Pending' }
-      case 'failed': return { color: 'bg-red-100', iconColor: 'text-red-600', Icon: AlertCircle, label: 'Failed' }
-      default: return { color: 'bg-gray-100', iconColor: 'text-gray-600', Icon: AlertCircle, label: status }
+      case 'completed':
+        return {
+          color: 'bg-green-100',
+          iconColor: 'text-green-600',
+          Icon: CheckCircle,
+          label: 'Completed',
+        }
+      case 'running':
+        return { color: 'bg-blue-100', iconColor: 'text-blue-600', Icon: Clock, label: 'Running' }
+      case 'pending':
+        return {
+          color: 'bg-yellow-100',
+          iconColor: 'text-yellow-600',
+          Icon: Clock,
+          label: 'Pending',
+        }
+      case 'failed':
+        return {
+          color: 'bg-red-100',
+          iconColor: 'text-red-600',
+          Icon: AlertCircle,
+          label: 'Failed',
+        }
+      default:
+        return {
+          color: 'bg-gray-100',
+          iconColor: 'text-gray-600',
+          Icon: AlertCircle,
+          label: status,
+        }
     }
   }
 
   const severityBadge = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'bg-red-100 text-red-700'
-      case 'high': return 'bg-orange-100 text-orange-700'
-      case 'medium': return 'bg-yellow-100 text-yellow-700'
-      case 'low': return 'bg-blue-100 text-blue-700'
-      default: return 'bg-gray-100 text-gray-600'
+      case 'critical':
+        return 'bg-red-100 text-red-700'
+      case 'high':
+        return 'bg-orange-100 text-orange-700'
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-700'
+      case 'low':
+        return 'bg-blue-100 text-blue-700'
+      default:
+        return 'bg-gray-100 text-gray-600'
     }
   }
 
@@ -157,12 +207,16 @@ export function Dashboard() {
                     paddingAngle={2}
                     dataKey="count"
                     nameKey="severity"
-                    label={({ severity, count, percent }) => `${severity}: ${count} (${(percent * 100).toFixed(0)}%)`}
+                    label={({ severity, count, percent }) =>
+                      `${severity}: ${count} (${(percent * 100).toFixed(0)}%)`
+                    }
                     labelLine={false}
                   >
-                    {severityData.filter((s) => s.count > 0).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
+                    {severityData
+                      .filter((s) => s.count > 0)
+                      .map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
                   </Pie>
                   <Tooltip formatter={(value: number) => [value, 'findings']} />
                 </PieChart>
@@ -177,7 +231,9 @@ export function Dashboard() {
             {severityData.map((s) => (
               <div key={s.severity} className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
-                <span className="text-sm text-gray-600">{s.severity}: {s.count}</span>
+                <span className="text-sm text-gray-600">
+                  {s.severity}: {s.count}
+                </span>
               </div>
             ))}
           </div>
@@ -186,34 +242,52 @@ export function Dashboard() {
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Recent Scans</h3>
-            <button onClick={() => navigate('/scans')} className="text-sm text-primary-600 hover:text-primary-700">View all</button>
+            <button
+              onClick={() => navigate('/scans')}
+              className="text-sm text-primary-600 hover:text-primary-700"
+            >
+              View all
+            </button>
           </div>
           <div className="space-y-3">
-            {recentScans.length > 0 ? recentScans.map((scan) => {
-              const props = getScanStatusProps(scan.status)
-              return (
-                <div key={scan.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg ${props.color} flex items-center justify-center`}>
-                      <props.Icon className={`w-5 h-5 ${props.iconColor}`} />
+            {recentScans.length > 0 ? (
+              recentScans.map((scan) => {
+                const props = getScanStatusProps(scan.status)
+                return (
+                  <div
+                    key={scan.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-lg ${props.color} flex items-center justify-center`}
+                      >
+                        <props.Icon className={`w-5 h-5 ${props.iconColor}`} />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{scan.target}</p>
+                        <p className="text-sm text-gray-500">{props.label}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{scan.target}</p>
-                      <p className="text-sm text-gray-500">{props.label}</p>
+                    <div className="text-sm text-gray-500">
+                      {scan.completed_at
+                        ? `${Math.round((new Date(scan.completed_at).getTime() - new Date(scan.started_at).getTime()) / 1000)}s`
+                        : scan.started_at
+                          ? 'In progress'
+                          : 'Queued'}
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500">
-                    {scan.completed_at
-                      ? `${Math.round((new Date(scan.completed_at).getTime() - new Date(scan.started_at).getTime()) / 1000)}s`
-                      : scan.started_at
-                        ? 'In progress'
-                        : 'Queued'}
-                  </div>
-                </div>
-              )
-            }) : (
+                )
+              })
+            ) : (
               <div className="text-center py-8 text-gray-500">
-                No scans yet. <button onClick={() => navigate('/scans')} className="text-primary-600 hover:underline">Start one</button>
+                No scans yet.{' '}
+                <button
+                  onClick={() => navigate('/scans')}
+                  className="text-primary-600 hover:underline"
+                >
+                  Start one
+                </button>
               </div>
             )}
           </div>
@@ -229,24 +303,34 @@ export function Dashboard() {
           <span className="text-sm text-gray-500">Asset change history across scans</span>
         </div>
         <div className="space-y-3">
-          {recentChanges.length > 0 ? recentChanges.map((change) => (
-            <div key={change.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full uppercase ${severityBadge(change.severity)}`}>
-                  {change.severity}
-                </span>
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{change.title}</p>
-                  <p className="text-sm text-gray-500">
-                    {change.asset_name ?? (change.asset_id ? `Asset #${change.asset_id}` : 'Global')}
-                    {' · '}
-                    {new Date(change.created_at).toLocaleString()}
-                  </p>
+          {recentChanges.length > 0 ? (
+            recentChanges.map((change) => (
+              <div
+                key={change.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className={`text-xs font-semibold px-2 py-1 rounded-full uppercase ${severityBadge(change.severity)}`}
+                  >
+                    {change.severity}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{change.title}</p>
+                    <p className="text-sm text-gray-500">
+                      {change.asset_name ??
+                        (change.asset_id ? `Asset #${change.asset_id}` : 'Global')}
+                      {' · '}
+                      {new Date(change.created_at).toLocaleString()}
+                    </p>
+                  </div>
                 </div>
+                {!change.read && (
+                  <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" title="Unread" />
+                )}
               </div>
-              {!change.read && <span className="w-2 h-2 rounded-full bg-primary-600 shrink-0" title="Unread" />}
-            </div>
-          )) : (
+            ))
+          ) : (
             <div className="text-center py-8 text-gray-500">
               No asset changes detected yet. Changes appear here after consecutive scans.
             </div>

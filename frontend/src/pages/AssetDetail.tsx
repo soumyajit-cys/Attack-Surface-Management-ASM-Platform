@@ -50,10 +50,14 @@ export function AssetDetail() {
 
   const getCriticalityColor = (c: string) => {
     switch (c) {
-      case 'prod': return 'badge-critical'
-      case 'staging': return 'badge-high'
-      case 'dev': return 'badge-info'
-      default: return 'badge-low'
+      case 'prod':
+        return 'badge-critical'
+      case 'staging':
+        return 'badge-high'
+      case 'dev':
+        return 'badge-info'
+      default:
+        return 'badge-low'
     }
   }
 
@@ -68,7 +72,9 @@ export function AssetDetail() {
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold text-gray-900">Asset not found</h2>
-        <button onClick={() => navigate('/assets')} className="btn-primary mt-4">Back to Assets</button>
+        <button onClick={() => navigate('/assets')} className="btn-primary mt-4">
+          Back to Assets
+        </button>
       </div>
     )
   }
@@ -87,11 +93,17 @@ export function AssetDetail() {
                 {asset.criticality.charAt(0).toUpperCase() + asset.criticality.slice(1)}
               </span>
             </div>
-            <p className="text-gray-500 mt-1">Created {new Date(asset.created_at).toLocaleDateString()}</p>
+            <p className="text-gray-500 mt-1">
+              Created {new Date(asset.created_at).toLocaleDateString()}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="btn-secondary flex items-center gap-2" onClick={fetchAsset} disabled={loading}>
+          <button
+            className="btn-secondary flex items-center gap-2"
+            onClick={fetchAsset}
+            disabled={loading}
+          >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
@@ -107,7 +119,9 @@ export function AssetDetail() {
           ) : (
             <p className="text-3xl font-bold text-gray-400 mt-1">—</p>
           )}
-          <p className="text-sm text-gray-500 mt-1">{asset.risk_score > 0 ? '/10' : 'No score yet'}</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {asset.risk_score > 0 ? '/10' : 'No score yet'}
+          </p>
         </div>
         <div className="card p-6">
           <p className="text-sm text-gray-500">Domains</p>
@@ -130,7 +144,10 @@ export function AssetDetail() {
         <div className="card p-6">
           <p className="text-sm text-gray-500">SSL Certificates</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">
-            {asset.domains.reduce((acc, d) => acc + d.subdomains.filter(sub => sub.ssl).length, 0)}
+            {asset.domains.reduce(
+              (acc, d) => acc + d.subdomains.filter((sub) => sub.ssl).length,
+              0,
+            )}
           </p>
         </div>
       </div>
@@ -160,7 +177,12 @@ export function AssetDetail() {
         </div>
 
         {activeTab === 'Graph' ? (
-          <div id="asset-graph-panel" role="tabpanel" aria-labelledby="asset-graph-tab" className="p-6 overflow-x-auto">
+          <div
+            id="asset-graph-panel"
+            role="tabpanel"
+            aria-labelledby="asset-graph-tab"
+            className="p-6 overflow-x-auto"
+          >
             {graphLoading ? (
               <div className="flex items-center justify-center h-96">
                 <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
@@ -170,47 +192,65 @@ export function AssetDetail() {
             )}
           </div>
         ) : (
-        <div id="asset-info-panel" role="tabpanel" aria-labelledby="asset-info-tab" className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Domains & Subdomains</h2>
-          {asset.domains.map((domain) => (
-            <div key={domain.id} className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold text-gray-900">{domain.domain}</h3>
-                  <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                    {domain.registrar && <span>Registrar: {domain.registrar}</span>}
-                    {domain.asn && <span>ASN: {domain.asn}</span>}
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                {domain.subdomains.map((sub) => (
-                  <div key={sub.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-medium text-gray-900">{sub.subdomain}</span>
-                        {sub.ip_address && <span className="text-sm text-gray-500">{sub.ip_address}</span>}
-                        <span className={`badge ${sub.source === 'primary' ? 'badge-critical' : 'badge-info'}`}>{sub.source}</span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        {sub.ports.map((port) => (
-                          <span key={port.id} className={`badge ${port.status === 'open' ? 'badge-critical' : 'badge-low'}`}>
-                            {port.port}/{port.protocol} {port.service}
-                          </span>
-                        ))}
-                        {sub.ssl && (
-                          <span className={`badge ${sub.ssl.risk_level === 'critical' ? 'badge-critical' : sub.ssl.risk_level === 'high' ? 'badge-high' : sub.ssl.risk_level === 'medium' ? 'badge-medium' : 'badge-low'}`}>
-                            SSL: {sub.ssl.tls_version} ({sub.ssl.risk_level})
-                          </span>
-                        )}
-                      </div>
+          <div
+            id="asset-info-panel"
+            role="tabpanel"
+            aria-labelledby="asset-info-tab"
+            className="p-6"
+          >
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Domains & Subdomains</h2>
+            {asset.domains.map((domain) => (
+              <div key={domain.id} className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{domain.domain}</h3>
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                      {domain.registrar && <span>Registrar: {domain.registrar}</span>}
+                      {domain.asn && <span>ASN: {domain.asn}</span>}
                     </div>
                   </div>
-                ))}
+                </div>
+                <div className="space-y-2">
+                  {domain.subdomains.map((sub) => (
+                    <div key={sub.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-medium text-gray-900">
+                            {sub.subdomain}
+                          </span>
+                          {sub.ip_address && (
+                            <span className="text-sm text-gray-500">{sub.ip_address}</span>
+                          )}
+                          <span
+                            className={`badge ${sub.source === 'primary' ? 'badge-critical' : 'badge-info'}`}
+                          >
+                            {sub.source}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {sub.ports.map((port) => (
+                            <span
+                              key={port.id}
+                              className={`badge ${port.status === 'open' ? 'badge-critical' : 'badge-low'}`}
+                            >
+                              {port.port}/{port.protocol} {port.service}
+                            </span>
+                          ))}
+                          {sub.ssl && (
+                            <span
+                              className={`badge ${sub.ssl.risk_level === 'critical' ? 'badge-critical' : sub.ssl.risk_level === 'high' ? 'badge-high' : sub.ssl.risk_level === 'medium' ? 'badge-medium' : 'badge-low'}`}
+                            >
+                              SSL: {sub.ssl.tls_version} ({sub.ssl.risk_level})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -30,7 +30,11 @@ export function ScanPolicies() {
       const data = await api.getScanPolicies()
       setPolicies(data)
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to load scan policies', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to load scan policies',
+        message: getApiErrorMessage(error),
+      })
     } finally {
       setLoading(false)
     }
@@ -45,7 +49,10 @@ export function ScanPolicies() {
     }
   }
 
-  useEffect(() => { fetchPolicies(); fetchAssets() }, [])
+  useEffect(() => {
+    fetchPolicies()
+    fetchAssets()
+  }, [])
 
   const handleRunNow = async (policyId: number) => {
     try {
@@ -60,7 +67,7 @@ export function ScanPolicies() {
     if (!confirm('Delete this scan policy?')) return
     try {
       await api.deleteScanPolicy(policyId)
-      setPolicies(policies.filter(p => p.id !== policyId))
+      setPolicies(policies.filter((p) => p.id !== policyId))
       addToast({ type: 'success', title: 'Policy deleted' })
     } catch (error) {
       addToast({ type: 'error', title: 'Failed to delete', message: getApiErrorMessage(error) })
@@ -112,14 +119,18 @@ export function ScanPolicies() {
       addToast({ type: 'success', title: editingPolicy ? 'Policy updated' : 'Policy created' })
       fetchPolicies()
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to save policy', message: getApiErrorMessage(error) })
+      addToast({
+        type: 'error',
+        title: 'Failed to save policy',
+        message: getApiErrorMessage(error),
+      })
     } finally {
       setSaving(false)
     }
   }
 
   const assetName = (assetId: number) => {
-    const found = assets.find(a => a.id === assetId)
+    const found = assets.find((a) => a.id === assetId)
     return found ? found.name : `Asset #${assetId}`
   }
 
@@ -149,14 +160,30 @@ export function ScanPolicies() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Frequency</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scope</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Run</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Run</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Asset
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Frequency
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Scope
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Last Run
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Next Run
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -166,15 +193,23 @@ export function ScanPolicies() {
                   <td className="px-4 py-4 text-gray-500">{assetName(policy.asset_id)}</td>
                   <td className="px-4 py-4">
                     <span className="badge badge-info">{policy.frequency}</span>
-                    {policy.cron_expression && <span className="ml-2 text-xs text-gray-500 font-mono">{policy.cron_expression}</span>}
+                    {policy.cron_expression && (
+                      <span className="ml-2 text-xs text-gray-500 font-mono">
+                        {policy.cron_expression}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`badge ${policy.scope === 'full' ? 'badge-critical' : policy.scope === 'active' ? 'badge-high' : 'badge-info'}`}>
+                    <span
+                      className={`badge ${policy.scope === 'full' ? 'badge-critical' : policy.scope === 'active' ? 'badge-high' : 'badge-info'}`}
+                    >
                       {policy.scope}
                     </span>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`flex items-center gap-1 badge ${policy.is_active ? 'badge-success' : 'badge-low'}`}>
+                    <span
+                      className={`flex items-center gap-1 badge ${policy.is_active ? 'badge-success' : 'badge-low'}`}
+                    >
                       {policy.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </td>
@@ -182,17 +217,31 @@ export function ScanPolicies() {
                     {policy.last_run_at ? new Date(policy.last_run_at).toLocaleString() : 'Never'}
                   </td>
                   <td className="px-4 py-4 text-gray-500">
-                    {policy.next_run_at ? new Date(policy.next_run_at).toLocaleString() : 'Not scheduled'}
+                    {policy.next_run_at
+                      ? new Date(policy.next_run_at).toLocaleString()
+                      : 'Not scheduled'}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" title="Run Now" onClick={() => handleRunNow(policy.id)}>
+                      <button
+                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+                        title="Run Now"
+                        onClick={() => handleRunNow(policy.id)}
+                      >
                         <Play className="w-4 h-4" />
                       </button>
-                      <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700" title="Edit" onClick={() => openEditModal(policy)}>
+                      <button
+                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+                        title="Edit"
+                        onClick={() => openEditModal(policy)}
+                      >
                         <Edit className="w-4 h-4" />
                       </button>
-                      <button className="p-2 rounded-lg hover:bg-danger-100 text-danger-500 hover:text-danger-700" title="Delete" onClick={() => handleDelete(policy.id)}>
+                      <button
+                        className="p-2 rounded-lg hover:bg-danger-100 text-danger-500 hover:text-danger-700"
+                        title="Delete"
+                        onClick={() => handleDelete(policy.id)}
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -214,23 +263,43 @@ export function ScanPolicies() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl max-w-md w-full mx-4 p-6">
-            <h2 className="text-xl font-bold mb-4">{editingPolicy ? 'Edit Policy' : 'Create Scan Policy'}</h2>
+            <h2 className="text-xl font-bold mb-4">
+              {editingPolicy ? 'Edit Policy' : 'Create Scan Policy'}
+            </h2>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <label className="label">Policy Name</label>
-                <input type="text" className="input" placeholder="Daily Production Scan" value={formName} onChange={(e) => setFormName(e.target.value)} required />
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Daily Production Scan"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  required
+                />
               </div>
               <div>
                 <label className="label">Asset</label>
-                <select className="input" value={formAssetId} onChange={(e) => setFormAssetId(Number(e.target.value))} required>
+                <select
+                  className="input"
+                  value={formAssetId}
+                  onChange={(e) => setFormAssetId(Number(e.target.value))}
+                  required
+                >
                   {assets.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className="label">Frequency</label>
-                <select className="input" value={formFrequency} onChange={(e) => setFormFrequency(e.target.value)}>
+                <select
+                  className="input"
+                  value={formFrequency}
+                  onChange={(e) => setFormFrequency(e.target.value)}
+                >
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
@@ -240,19 +309,32 @@ export function ScanPolicies() {
               {formFrequency === 'custom_cron' && (
                 <div>
                   <label className="label">Cron Expression</label>
-                  <input type="text" className="input font-mono" placeholder="0 2 * * 1" value={formCron} onChange={(e) => setFormCron(e.target.value)} required />
+                  <input
+                    type="text"
+                    className="input font-mono"
+                    placeholder="0 2 * * 1"
+                    value={formCron}
+                    onChange={(e) => setFormCron(e.target.value)}
+                    required
+                  />
                 </div>
               )}
               <div>
                 <label className="label">Scope</label>
-                <select className="input" value={formScope} onChange={(e) => setFormScope(e.target.value)}>
+                <select
+                  className="input"
+                  value={formScope}
+                  onChange={(e) => setFormScope(e.target.value)}
+                >
                   <option value="full">Full (Passive + Active)</option>
                   <option value="passive">Passive Only</option>
                   <option value="active">Active Only</option>
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => setShowModal(false)} className="btn-secondary">
+                  Cancel
+                </button>
                 <button type="submit" className="btn-primary" disabled={saving}>
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                 </button>

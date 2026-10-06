@@ -22,7 +22,11 @@ export function Login() {
       addToast({ type: 'success', title: 'Welcome back!', message: `Logged in as ${username}` })
       navigate('/')
     } catch (error) {
-      addToast({ type: 'error', title: 'Login failed', message: getApiErrorMessage(error) || 'Invalid credentials' })
+      addToast({
+        type: 'error',
+        title: 'Login failed',
+        message: getApiErrorMessage(error) || 'Invalid credentials',
+      })
     } finally {
       setLoading(false)
     }
@@ -45,7 +49,9 @@ export function Login() {
         <div className="card p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="username" className="label">Username</label>
+              <label htmlFor="username" className="label">
+                Username
+              </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -62,7 +68,9 @@ export function Login() {
             </div>
 
             <div>
-              <label htmlFor="password" className="label">Password</label>
+              <label htmlFor="password" className="label">
+                Password
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
@@ -85,16 +93,8 @@ export function Login() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              className="btn-primary w-full py-3"
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                'Sign in'
-              )}
+            <button type="submit" className="btn-primary w-full py-3" disabled={loading}>
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign in'}
             </button>
           </form>
 
