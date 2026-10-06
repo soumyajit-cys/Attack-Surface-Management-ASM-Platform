@@ -1,16 +1,29 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from contextlib import asynccontextmanager
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings, validate_runtime_config
 from app.core.errors import register_error_handlers
+from utils.logger import logger
 from utils.rate_limiter import setup_rate_limiting
 from metrics.middleware import PrometheusMiddleware
 
 # Fail fast on invalid configuration (weak/missing JWT secret, prod misuse).
 validate_runtime_config()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if not settings.require_domain_verification:
+        logger.warning(
+            "SECURITY: REQUIRE_DOMAIN_VERIFICATION is off — scans run without "
+            "ownership proof. Local development only; never disable in production."
+        )
+    yield
+
 
 app = FastAPI(
     title="SentinelASM",
@@ -19,6 +32,7 @@ app = FastAPI(
         "finding synthesis, risk scoring and alerting."
     ),
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
