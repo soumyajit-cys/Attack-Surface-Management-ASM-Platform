@@ -286,7 +286,7 @@ def _build_digest_body(
     alerts_open = (
         db.query(Alert)
         .filter(Alert.organization_id == org_id)
-        .filter(Alert.read == 0)
+        .filter(Alert.read.is_(False))
         .count()
     )
 
