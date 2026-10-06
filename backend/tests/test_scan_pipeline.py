@@ -91,6 +91,26 @@ def mock_scan_pipeline(monkeypatch):
 def test_full_scan_pipeline(client, db, mock_scan_pipeline):
     headers = _register(client, "scanner")
 
+    # Phase 1: manual scans require a verified (or grace) domain.
+    from models.user import User
+    from models.verified_domain import VerifiedDomain
+    from utils.database import SessionLocal
+
+    seed = SessionLocal()
+    user = seed.query(User).filter(User.username == "scanner").first()
+    now = datetime.now(timezone.utc)
+    seed.add(VerifiedDomain(
+        organization_id=user.organization_id,
+        domain="example.com",
+        method="dns_txt",
+        status="verified",
+        token="test-token",
+        verified_at=now,
+        expires_at=now + timedelta(days=90),
+    ))
+    seed.commit()
+    seed.close()
+
     response = client.post(
         "/api/v1/scans",
         json={"domain": "example.com"},
