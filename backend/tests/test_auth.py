@@ -1,6 +1,6 @@
 def test_register_login_me(client):
     response = client.post(
-        "/auth/register",
+        "/api/v1/auth/register",
         json={
             "username": "alice",
             "email": "alice@example.com",
@@ -14,7 +14,7 @@ def test_register_login_me(client):
     assert body["refresh_token"]
 
     response = client.post(
-        "/auth/login",
+        "/api/v1/auth/login",
         json={"username": "alice", "password": "supersecret1"},
     )
     assert response.status_code == 200, response.text
@@ -22,7 +22,7 @@ def test_register_login_me(client):
     access = response.json()["access_token"]
 
     me = client.get(
-        "/auth/me",
+        "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {access}"},
     )
     assert me.status_code == 200
@@ -37,13 +37,13 @@ def test_register_duplicate_username(client):
         "password": "supersecret1",
         "organization": "Acme Corp",
     }
-    assert client.post("/auth/register", json=payload).status_code == 201
-    assert client.post("/auth/register", json=payload).status_code == 409
+    assert client.post("/api/v1/auth/register", json=payload).status_code == 201
+    assert client.post("/api/v1/auth/register", json=payload).status_code == 409
 
 
 def test_login_wrong_password(client):
     client.post(
-        "/auth/register",
+        "/api/v1/auth/register",
         json={
             "username": "carol",
             "email": "carol@example.com",
@@ -52,7 +52,7 @@ def test_login_wrong_password(client):
         },
     )
     response = client.post(
-        "/auth/login",
+        "/api/v1/auth/login",
         json={"username": "carol", "password": "wrongpassword"},
     )
     assert response.status_code == 401
@@ -60,7 +60,7 @@ def test_login_wrong_password(client):
 
 def test_refresh_rotates_and_revokes_old(client):
     client.post(
-        "/auth/register",
+        "/api/v1/auth/register",
         json={
             "username": "dave",
             "email": "dave@example.com",
@@ -69,13 +69,13 @@ def test_refresh_rotates_and_revokes_old(client):
         },
     )
     login = client.post(
-        "/auth/login",
+        "/api/v1/auth/login",
         json={"username": "dave", "password": "supersecret1"},
     ).json()
     old_refresh = login["refresh_token"]
 
     refreshed = client.post(
-        "/auth/refresh",
+        "/api/v1/auth/refresh",
         json={"refresh_token": old_refresh},
     )
     assert refreshed.status_code == 200, refreshed.text
@@ -83,7 +83,7 @@ def test_refresh_rotates_and_revokes_old(client):
     assert new_refresh != old_refresh
 
     replay = client.post(
-        "/auth/refresh",
+        "/api/v1/auth/refresh",
         json={"refresh_token": old_refresh},
     )
     assert replay.status_code == 401
@@ -91,7 +91,7 @@ def test_refresh_rotates_and_revokes_old(client):
 
 def test_logout_revokes_tokens(client):
     client.post(
-        "/auth/register",
+        "/api/v1/auth/register",
         json={
             "username": "erin",
             "email": "erin@example.com",
@@ -100,21 +100,21 @@ def test_logout_revokes_tokens(client):
         },
     )
     login = client.post(
-        "/auth/login",
+        "/api/v1/auth/login",
         json={"username": "erin", "password": "supersecret1"},
     ).json()
     access = login["access_token"]
 
     assert (
         client.get(
-            "/auth/me",
+            "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {access}"},
         ).status_code
         == 200
     )
 
     client.post(
-        "/auth/logout",
+        "/api/v1/auth/logout",
         json={
             "refresh_token": login["refresh_token"],
             "access_token": access,
@@ -123,7 +123,7 @@ def test_logout_revokes_tokens(client):
 
     assert (
         client.get(
-            "/auth/me",
+            "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {access}"},
         ).status_code
         == 401
@@ -132,7 +132,7 @@ def test_logout_revokes_tokens(client):
 
 def test_password_reset_flow(client):
     client.post(
-        "/auth/register",
+        "/api/v1/auth/register",
         json={
             "username": "frank",
             "email": "frank@example.com",
@@ -151,25 +151,25 @@ def test_password_reset_flow(client):
     db.close()
 
     response = client.post(
-        "/auth/reset-password",
+        "/api/v1/auth/reset-password",
         json={"token": reset_token, "new_password": "brandnewpass1"},
     )
     assert response.status_code == 200, response.text
 
     login = client.post(
-        "/auth/login",
+        "/api/v1/auth/login",
         json={"username": "frank", "password": "brandnewpass1"},
     )
     assert login.status_code == 200
 
     reuse = client.post(
-        "/auth/reset-password",
+        "/api/v1/auth/reset-password",
         json={"token": reset_token, "new_password": "anotherpass1"},
     )
     assert reuse.status_code == 400
 
 
 def test_unauthenticated_requests_rejected(client):
-    assert client.get("/auth/me").status_code == 401
-    assert client.get("/findings/").status_code == 401
-    assert client.get("/dashboard/").status_code == 401
+    assert client.get("/api/v1/auth/me").status_code == 401
+    assert client.get("/api/v1/findings").status_code == 401
+    assert client.get("/api/v1/dashboard").status_code == 401
