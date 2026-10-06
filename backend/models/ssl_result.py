@@ -33,7 +33,7 @@ class SSLResult(Base):
 
     cipher = Column(String)
 
-    expires_at = Column(DateTime)
+    expires_at = Column(DateTime(timezone=True))
 
     self_signed = Column(Boolean)
 
