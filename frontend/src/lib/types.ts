@@ -32,6 +32,27 @@ export interface Scan {
   updated_at?: string
 }
 
+export interface VerifiedDomain {
+  domain: string
+  method: string
+  status: string
+  verified_at: string | null
+  expires_at: string | null
+  last_checked_at: string | null
+}
+
+export interface VerificationChallenge {
+  domain: string
+  method: string
+  status: string
+  challenge_token: string
+  txt_record_name: string | null
+  expected_txt_value: string | null
+  file_path: string | null
+  file_content: string | null
+  instructions: string
+}
+
 export interface Asset {
   id: number
   name: string
