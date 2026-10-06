@@ -19,6 +19,10 @@ httpx
 dnspython
 python-whois
 requests
+# Public Suffix List for ownership verification (reject verifying bare
+# suffixes like co.uk / github.io). Used with suffix_list_urls=None so only
+# the bundled snapshot is consulted -- no runtime network fetch.
+tldextract
 
 # Rate limiting (was missing -- fresh installs failed at startup)
 slowapi>=0.1.9
