@@ -36,7 +36,7 @@ app.add_middleware(PrometheusMiddleware)
 register_error_handlers(app)
 
 # Versioned API only (legacy unversioned surface removed in Phase 0 task 0.4;
-// invitation accept, org create, and digest test were ported to /api/v1).
+# invitation accept, org create, and digest test were ported to /api/v1).
 app.include_router(api_v1_router, prefix="/api")
 
 
