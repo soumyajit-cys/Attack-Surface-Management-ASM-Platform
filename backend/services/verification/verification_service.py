@@ -13,6 +13,7 @@ writes, container-safe) and the private-domains section enabled.
 
 from __future__ import annotations
 
+import json
 import secrets
 import socket
 from datetime import datetime, timedelta, timezone
@@ -195,10 +196,11 @@ def record_grace_notice(
         asset_id=asset_id,
         title=f"Verify {row.domain} before {row.expires_at}",
         severity="medium",
-        message=(
-            '{"type": "verification_grace", "domain": "%s", '
-            '"expires_at": "%s"}' % (row.domain, row.expires_at)
-        ),
+        message=json.dumps({
+            "type": "verification_grace",
+            "domain": row.domain,
+            "expires_at": str(row.expires_at),
+        }),
     )
     db.add(alert)
     db.flush()
