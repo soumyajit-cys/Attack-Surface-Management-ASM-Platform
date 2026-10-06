@@ -3,6 +3,9 @@ uvicorn
 sqlalchemy
 alembic
 psycopg2-binary
+# SQLAlchemy >= 2.1 defaults to the psycopg (v3) driver for postgresql:// URLs,
+# so fresh installs also need it (clean clones got ModuleNotFoundError: psycopg).
+psycopg[binary]
 
 celery
 redis
