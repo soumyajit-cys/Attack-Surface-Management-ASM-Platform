@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Column,
+    Boolean,
     Integer,
     String,
     Text,
@@ -40,7 +41,7 @@ class Alert(Base):
 
     message = Column(Text)
 
-    read = Column(Integer, default=0)
+    read = Column(Boolean, default=False)
 
     created_at = Column(
         DateTime(timezone=True),
