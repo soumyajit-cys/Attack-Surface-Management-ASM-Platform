@@ -536,12 +536,18 @@ def _persist_risk_score(db: Session, asset_id: int) -> None:
     recalculate_asset_risk_score(db, asset_id)
 
 
-def _dispatch_enrichment(scan: ScanHistory, asset_id: int) -> None:
+def _dispatch_enrichment(scan: ScanHistory, asset_id: int, scope: str = "full") -> None:
     """Queue OSV.dev CVE enrichment for *asset_id* (best-effort).
 
     Enrichment runs in its own task/session: OSV outages or unparseable
-    banners must never fail an otherwise completed scan.
+    banners must never fail an otherwise completed scan. Only ``full``-scope
+    scans enrich (passive/active findings have no banner CVE mapping).
     """
+    if not scope_policy.enrichment_allowed(scope):
+        logger.debug(
+            "Skipping CVE enrichment for asset %s (scope=%s)", asset_id, scope
+        )
+        return
     try:
         from tasks.cve_tasks import enrich_asset_findings
         enrich_asset_findings.delay(asset_id=asset_id)
