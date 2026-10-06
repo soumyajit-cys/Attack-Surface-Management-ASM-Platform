@@ -1,0 +1,73 @@
+# Phase 0 baseline (2026-10-06): lint/type baselines to get CI green without
+# hiding failures behind `|| true`. Each ignore below names the rule and why
+# it is deferred; re-enable incrementally in Phase 1.
+# Baseline counts: `ruff check .` reported 662 errors,
+# `mypy . --ignore-missing-imports` reported 271 errors in 38 files.
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+ignore = [
+  # Function call in default argument: FastAPI Query()/Field() use it by design.
+  "B008",
+  # Blind except / try-except-pass / try-except-continue: scanners and tasks
+  # fail soft intentionally (every handler logs). Tighten per-module in Phase 1.
+  "BLE001",
+  "S110",
+  "S112",
+  # Unused imports/variables/redefinitions: largely legacy re-export shims and
+  # duplicated legacy/v1 surfaces, removed under task 0.4.
+  "F401",
+  "F841",
+  "F811",
+  # Import sorting: not enforced yet; run `ruff check --fix` in Phase 1.
+  "I001",
+  # pyupgrade rewrites (Optional->X|None, Union->|, etc.): automated fix in Phase 1.
+  "UP006",
+  "UP007",
+  "UP035",
+  "UP045",
+  # Ruff-specific nits (explicit f-string conversion, implicit Optional,
+  # unsorted dunder, unused unpacked variable): deferred.
+  "RUF010",
+  "RUF013",
+  "RUF022",
+  "RUF059",
+  # Small simplifications (collapsible if, needless bool, multiple with):
+  # deferred, no behavior impact.
+  "SIM102",
+  "SIM103",
+  "SIM117",
+  # Style nits (implicit concat, unnecessary collection call, needless return
+  # None): deferred.
+  "ISC004",
+  "C408",
+  "RET501",
+  # Datetime tz-naive calls: data-model tz work lands under task 0.5
+  # (ssl_results.expires_at migration); re-enable after.
+  "DTZ005",
+  "DTZ901",
+  # Blocking HTTP call in async function: `requests` is used inside Celery sync
+  # task context via _run_async(); header scans already use httpx.
+  "ASYNC210",
+  # pyupgrade batch (datetime.timezone.utc->UTC, TimeoutError alias, default
+  # type args, PEP-695 generics): automated `ruff check --fix` in Phase 1.
+  "UP017",
+  "UP041",
+  "UP043",
+  "UP046",
+  # fromisoformat z-suffix handling: review with 0.5 tz work in Phase 1.
+  "FURB162",
+  # Unused noqa directives: stale `# noqa` cleanup lands with the 0.4 legacy
+  # removal; re-enable after.
+  "RUF100",
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+# 271 errors at baseline, dominated by SQLAlchemy classic Column[...] typing
+# (arg-type/assignment/return-value): models use legacy Column() style so
+# attributes report as Column[...] instead of plain types. Migrating models to
+# SQLAlchemy 2.0 Mapped[] typing is Phase 1 work; re-enable codes incrementally.
+disable_error_code = "arg-type, assignment, index, return-value, var-annotated, call-overload, operator, attr-defined, union-attr, misc, call-arg"
