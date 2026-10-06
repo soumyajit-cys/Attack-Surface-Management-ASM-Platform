@@ -19,7 +19,12 @@ celery = Celery(
     "sentinelasm",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["tasks.discovery_tasks", "tasks.scheduler_tasks", "tasks.cve_tasks"],
+    include=[
+        "tasks.discovery_tasks",
+        "tasks.scheduler_tasks",
+        "tasks.cve_tasks",
+        "tasks.verification_tasks",
+    ],
 )
 
 # ── Exchange / Queue definitions ──────────────────────────────────────────────
@@ -65,9 +70,10 @@ celery.conf.update(
         "tasks.scheduler.*": {"queue": "scans"},
         "tasks.scheduler.process_due_scan_policies": {"queue": "scans"},
         "tasks.scheduler.send_due_email_digests": {"queue": "celery"},
+        "tasks.verification.*": {"queue": "scans"},
     },
 
-    # ── Beat schedule (scan policies + email digests) ────────────────────────
+    # ── Beat schedule (scan policies + email digests + verification) ────
     beat_schedule={
         "process-due-scan-policies": {
             "task": "tasks.scheduler.process_due_scan_policies",
@@ -78,6 +84,11 @@ celery.conf.update(
             "task": "tasks.scheduler.send_due_email_digests",
             "schedule": 3600.0,     # hourly
             "options": {"queue": "celery"},
+        },
+        "recheck-verified-domains": {
+            "task": "tasks.verification.recheck_verified_domains",
+            "schedule": 86400.0,    # daily
+            "options": {"queue": "scans"},
         },
     },
 
