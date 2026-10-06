@@ -273,7 +273,7 @@ class ApiClient {
 
   async requestVerification(
     domain: string,
-    method: 'dns_txt' | 'http_file'
+    method: 'dns_txt' | 'http_file',
   ): Promise<VerificationChallenge> {
     return this.post<VerificationChallenge>('/scans/verify-ownership', { domain, method })
   }
