@@ -58,7 +58,13 @@ def recheck_verified_domains() -> dict:
             try:
                 ok, _ = asyncio.run(check_row(db, row))
                 rechecked += 1
+                # Stamp here as well as in check_row so the outcome never
+                # depends on callee side effects.
+                row.last_checked_at = datetime.now(timezone.utc)
                 if not ok:
+                    # check_row flips verified rows itself, but set it here too
+                    # so the outcome never depends on callee side effects.
+                    row.status = STATUS_EXPIRED
                     expired += 1
             except Exception as exc:
                 logger.warning(
