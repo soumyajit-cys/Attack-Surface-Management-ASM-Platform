@@ -28,6 +28,7 @@ from models import (
 )
 from models.scan_history import ScanHistory
 from app.core.config import settings
+from app.scanning import scope as scope_policy
 from services.alerts.email_service import send_email
 from services.verification import verification_service as verification
 from utils.database import SessionLocal
@@ -176,7 +177,10 @@ def process_due_scan_policies() -> dict:
 
             try:
                 from tasks.discovery_tasks import run_discovery
-                run_discovery.delay(scan_id=scan.id)
+                run_discovery.delay(
+                    scan_id=scan.id,
+                    scope=scope_policy.normalize_scope(policy.scope),
+                )
             except Exception as exc:
                 logger.warning(
                     "Failed to dispatch scan for policy %s: %s",
