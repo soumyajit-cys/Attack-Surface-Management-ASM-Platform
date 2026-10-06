@@ -51,7 +51,10 @@ def get_or_create_domain(
 ) -> Domain:
     domain = (
         db.query(Domain)
-        .filter(Domain.domain == domain_name)
+        .filter(
+            Domain.organization_id == org_id,
+            Domain.domain == domain_name,
+        )
         .first()
     )
     if domain is None:
