@@ -92,6 +92,17 @@ class Settings(BaseSettings):
     osv_timeout_seconds: float = 10.0
     osv_enabled: bool = True
 
+    # Domain ownership verification (Phase 1). Scans are allowed only for
+    # verified (or grace-grandfathered) domains. REQUIRE_DOMAIN_VERIFICATION
+    # exists as a local-development escape hatch only: with it off the app
+    # logs a loud warning at startup (see main.py).
+    require_domain_verification: bool = True
+    # Verified domains expire after this many days and must be re-verified.
+    verification_expiry_days: int = 90
+    # Migration-grandfathered domains keep scanning for this many days while
+    # owners verify; afterwards they are treated as unverified.
+    verification_grace_days: int = 14
+
     log_level: str = "INFO"
     log_format: str = "json"
 
