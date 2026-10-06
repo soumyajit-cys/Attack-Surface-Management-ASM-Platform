@@ -17,7 +17,7 @@ from schemas.organization import (
 )
 
 from app.core.audit import record_audit
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
@@ -128,6 +128,69 @@ async def list_invitations(
         Invitation.organization_id == principal.organization_id
     ).order_by(Invitation.created_at.desc()).all()
     return invitations
+
+
+@router.post("/invitations/{token}/accept")
+async def accept_invitation(
+    token: str,
+    data: InvitationAccept,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Accept an invitation (public): creates the invited user's account.
+
+    Ported from the legacy surface so v1 invitations are end-to-end usable.
+    Behavior is unchanged except expired invitations now return 400 with code
+    `invitation_expired` (no 410 type exists in the v1 envelope).
+    """
+    from auth.security import hash_password
+    from models.user import User
+
+    invitation = db.query(Invitation).filter(
+        Invitation.token == token,
+        Invitation.status == InvitationStatus.PENDING,
+    ).first()
+    if not invitation:
+        raise NotFoundError(
+            "Invalid or expired invitation token", code="invitation_invalid"
+        )
+
+    if invitation.expires_at < datetime.now(timezone.utc):
+        invitation.status = InvitationStatus.EXPIRED
+        db.commit()
+        raise BadRequestError(
+            "Invitation has expired", code="invitation_expired"
+        )
+
+    if db.query(User).filter(User.username == data.username).first():
+        raise ConflictError("Username already taken", code="username_taken")
+
+    if db.query(User).filter(User.email == invitation.email).first():
+        raise ConflictError("Email already registered", code="email_taken")
+
+    user = User(
+        organization_id=invitation.organization_id,
+        username=data.username,
+        email=invitation.email,
+        password_hash=hash_password(data.password),
+        role=invitation.role,
+    )
+    db.add(user)
+
+    invitation.status = InvitationStatus.ACCEPTED
+    invitation.accepted_at = datetime.now(timezone.utc)
+
+    record_audit(
+        db,
+        organization_id=invitation.organization_id,
+        actor=data.username,
+        action="org.invite_accepted",
+        details={"email": invitation.email},
+        request=request,
+    )
+    db.commit()
+
+    return {"message": "Invitation accepted, account created"}
 
 
 @router.post("/invitations/{invitation_id}/revoke")
