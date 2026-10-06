@@ -17,6 +17,8 @@ import type {
   DashboardData,
   AssetDetailData,
   ChangeEvent,
+  VerifiedDomain,
+  VerificationChallenge,
 } from './types'
 import type { AssetGraphData } from '../AssetGraph'
 
@@ -267,6 +269,21 @@ class ApiClient {
     status?: string
   }): Promise<PaginatedResponse<Scan>> {
     return this.get<PaginatedResponse<Scan>>('/scans', { params })
+  }
+
+  async requestVerification(
+    domain: string,
+    method: 'dns_txt' | 'http_file'
+  ): Promise<VerificationChallenge> {
+    return this.post<VerificationChallenge>('/scans/verify-ownership', { domain, method })
+  }
+
+  async checkVerification(domain: string): Promise<{ verified: boolean; message: string }> {
+    return this.get('/scans/verify-ownership/check', { params: { domain } })
+  }
+
+  async listVerifiedDomains(): Promise<{ items: VerifiedDomain[] }> {
+    return this.get('/scans/verified-domains')
   }
 
   // ── scan policies ──────────────────────────────────────────────────────────
