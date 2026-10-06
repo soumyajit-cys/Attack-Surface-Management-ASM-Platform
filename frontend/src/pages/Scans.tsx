@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
-import type { Scan } from '../lib/types'
+import type { Scan, VerificationChallenge, VerifiedDomain } from '../lib/types'
 import {
   Scan as ScanIcon,
   Loader2,
@@ -10,6 +10,7 @@ import {
   CheckCircle,
   AlertCircle,
   MinusCircle,
+  ShieldCheck,
 } from 'lucide-react'
 
 const PAGE_SIZE = 50
@@ -20,6 +21,25 @@ export function Scans() {
   const [loading, setLoading] = useState(true)
   const [startingScan, setStartingScan] = useState(false)
   const [scanDomain, setScanDomain] = useState('')
+  const [verifyDomain, setVerifyDomain] = useState('')
+  const [verifyMethod, setVerifyMethod] = useState<'dns_txt' | 'http_file'>('dns_txt')
+  const [challenge, setChallenge] = useState<VerificationChallenge | null>(null)
+  const [requesting, setRequesting] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [verifiedDomains, setVerifiedDomains] = useState<VerifiedDomain[]>([])
+
+  const fetchVerifiedDomains = async () => {
+    try {
+      const data = await api.listVerifiedDomains()
+      setVerifiedDomains(data.items)
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Failed to load verification status',
+        message: getApiErrorMessage(error),
+      })
+    }
+  }
 
   const fetchScans = async () => {
     setLoading(true)
@@ -35,6 +55,7 @@ export function Scans() {
 
   useEffect(() => {
     fetchScans()
+    fetchVerifiedDomains()
   }, [])
 
   const handleStartScan = async (e: React.FormEvent) => {
@@ -47,9 +68,65 @@ export function Scans() {
       setScanDomain('')
       fetchScans()
     } catch (error) {
-      addToast({ type: 'error', title: 'Failed to start scan', message: getApiErrorMessage(error) })
+      const message = getApiErrorMessage(error)
+      if (message.toLowerCase().includes('not verified')) {
+        setVerifyDomain(scanDomain.trim().toLowerCase())
+        addToast({
+          type: 'warning',
+          title: 'Domain not verified',
+          message: `${message} Verify ownership below, then retry the scan.`,
+        })
+      } else {
+        addToast({ type: 'error', title: 'Failed to start scan', message })
+      }
     } finally {
       setStartingScan(false)
+    }
+  }
+
+  const handleRequestChallenge = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!verifyDomain.trim()) return
+    setRequesting(true)
+    try {
+      const data = await api.requestVerification(verifyDomain.trim(), verifyMethod)
+      setChallenge(data)
+      addToast({ type: 'info', title: 'Challenge issued', message: data.instructions })
+    } catch (error) {
+      addToast({ type: 'error', title: 'Challenge failed', message: getApiErrorMessage(error) })
+    } finally {
+      setRequesting(false)
+    }
+  }
+
+  const handleCheckNow = async () => {
+    const domain = challenge?.domain ?? verifyDomain.trim()
+    if (!domain) return
+    setChecking(true)
+    try {
+      const result = await api.checkVerification(domain)
+      addToast({ type: 'success', title: 'Domain verified', message: result.message })
+      setChallenge(null)
+      fetchVerifiedDomains()
+    } catch (error) {
+      addToast({ type: 'error', title: 'Not verified yet', message: getApiErrorMessage(error) })
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const getVerificationBadge = (status: string) => {
+    switch (status) {
+      case 'verified':
+        return 'text-success-600 bg-success-100'
+      case 'pending':
+        return 'text-warning-600 bg-warning-100'
+      case 'grandfathered':
+        return 'text-amber-700 bg-amber-100'
+      case 'failed':
+        return 'text-danger-600 bg-danger-100'
+      default:
+        return 'text-gray-600 bg-gray-100'
     }
   }
 
@@ -89,6 +166,85 @@ export function Scans() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Scans</h1>
           <p className="text-gray-600">Manage and monitor your scans</p>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5" />
+            Domain verification
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            Scans require proof of ownership. Verify a domain (or its parent) once — subdomains are
+            covered automatically.
+          </p>
+          <form onSubmit={handleRequestChallenge} className="flex flex-col sm:flex-row gap-4 mt-4">
+            <input
+              type="text"
+              value={verifyDomain}
+              onChange={(e) => setVerifyDomain(e.target.value)}
+              className="input flex-1"
+              placeholder="example.com"
+              required
+            />
+            <select
+              value={verifyMethod}
+              onChange={(e) => setVerifyMethod(e.target.value as 'dns_txt' | 'http_file')}
+              className="input"
+            >
+              <option value="dns_txt">DNS TXT record</option>
+              <option value="http_file">HTTP file</option>
+            </select>
+            <button type="submit" className="btn-secondary" disabled={requesting}>
+              {requesting ? 'Issuing…' : 'Get challenge'}
+            </button>
+          </form>
+          {challenge && (
+            <div className="mt-4 p-4 bg-gray-50 rounded text-sm space-y-2">
+              <p className="text-gray-700">{challenge.instructions}</p>
+              {challenge.txt_record_name && (
+                <p className="font-mono break-all">
+                  {challenge.txt_record_name} → {challenge.expected_txt_value}
+                </p>
+              )}
+              {challenge.file_path && (
+                <p className="font-mono break-all">
+                  {challenge.file_path} → {challenge.file_content}
+                </p>
+              )}
+              <button onClick={handleCheckNow} className="btn-primary" disabled={checking}>
+                {checking ? 'Checking…' : 'Check now'}
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="p-6">
+          <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-2">
+            Verification status
+          </h3>
+          {verifiedDomains.length === 0 && (
+            <p className="text-sm text-gray-500">No domains verified yet.</p>
+          )}
+          <ul className="space-y-2">
+            {verifiedDomains.map((v) => (
+              <li key={v.domain} className="flex items-center gap-2 text-sm flex-wrap">
+                <span className="font-medium text-gray-900">{v.domain}</span>
+                <span className={`badge ${getVerificationBadge(v.status)}`}>{v.status}</span>
+                {v.status === 'grandfathered' && v.expires_at && (
+                  <span className="text-amber-700">
+                    grace expires {new Date(v.expires_at).toLocaleDateString()} — verify to keep
+                    scanning
+                  </span>
+                )}
+                {v.status === 'verified' && v.expires_at && (
+                  <span className="text-gray-500">
+                    expires {new Date(v.expires_at).toLocaleDateString()}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
 
