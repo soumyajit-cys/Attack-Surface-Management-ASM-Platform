@@ -474,3 +474,36 @@ async def delete_digest_config(
     db.commit()
 
     return {"message": "Digest config deleted"}
+
+
+@router.post("/digest/test")
+async def test_digest_config(
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_ALERT_ADMIN_DEP),
+):
+    """Send a test digest for the organization's config. Ported from legacy."""
+    from services.alerts.alerting_service import send_email_digest
+
+    config = db.query(EmailDigestConfig).filter(
+        EmailDigestConfig.organization_id == principal.organization_id
+    ).first()
+    if not config:
+        raise NotFoundError("Digest config not found", code="digest_config_not_found")
+
+    sent = await send_email_digest(db, config)
+
+    record_audit(
+        db,
+        organization_id=principal.organization_id,
+        actor=principal.user.username,
+        action="alerting.digest_tested",
+        details={"id": config.id, "sent": sent},
+        request=request,
+    )
+    db.commit()
+
+    if sent:
+        return {"message": "Test digest sent successfully"}
+    raise AppError("Failed to send test digest (no findings in period?)",
+                   code="digest_send_failed")
