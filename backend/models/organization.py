@@ -103,6 +103,12 @@ class Organization(Base):
         cascade="all, delete-orphan"
     )
 
+    verified_domains = relationship(
+        "VerifiedDomain",
+        back_populates="organization",
+        cascade="all, delete-orphan"
+    )
+
 
 class Invitation(Base):
 
