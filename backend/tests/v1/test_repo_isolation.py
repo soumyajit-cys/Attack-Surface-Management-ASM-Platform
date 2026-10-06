@@ -12,7 +12,7 @@ from models.asset import Asset
 from models.domain import Domain
 
 from app.db.scoped import OrgScope, TenantScopeError
-from app.repositories.assets import AssetRepository, DomainOwnedByAnotherOrgError, DomainRepository
+from app.repositories.assets import AssetRepository, DomainRepository
 from app.repositories.users import UserRepository
 
 
@@ -71,10 +71,12 @@ def test_get_or_create_domain_same_org_roundtrip(db, org_factory):
     assert again.organization_id == org_a.id
 
 
-def test_get_or_create_domain_cross_org_raises_not_hijacks(db, org_factory):
-    """The old bug: org B scanning a domain owned by org A reassigned the row.
+def test_get_or_create_domain_cross_org_creates_separate_rows(db, org_factory):
+    """Two orgs may own the same domain name as separate rows.
 
-    Now the scoped repository raises instead of stealing the row.
+    Regression test for the hijack bug: org B scanning a domain owned by org A
+    must not re-point org A's row; each org gets its own (organization_id, domain)
+    row per ``uq_domains_org_domain``.
     """
     org_a, _ = org_factory("Domain Owner", "owner_user", "owner_user@example.com")
     org_b, _ = org_factory("Domain Attacker", "attacker_user", "attacker_user@example.com")
@@ -91,15 +93,22 @@ def test_get_or_create_domain_cross_org_raises_not_hijacks(db, org_factory):
     db.flush()
 
     repo_b = DomainRepository(OrgScope(db=db, organization_id=org_b.id))
-    with pytest.raises(DomainOwnedByAnotherOrgError):
-        repo_b.get_or_create("contested.example", asset_b)
+    other = repo_b.get_or_create("contested.example", asset_b)
+    db.flush()
 
-    # Row untouched: still org A's.
+    assert other.id != owned.id
+    assert other.organization_id == org_b.id
+    assert other.asset_id == asset_b.id
+
+    # Org A's row untouched.
     db.expire_all()
-    row = db.query(Domain).filter(Domain.domain == "contested.example").one()
-    assert row.organization_id == original_org_id
-    assert row.asset_id == original_asset_id
-    assert row.organization_id == org_a.id
+    row_a = db.query(Domain).filter(
+        Domain.organization_id == org_a.id,
+        Domain.domain == "contested.example",
+    ).one()
+    assert row_a.organization_id == original_org_id
+    assert row_a.asset_id == original_asset_id
+    assert row_a.organization_id == org_a.id
 
 
 def test_domain_repo_get_scoped(db, org_factory):
