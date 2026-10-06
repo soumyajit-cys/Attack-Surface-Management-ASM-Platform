@@ -16,5 +16,12 @@ class ScanRequest(BaseModel):
         description="Verification method for ownership challenges",
     )
 
+    # Only used by POST /scans (manual scans default to full).
+    scope: str = Field(
+        default="full",
+        pattern="^(passive|active|full)$",
+        description="Scan scope: passive, active, or full",
+    )
+
 
     
