@@ -26,11 +26,11 @@ def test_findings_pagination(client, db, org_factory, auth_headers):
     headers = auth_headers("pager")
 
     page1 = client.get(
-        "/findings/?page=1&page_size=2",
+        "/api/v1/findings?page=1&page_size=2",
         headers=headers,
     ).json()
     page2 = client.get(
-        "/findings/?page=2&page_size=2",
+        "/api/v1/findings?page=2&page_size=2",
         headers=headers,
     ).json()
 
@@ -48,7 +48,7 @@ def test_findings_severity_filter(client, db, org_factory, auth_headers):
     _seed(db, org_factory, "severe")
 
     response = client.get(
-        "/findings/?severity=critical",
+        "/api/v1/findings?severity=critical",
         headers=auth_headers("severe"),
     )
     assert response.status_code == 200
@@ -61,7 +61,7 @@ def test_dashboard_counts(client, db, org_factory, auth_headers):
     _seed(db, org_factory, "counter")
 
     response = client.get(
-        "/dashboard/",
+        "/api/v1/dashboard",
         headers=auth_headers("counter"),
     )
     assert response.status_code == 200
