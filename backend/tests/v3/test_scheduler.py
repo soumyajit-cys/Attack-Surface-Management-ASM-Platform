@@ -1,6 +1,6 @@
 """v3 scheduler tests: next-run computation, due-scan dispatch, digest emails."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from models import ScanFrequency, ScanPolicy, Asset, ScanHistory, EmailDigestConfig
 from tasks.scheduler_tasks import (
@@ -58,6 +58,18 @@ class TestProcessDueScanPolicies:
         asset = Asset(organization_id=org.id, name="policy-test.example.com")
         db.add(asset)
         db.flush()
+
+        # Phase 1: scheduled scans require a verified (or grace) domain.
+        from models.verified_domain import VerifiedDomain
+        db.add(VerifiedDomain(
+            organization_id=org.id,
+            domain="policy-test.example.com",
+            method="dns_txt",
+            status="verified",
+            token="test-token",
+            verified_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+        ))
 
         policy = ScanPolicy(
             organization_id=org.id,
