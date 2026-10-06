@@ -10,7 +10,7 @@ def _register(client, username, role=None):
         "password": "supersecret1",
         "organization": f"Org-{username}",
     }
-    response = client.post("/auth/register", json=payload)
+    response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201, response.text
     access = response.json()["access_token"]
 
@@ -92,7 +92,7 @@ def test_full_scan_pipeline(client, db, mock_scan_pipeline):
     headers = _register(client, "scanner")
 
     response = client.post(
-        "/scan/",
+        "/api/v1/scans",
         json={"domain": "example.com"},
         headers=headers,
     )
@@ -100,7 +100,7 @@ def test_full_scan_pipeline(client, db, mock_scan_pipeline):
     scan_id = response.json()["scan_id"]
 
     status = client.get(
-        f"/scan/{scan_id}",
+        f"/api/v1/scans/{scan_id}",
         headers=headers,
     )
     assert status.status_code == 200
@@ -139,7 +139,7 @@ def test_full_scan_pipeline(client, db, mock_scan_pipeline):
 
     assert db.query(RiskScore).count() >= 1
 
-    dashboard = client.get("/dashboard/", headers=headers).json()
+    dashboard = client.get("/api/v1/dashboard", headers=headers).json()
     assert dashboard["assets"] == 1
     assert dashboard["findings"] > 0
 
@@ -148,7 +148,7 @@ def test_viewer_cannot_trigger_scan(client, db, mock_scan_pipeline):
     headers = _register(client, "viewer1", role="viewer")
 
     response = client.post(
-        "/scan/",
+        "/api/v1/scans",
         json={"domain": "example.com"},
         headers=headers,
     )
@@ -159,7 +159,7 @@ def test_invalid_domain_rejected(client, db):
     headers = _register(client, "validator")
 
     response = client.post(
-        "/scan/",
+        "/api/v1/scans",
         json={"domain": "not a domain!!"},
         headers=headers,
     )
