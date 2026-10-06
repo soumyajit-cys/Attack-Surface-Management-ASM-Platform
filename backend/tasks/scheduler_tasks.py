@@ -27,7 +27,9 @@ from models import (
     ScanPolicy,
 )
 from models.scan_history import ScanHistory
+from app.core.config import settings
 from services.alerts.email_service import send_email
+from services.verification import verification_service as verification
 from utils.database import SessionLocal
 from utils.logger import logger
 from workers.celery_app import celery
@@ -107,6 +109,7 @@ def process_due_scan_policies() -> dict:
     now = datetime.now(timezone.utc)
     dispatched = 0
     failed = 0
+    skipped = 0
 
     try:
         policies = (
@@ -138,6 +141,39 @@ def process_due_scan_policies() -> dict:
             db.add(scan)
             db.flush()
 
+            # ── Phase 1 ownership gate ──────────────────────────────
+            if settings.require_domain_verification:
+                allowed, mode_or_reason, covering = verification.is_scan_allowed(
+                    db, policy.organization_id, target, now
+                )
+                if not allowed:
+                    scan.status = "skipped"
+                    scan.error = f"domain_not_verified: {mode_or_reason}"
+                    scan.completed_at = now
+                    policy.last_run_at = now
+                    policy.next_run_at = compute_next_run(
+                        policy.frequency,
+                        policy.cron_expression,
+                        now,
+                    )
+                    skipped += 1
+                    logger.warning(
+                        "Skipping scheduled scan for policy %s (%s): %s",
+                        policy.id, target, mode_or_reason,
+                    )
+                    continue
+                if (
+                    mode_or_reason == verification.STATUS_GRANDFATHERED
+                    and covering is not None
+                ):
+                    logger.warning(
+                        "Policy %s scans grandfathered domain %s (verify before %s)",
+                        policy.id, covering.domain, covering.expires_at,
+                    )
+                    verification.record_grace_notice(
+                        db, policy.organization_id, asset.id, covering
+                    )
+
             try:
                 from tasks.discovery_tasks import run_discovery
                 run_discovery.delay(scan_id=scan.id)
@@ -162,10 +198,10 @@ def process_due_scan_policies() -> dict:
         db.close()
 
     logger.info(
-        "process_due_scan_policies: dispatched=%s failed=%s",
-        dispatched, failed,
+        "process_due_scan_policies: dispatched=%s failed=%s skipped=%s",
+        dispatched, failed, skipped,
     )
-    return {"dispatched": dispatched, "failed": failed}
+    return {"dispatched": dispatched, "failed": failed, "skipped": skipped}
 
 
 # ── Email digest scheduler ────────────────────────────────────────────────────
