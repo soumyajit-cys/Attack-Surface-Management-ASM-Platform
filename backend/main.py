@@ -3,16 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
-from api.routes.auth import router as auth_router
-from api.routes.scans import router as scan_router
-from api.routes.findings import router as findings_router
-from api.routes.dashboard import router as dashboard_router
-from api.routes.organizations import router as organizations_router
-from api.routes.scan_policies import router as scan_policies_router
-from api.routes.graph import router as graph_router
-from api.routes.alerting import router as alerting_router
-from api.routes.reports import router as reports_router
-
 from app.api.v1.router import api_v1_router
 from app.core.config import settings, validate_runtime_config
 from app.core.errors import register_error_handlers
@@ -45,18 +35,8 @@ app.add_middleware(PrometheusMiddleware)
 
 register_error_handlers(app)
 
-# Legacy surface (migrating incrementally to /api/v1).
-app.include_router(auth_router)
-app.include_router(scan_router)
-app.include_router(findings_router)
-app.include_router(dashboard_router)
-app.include_router(organizations_router)
-app.include_router(scan_policies_router)
-app.include_router(graph_router)
-app.include_router(alerting_router)
-app.include_router(reports_router)
-
-# Versioned API.
+# Versioned API only (legacy unversioned surface removed in Phase 0 task 0.4;
+// invitation accept, org create, and digest test were ported to /api/v1).
 app.include_router(api_v1_router, prefix="/api")
 
 
