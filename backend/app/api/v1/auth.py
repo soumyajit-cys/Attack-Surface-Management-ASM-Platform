@@ -190,7 +190,12 @@ async def refresh(
     )
     db.commit()
 
-    return _issue_tokens(db, user)
+    org = db.get(Organization, user.organization_id)
+    return TokenBundle(
+        access_token=access,
+        refresh_token=new_refresh,
+        user=_user_out(user, organization_name=org.name if org else None),
+    )
 
 
 @router.post("/logout", response_model=MessageOut)
