@@ -23,3 +23,6 @@ class ScanContext:
 
     subdomains: list[str] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
+    # Scan scope name (see app.scanning.scope). Plain string (not imported)
+    # to avoid a registry -> context -> scope import cycle.
+    scope: str = "full"
