@@ -20,6 +20,7 @@ from app.core.errors import BadRequestError, ForbiddenError, NotFoundError
 from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
+from app.scanning import scope as scope_policy
 from services.verification import verification_service as verification
 from tasks.discovery_tasks import run_discovery
 from utils.rate_limiter import limiter
@@ -53,6 +54,7 @@ async def start_scan(
     principal: Principal = Depends(_SCAN_DEP),
 ):
     domain = _validated_domain(data.domain)
+    scope = scope_policy.normalize_scope(data.scope)
 
     from services.discovery.domain_service import resolve_domain
     resolved = await resolve_domain(domain)
@@ -89,19 +91,20 @@ async def start_scan(
         organization_id=principal.organization_id,
         target=domain,
         status="pending",
+        scope=scope,
     )
     db.add(scan)
     db.commit()
     db.refresh(scan)
 
-    run_discovery.delay(scan_id=scan.id)
+    run_discovery.delay(scan_id=scan.id, scope=scope)
 
     record_audit(
         db,
         organization_id=principal.organization_id,
         actor=principal.user.username,
         action="scan.started",
-        details={"target": domain},
+        details={"target": domain, "scope": scope},
         request=request,
     )
     db.commit()
