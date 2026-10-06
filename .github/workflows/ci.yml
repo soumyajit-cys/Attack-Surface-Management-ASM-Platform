@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./Attack-Surface-Management-ASM-Platform/backend
+        working-directory: ./backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,6 +27,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -38,14 +39,15 @@ jobs:
         run: ruff check .
 
       - name: Run MyPy (type check)
-        run: mypy . --ignore-missing-imports || true
+        # Baseline overrides live in backend/pyproject.toml [tool.mypy].
+        run: mypy . --ignore-missing-imports
 
   lint-frontend:
     name: Lint Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./Attack-Surface-Management-ASM-Platform/frontend
+        working-directory: ./frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -55,22 +57,25 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run ESLint
-        run: npx eslint src --ext .ts,.tsx || true
+        # Baseline config lives in frontend/.eslintrc.cjs.
+        run: npx eslint src --ext .ts,.tsx
 
       - name: Run Prettier check
-        run: npx prettier --check src || true
+        # Style baseline lives in frontend/.prettierrc.
+        run: npx prettier --check src
 
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./Attack-Surface-Management-ASM-Platform/backend
+        working-directory: ./backend
     services:
       postgres:
         image: postgres:16
@@ -101,6 +106,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -156,7 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./Attack-Surface-Management-ASM-Platform/frontend
+        working-directory: ./frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -166,12 +172,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run tests
-        run: npm test -- --coverage || true
+        # frontend/package.json test script runs `vitest run` (no watch, no
+        # coverage provider). Hard gate: no `|| true`.
+        run: npm test
 
   dependency-scan:
     name: Dependency Scanning
@@ -186,18 +195,32 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Run pip-audit (Python)
+        # Phase 0 baseline: two vulns with no fixed release, each ignored with
+        # reason. Revisit in Phase 1 (PyJWT migration removes python-jose).
+        # - CVE-2026-85394 (python-jose): HMAC key-confusion only when
+        #   algorithms are not restricted. SentinelASM always passes explicit
+        #   HS256 (auth/jwt.py encode/decode) and uses symmetric secrets only.
+        # - PYSEC-2026-1325 (ecdsa, transitive via python-jose): P-256 timing
+        #   side-channel in sign/keygen; verification is unaffected, the repo
+        #   never calls the affected APIs, and upstream has no planned fix.
         run: |
           pip install pip-audit
-          pip-audit -r Attack-Surface-Management-ASM-Platform/backend/requirements.txt || true
+          pip-audit -r backend/requirements.txt \
+            --ignore-vuln CVE-2026-85394 \
+            --ignore-vuln PYSEC-2026-1325
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Run npm audit (Frontend)
-        working-directory: ./Attack-Surface-Management-ASM-Platform/frontend
-        run: npm audit --audit-level=high || true
+      # Prod dependencies only: dev-toolchain highs (brace-expansion via
+      # eslint, braces via tailwind) need breaking majors (tailwind v4,
+      # react-router-dom v7) and are deferred to Phase 1. The prod gate at
+      # --audit-level=high is hard (axios fixed at 1.20.0).
+      - name: Run npm audit (Frontend, prod only)
+        working-directory: ./frontend
+        run: npm audit --omit=dev --audit-level=high
 
   docker-build:
     name: Build Docker Images
@@ -230,7 +253,7 @@ jobs:
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
-          context: ./Attack-Surface-Management-ASM-Platform/backend
+          context: ./backend
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
@@ -249,12 +272,17 @@ jobs:
       - name: Build and push Frontend
         uses: docker/build-push-action@v5
         with:
-          context: ./Attack-Surface-Management-ASM-Platform/frontend
+          context: ./frontend
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # NOTE: the worker reuses the backend image (same Dockerfile, Celery
+      # entrypoint comes from docker-compose.yml `command:`). backend/Dockerfile
+      # has no `worker` stage, so the old `target: worker` build step was
+      # removed instead of building a non-existent stage.
 
       - name: Extract metadata for Worker
         id: meta-worker
@@ -268,11 +296,11 @@ jobs:
       - name: Build and push Worker
         uses: docker/build-push-action@v5
         with:
-          context: ./Attack-Surface-Management-ASM-Platform/backend
+          # Same backend image with a Celery entrypoint (see note above).
+          context: ./backend
           push: true
           tags: ${{ steps.meta-worker.outputs.tags }}
           labels: ${{ steps.meta-worker.outputs.labels }}
-          target: worker
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -291,7 +319,7 @@ jobs:
       - name: Build Backend (no push)
         uses: docker/build-push-action@v5
         with:
-          context: ./Attack-Surface-Management-ASM-Platform/backend
+          context: ./backend
           push: false
           tags: sentinelasm/backend:pr-${{ github.event.number }}
           cache-from: type=gha
@@ -300,7 +328,7 @@ jobs:
       - name: Build Frontend (no push)
         uses: docker/build-push-action@v5
         with:
-          context: ./Attack-Surface-Management-ASM-Platform/frontend
+          context: ./frontend
           push: false
           tags: sentinelasm/frontend:pr-${{ github.event.number }}
           cache-from: type=gha
@@ -309,9 +337,9 @@ jobs:
       - name: Build Worker (no push)
         uses: docker/build-push-action@v5
         with:
-          context: ./Attack-Surface-Management-ASM-Platform/backend
+          # Same backend image with a Celery entrypoint (see note above).
+          context: ./backend
           push: false
           tags: sentinelasm/worker:pr-${{ github.event.number }}
-          target: worker
           cache-from: type=gha
           cache-to: type=gha,mode=max
