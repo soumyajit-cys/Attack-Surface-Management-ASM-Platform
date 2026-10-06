@@ -81,8 +81,12 @@ class TestPipelineGating:
 
     def test_each_scope_runs_exactly_its_phases(self, db, monkeypatch):
         import tasks.discovery_tasks as dt
+        from app.scanning import registry as registry_mod
 
         seen = {}
+
+        def fake_modules(phase=None):
+            return [SimpleNamespace(name=f"{phase.value}-mod", phase=phase, run=None)]
 
         def fake_run(ctx, modules):
             for m in modules:
@@ -90,6 +94,7 @@ class TestPipelineGating:
             assert ctx.scope in ("active", "full")
             return {}
 
+        monkeypatch.setattr(registry_mod.registry, "get_modules", fake_modules)
         monkeypatch.setattr(dt, "_run_in_context", fake_run)
         monkeypatch.setattr(dt, "pinned_resolve", lambda host: "93.184.216.34")
         monkeypatch.setattr(dt, "persist_port_results", lambda *a: None)
