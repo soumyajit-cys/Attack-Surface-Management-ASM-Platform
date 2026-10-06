@@ -15,17 +15,15 @@ from models.scan_history import ScanHistory
 from schemas.scan import ScanRequest
 
 from app.core.audit import record_audit
-from app.core.errors import BadRequestError, NotFoundError
+from app.core.config import settings
+from app.core.errors import BadRequestError, ForbiddenError, NotFoundError
 from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
+from services.verification import verification_service as verification
 from tasks.discovery_tasks import run_discovery
 from utils.rate_limiter import limiter
-from utils.ssrf_guard import (
-    generate_ownership_challenge,
-    validate_scan_target,
-    verify_domain_ownership,
-)
+from utils.ssrf_guard import validate_scan_target
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
@@ -67,6 +65,26 @@ async def start_scan(
             code="scan_target_not_allowed",
         )
 
+    if settings.require_domain_verification:
+        from utils.logger import logger
+
+        ok, mode_or_reason, covering = verification.is_scan_allowed(
+            db, principal.organization_id, domain
+        )
+        if not ok:
+            raise ForbiddenError(
+                f"Scan blocked: {mode_or_reason}",
+                code="domain_not_verified",
+            )
+        if mode_or_reason == verification.STATUS_GRANDFATHERED and covering is not None:
+            logger.warning(
+                "Manual scan of grandfathered domain %s (verify before %s)",
+                covering.domain, covering.expires_at,
+            )
+            verification.record_grace_notice(
+                db, principal.organization_id, None, covering
+            )
+
     scan = ScanHistory(
         organization_id=principal.organization_id,
         target=domain,
@@ -105,27 +123,59 @@ async def request_ownership_verification(
     principal: Principal = Depends(_SCAN_DEP),
 ):
     domain = _validated_domain(data.domain)
-    token, expected_value = generate_ownership_challenge(domain)
+    method = (data.method or verification.METHOD_DNS_TXT).strip().lower()
+    if method not in verification.METHODS:
+        raise BadRequestError(
+            f"Unknown verification method: {method}",
+            code="invalid_verification_method",
+        )
+    try:
+        row = verification.initiate_verification(
+            db, principal.organization_id, domain, method
+        )
+    except ValueError as exc:
+        raise BadRequestError(str(exc), code="verification_not_allowed")
+
+    expected = verification.challenge_value(row.token)
+    if method == verification.METHOD_DNS_TXT:
+        record_name: str | None = f"_sentinelasm-challenge.{domain}"
+        expected_txt: str | None = expected
+        file_path: str | None = None
+        file_content: str | None = None
+        instructions = (
+            f"Add a TXT record at _sentinelasm-challenge.{domain} "
+            f"with value: {expected}"
+        )
+    else:
+        record_name = None
+        expected_txt = None
+        file_path = verification.http_file_path(row.token)
+        file_content = expected
+        instructions = (
+            f"Serve the exact text '{expected}' at "
+            f"https://{domain}{file_path} (plain HTTP is also accepted)"
+        )
 
     record_audit(
         db,
         organization_id=principal.organization_id,
         actor=principal.user.username,
         action="scan.ownership_challenge",
-        details={"domain": domain},
+        details={"domain": domain, "method": method},
         request=request,
     )
     db.commit()
 
     return {
         "domain": domain,
-        "challenge_token": token,
-        "txt_record_name": f"_sentinelasm-challenge.{domain}",
-        "expected_txt_value": expected_value,
-        "instructions": (
-            f"Add a TXT record at _sentinelasm-challenge.{domain} "
-            f"with value: {expected_value}"
-        ),
+        "method": method,
+        "status": row.status,
+        "challenge_token": row.token,
+        "txt_record_name": record_name,
+        "expected_txt_value": expected_txt,
+        "file_path": file_path,
+        "file_content": file_content,
+        "instructions": instructions,
     }
 
 
@@ -134,33 +184,84 @@ async def request_ownership_verification(
 async def check_ownership_verification(
     request: Request,
     domain: str,
-    token: str,
+    token: str | None = None,
     db: Session = Depends(get_db),
     principal: Principal = Depends(_SCAN_DEP),
 ):
-    domain = _validated_domain(domain)
-    verified, message = await verify_domain_ownership(domain, token)
+    from models.verified_domain import VerifiedDomain
 
-    if not verified:
-        raise BadRequestError(
-            message,
-            code="ownership_unverified",
+    domain = _validated_domain(domain)
+    row = (
+        db.query(VerifiedDomain)
+        .filter(
+            VerifiedDomain.organization_id == principal.organization_id,
+            VerifiedDomain.domain == domain,
         )
+        .first()
+    )
+    if row is None:
+        raise NotFoundError(
+            "No verification challenge for this domain",
+            code="verification_not_found",
+        )
+    if token is not None and token != row.token:
+        raise BadRequestError(
+            "Challenge token does not match the issued challenge",
+            code="verification_failed",
+        )
+
+    ok, message = await verification.check_row(db, row)
 
     record_audit(
         db,
         organization_id=principal.organization_id,
         actor=principal.user.username,
-        action="scan.ownership_verified",
-        details={"domain": domain},
+        action="scan.ownership_verified" if ok else "scan.ownership_failed",
+        details={"domain": domain, "method": row.method},
         request=request,
     )
     db.commit()
+
+    if not ok:
+        raise BadRequestError(
+            message,
+            code="verification_failed",
+        )
 
     return {
         "verified": True,
         "message": message,
         "domain": domain,
+        "method": row.method,
+    }
+
+
+@router.get("/verified-domains")
+async def list_verified_domains(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_READ_SCAN_DEP),
+):
+    """This org's domain verification rows (statuses drive UI badges)."""
+    from models.verified_domain import VerifiedDomain
+
+    rows = (
+        db.query(VerifiedDomain)
+        .filter(VerifiedDomain.organization_id == principal.organization_id)
+        .order_by(VerifiedDomain.domain)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "domain": r.domain,
+                "method": r.method,
+                "status": r.status,
+                "verified_at": r.verified_at,
+                "expires_at": r.expires_at,
+                "last_checked_at": r.last_checked_at,
+            }
+            for r in rows
+        ]
     }
 
 
