@@ -92,26 +92,31 @@ flowchart TD
 
 ## Quick start
 
+Prereqs for local dev: python 3.13, node 20, PostgreSQL 16 + Redis 7 running
+locally. Prefer Docker only? Skip to `make up` below.
+
 ```bash
-# 1 — create the database
+# 1 — environment files (idempotent; never overwrites an existing .env)
+make setup
+
+# 2 — create the database (local postgres)
 psql -U postgres -c "CREATE USER sentinel WITH PASSWORD 'sentinelpass';"
 psql -U postgres -c "CREATE DATABASE sentinelasm OWNER sentinel;"
 
-# 2 — backend
+# 3 — backend
 cd backend
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-# generate a real JWT_SECRET and paste it into .env:
-python -c "import secrets; print(secrets.token_hex(32))"
-alembic upgrade head
-uvicorn main:app --reload --port 8000 &
+cd ..
+make migrate
+make dev &   # API on http://localhost:8000
 
-# 3 — celery worker (+ optional beat)
+# 4 — celery worker (+ optional beat), run from backend/ with venv active
+cd backend
 celery -A workers.celery_app:celery worker -l info &
 celery -A workers.celery_app:celery beat -l info &
 
-# 4 — frontend
+# 5 — frontend
 cd ../frontend
 npm install
 npm run dev          # → http://localhost:5173
@@ -119,11 +124,20 @@ npm run dev          # → http://localhost:5173
 
 Open `http://localhost:5173`, register an account, and start a scan on `example.com`.
 
+Compose alternative (full stack on `http://localhost`, needs Docker only):
+
+```bash
+make setup   # generates JWT_SECRET + POSTGRES_PASSWORD in .env
+make up
+```
+
 ---
 
 ## Configuration
 
-All backend configuration lives in `backend/.env` (copy from `.env.example`).
+All backend configuration lives in `backend/.env` for local dev and in the root
+`.env` for compose (copy from the matching `.env.example`; every variable is
+documented there). `make setup` creates both without overwriting existing files.
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
@@ -133,11 +147,13 @@ All backend configuration lives in `backend/.env` (copy from `.env.example`).
 | `JWT_ALGORITHM` | `HS256` | No | |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | No | Access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | No | Refresh token lifetime |
+| `ENVIRONMENT` | `development` (`production` in compose example) | No | `production` rejects `DEBUG=True` + default DB URL |
 | `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` | (empty) | No | Required for password-reset emails and digest delivery |
 | `SMTP_FROM` | `sentinelasm@example.com` | No | |
 | `FRONTEND_URL` | `http://localhost:5173` | No | Used in password-reset links |
+| `OSV_API_URL` / `_TIMEOUT_SECONDS` / `_ENABLED` | `https://api.osv.dev/v1/query` / `10.0` / `True` | No | CVE enrichment feed |
 | `APP_NAME` | `SentinelASM` | No | |
-| `DEBUG` | `True` | No | |
+| `DEBUG` | `True` (local example; `False` in compose) | No | `True` also enables Celery eager mode |
 
 Frontend: set `VITE_API_BASE` (e.g. `https://api.example.com/api/v1`) to point at a remote API instead of the local Vite proxy.
 
