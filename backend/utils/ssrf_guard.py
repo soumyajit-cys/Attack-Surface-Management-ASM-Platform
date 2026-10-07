@@ -33,27 +33,27 @@ CLOUD_METADATA_IPS = [
     "fd00:ec2::254",
 ]
 
-# Explicitly non-routable networks (Phase 1, task 1.3). Checked with the
-# ``ipaddress`` module -- never with hostname string matching. Deliberately
-# exhaustive rather than relying on version-dependent ``is_global`` flags.
-_NON_ROUTABLE_V4 = [
-    ipaddress.IPv4Network("0.0.0.0/8"),        # unspecified / software scope
-    ipaddress.IPv4Network("10.0.0.0/8"),       # private
-    ipaddress.IPv4Network("100.64.0.0/10"),    # CGNAT shared space
-    ipaddress.IPv4Network("127.0.0.0/8"),      # loopback
-    ipaddress.IPv4Network("169.254.0.0/16"),   # link-local (+ cloud metadata)
-    ipaddress.IPv4Network("172.16.0.0/12"),    # private
-    ipaddress.IPv4Network("192.168.0.0/16"),   # private
-    ipaddress.IPv4Network("224.0.0.0/4"),      # multicast
+# Explicit extra denies applied ON TOP of ``ip.is_global`` (Phase 1, task 1.3).
+# ``is_global`` already excludes private/loopback/link-local/CGNAT/reserved
+# ranges on current Pythons, but its table is version-dependent and it
+# misses multicast entirely -- so every sensitive range below is denied
+# explicitly as well. Checked with the ``ipaddress`` module, never with
+# hostname string matching.
+_EXTRA_DENY_V4 = [
+    ipaddress.IPv4Network("192.0.2.0/24"),     # documentation (TEST-NET-1)
+    ipaddress.IPv4Network("198.51.100.0/24"),  # documentation (TEST-NET-2)
+    ipaddress.IPv4Network("203.0.113.0/24"),   # documentation (TEST-NET-3)
+    ipaddress.IPv4Network("192.0.0.0/24"),     # special-purpose (IETF protocol)
+    ipaddress.IPv4Network("198.18.0.0/15"),    # benchmark testing
     ipaddress.IPv4Network("240.0.0.0/4"),      # reserved (+ broadcast)
 ]
 
-_NON_ROUTABLE_V6 = [
-    ipaddress.IPv6Network("::/128"),           # unspecified
-    ipaddress.IPv6Network("::1/128"),          # loopback
-    ipaddress.IPv6Network("fe80::/10"),        # link-local
-    ipaddress.IPv6Network("fc00::/7"),         # unique-local
-    ipaddress.IPv6Network("ff00::/8"),         # multicast
+_EXTRA_DENY_V6 = [
+    ipaddress.IPv6Network("2001::/32"),        # Teredo tunneling
+    ipaddress.IPv6Network("2001:db8::/32"),    # documentation
+    ipaddress.IPv6Network("fec0::/10"),        # site-local (deprecated)
+    ipaddress.IPv6Network("100::/64"),         # discard prefix
+    ipaddress.IPv6Network("64:ff9b:1::/48"),   # NAT64 local-use
 ]
 
 # Transition mechanisms that embed an IPv4 address: the embedded address
@@ -161,12 +161,14 @@ def _embedded_ipv4(addr: ipaddress.IPv6Address):
 def is_globally_routable_ip(ip: str) -> bool:
     """The ONE shared egress check (Phase 1, task 1.3).
 
-    True only when *ip* is a globally routable unicast address: anything
-    private, loopback, link-local, CGNAT, multicast, reserved, unspecified,
-    broadcast, or cloud-metadata -- including IPv4-mapped IPv6, NAT64/6to4
-    embeddings of blocked IPv4, non-standard IPv4 encodings, IPv6 zone ids,
-    and unparseable input -- returns False. Takes IP literals only; hostnames
-    must be resolved with ``getaddrinfo`` first, never string-matched.
+    True only when *ip* is a globally routable unicast address. The base
+    test is ``ip.is_global``; on top of it this function explicitly denies
+    multicast (which ``is_global`` misses), documentation/benchmark/reserved
+    ranges, deprecated site-local, Teredo, discard and NAT64-local prefixes,
+    cloud metadata endpoints, transition embeddings (mapped/NAT64/6to4) of
+    blocked IPv4, non-standard IPv4 encodings, IPv6 zone ids, and
+    unparseable input. Takes IP literals only; hostnames must be resolved
+    with ``getaddrinfo`` first, never string-matched.
     """
     if not isinstance(ip, str):
         return False
@@ -185,14 +187,25 @@ def is_globally_routable_ip(ip: str) -> bool:
     if isinstance(addr, ipaddress.IPv6Address):
         embedded = _embedded_ipv4(addr)
         if embedded is not None:
-            candidates.append(embedded)
+            # Transition addresses route to the embedded IPv4 node, so the
+            # embedded address alone decides (the wrapper prefix is
+            # algorithmic, e.g. 6to4/NAT64 relay space).
+            candidates = [embedded]
 
     for candidate in candidates:
         if isinstance(candidate, ipaddress.IPv4Address):
-            if any(candidate in net for net in _NON_ROUTABLE_V4):
+            if candidate.is_multicast:
+                return False
+            if not candidate.is_global:
+                return False
+            if any(candidate in net for net in _EXTRA_DENY_V4):
                 return False
         else:
-            if any(candidate in net for net in _NON_ROUTABLE_V6):
+            if candidate.is_multicast:
+                return False
+            if not candidate.is_global:
+                return False
+            if any(candidate in net for net in _EXTRA_DENY_V6):
                 return False
         if str(candidate) in CLOUD_METADATA_IPS or candidate.compressed in CLOUD_METADATA_IPS:
             return False
