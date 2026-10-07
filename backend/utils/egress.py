@@ -177,6 +177,8 @@ async def fetch_url_validated(
     *,
     method: str = "GET",
     headers: dict | None = None,
+    content: bytes | None = None,
+    auth: tuple[str, str] | None = None,
     timeout: float = 10.0,
     max_redirects: int = 3,
     max_bytes: int = 65536,
@@ -185,6 +187,8 @@ async def fetch_url_validated(
 
     Raises :class:`EgressBlocked` for non-http(s) URLs, unresolvable or
     blocked destinations, redirect loops/scheme changes, and over-cap bodies.
+    ``content``/``auth`` support POST delivery (webhooks); pass
+    ``max_redirects=0`` where redirects must be refused outright.
     """
     parsed = urlparse(url or "")
     if parsed.scheme not in ("http", "https"):
@@ -206,7 +210,8 @@ async def fetch_url_validated(
             req_headers = {**base_headers, "Host": current_host}
             extensions = {"sni_hostname": current_host} if scheme == "https" else {}
             async with client.stream(
-                method, target_url, headers=req_headers, extensions=extensions
+                method, target_url, headers=req_headers, content=content,
+                auth=auth, extensions=extensions
             ) as response:
                 if response.status_code in REDIRECT_STATUSES:
                     if hops >= max_redirects:
