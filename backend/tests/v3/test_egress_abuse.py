@@ -5,6 +5,7 @@ do not exist yet. Every test here is mocked -- no real network access.
 """
 
 import socket as real_socket
+from typing import ClassVar
 
 import pytest
 
@@ -342,8 +343,6 @@ class TestWebhookValidation:
 
 class TestNoDirectSocketUse:
     """Scanner paths must go through utils.egress (grep-style guard)."""
-
-    from typing import ClassVar
 
     ALLOW: ClassVar[dict] = {
         # Third-party API fetches, not target connections; each feed hostname
