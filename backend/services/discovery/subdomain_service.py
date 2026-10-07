@@ -97,14 +97,20 @@ async def _dns_brute_force(domain):
 
 
 async def resolve_subdomain_ips(subdomain):
+    from utils.ssrf_guard import is_globally_routable_ip
+
     try:
         loop = asyncio.get_event_loop()
         addrs = await loop.run_in_executor(None, socket.getaddrinfo, subdomain, None)
         ips = set()
         for addr in addrs:
             ip = addr[4][0]
-            if not ip.startswith("fe80") and not ip.startswith("127."):
+            # Full guard (not just fe80/127 prefixes): blocked IPs are
+            # discarded before they are stored or scanned.
+            if is_globally_routable_ip(ip):
                 ips.add(ip)
+            else:
+                logger.debug("Discarding non-routable IP %s for %s", ip, subdomain)
         return list(ips)
     except Exception as exc:
         logger.warning("Failed to resolve IPs for %s: %s", subdomain, exc)
