@@ -200,7 +200,7 @@ async def fetch_url_validated(
     timeout: float = 10.0,
     max_redirects: int = 3,
     max_bytes: int = 65536,
-    verify_tls: bool = True,
+    verify_tls: bool | str = True,
 ) -> FetchResult:
     """Fetch *url* through validated IPs with no client-side resolution trust.
 
@@ -211,7 +211,8 @@ async def fetch_url_validated(
     It exists for ONE caller only -- the header scanner's invalid-certificate
     fallback, which sends no credentials or cookies, stays IP-validated and
     redirect-validated, and records an "Invalid TLS certificate" finding
-    whenever the fallback was needed. Never use it elsewhere.
+    whenever the fallback was needed. ``verify_tls`` also accepts a CA bundle
+    path (used by tests). Never use ``False`` elsewhere.
     """
     parsed = urlparse(url or "")
     if parsed.scheme not in ("http", "https"):
@@ -220,7 +221,8 @@ async def fetch_url_validated(
     base_headers = dict(headers or {})
 
     async with httpx.AsyncClient(
-        timeout=timeout, follow_redirects=False, verify=verify_tls,
+        timeout=timeout, follow_redirects=False,
+        verify=_tls_verify_arg(verify_tls),
         # Never honor environment proxies: the destination was validated,
         # a proxy would re-route it elsewhere.
         trust_env=False,
@@ -270,6 +272,21 @@ async def fetch_url_validated(
                     headers=dict(response.headers),
                     body=body,
                 )
+
+
+def _tls_verify_arg(verify_tls: bool | str):
+    """Resolve ``verify_tls`` to an httpx ``verify`` argument.
+
+    Deterministic by design: ``True`` pins the Mozilla bundle shipped with
+    certifi (no environment dependence), a string pins an explicit CA file,
+    ``False`` disables verification (header-scanner fallback only).
+    """
+    if verify_tls is False:
+        return False
+    if isinstance(verify_tls, str):
+        return verify_tls
+    import certifi
+    return certifi.where()
 
 
 def _port_for(scheme: str, parsed) -> int:
