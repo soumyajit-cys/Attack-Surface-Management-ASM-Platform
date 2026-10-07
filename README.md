@@ -76,7 +76,7 @@ flowchart TD
 │   ├── tasks/                  # Celery tasks (discovery, scheduler)
 │   ├── workers/                # Celery app + DLQ wiring
 │   ├── migrations/             # Alembic
-│   └── tests/                  # Pytest (295 passing)
+│   └── tests/                  # Pytest (306 passing)
 ├── frontend/
 │   └── src/
 │       ├── pages/              # Dashboard, Assets, Scans, Findings, …
@@ -286,7 +286,7 @@ Instrumented automatically via `PrometheusMiddleware`:
 ## Testing
 
 ```bash
-# Backend — 295 tests, ~60 s
+# Backend — 306 tests, ~60 s
 cd backend && source venv/bin/activate
 python -m pytest tests/ -q -p no:warnings
 
