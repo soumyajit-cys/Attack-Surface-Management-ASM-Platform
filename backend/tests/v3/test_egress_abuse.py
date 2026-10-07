@@ -320,6 +320,29 @@ class TestWebhookValidation:
         host, port, path = validate_webhook_url("https://hooks.example.com/hook")
         assert (host, port) == ("hooks.example.com", 443)
 
+    def test_explicit_ports_override(self, monkeypatch):
+        monkeypatch.setattr(
+            "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
+        host, port, _ = validate_webhook_url(
+            "https://hooks.example.com:8444/x", allowed_ports=frozenset({8444}))
+        assert port == 8444
+        with pytest.raises(EgressBlocked):
+            validate_webhook_url(
+                "https://hooks.example.com/x", allowed_ports=frozenset({8444}))
+
+    def test_ports_setting_defaults_and_validation(self, monkeypatch):
+        from app.core.config import ConfigError, Settings
+
+        assert Settings().webhook_allowed_port_set == frozenset({443, 8443})
+
+        monkeypatch.setenv("WEBHOOK_ALLOWED_PORTS", "443")
+        assert Settings().webhook_allowed_port_set == frozenset({443})
+
+        for bad in ["", "nope", "0", "99999", "443,abc"]:
+            monkeypatch.setenv("WEBHOOK_ALLOWED_PORTS", bad)
+            with pytest.raises(ConfigError):
+                Settings()
+
     def test_send_path_validates_before_traffic(self, monkeypatch, db, org_factory):
         from services.alerts import alerting_service as alerts
 
