@@ -231,3 +231,64 @@ class TestPostWithRetry:
         result = asyncio.run(
             _post_with_retry("https://hook.example", {"text": "hi"}))
         assert result is False
+
+
+class TestDeliveryFailureTracking:
+    def _integration(self, db, org_id):
+        integration = AlertIntegration(
+            organization_id=org_id,
+            name="Flaky Hook",
+            channel=AlertChannel.SLACK,
+            webhook_url="https://hooks.example.com/x",
+            min_severity=AlertSeverity.LOW,
+            is_active=True,
+        )
+        db.add(integration)
+        db.flush()
+        return integration
+
+    @patch("services.alerts.alerting_service.send_slack_alert", new_callable=AsyncMock)
+    def test_failure_stamps_and_alerts_once_per_streak(self, mock_slack, db, org_factory):
+        from models.alert import Alert as AlertModel
+        from services.alerts.alerting_service import process_finding_alerts
+
+        mock_slack.return_value = False
+        org, _ = org_factory("Streak Org", "streak", "streak@example.com")
+        integration = self._integration(db, org.id)
+        finding = _make_finding(organization_id=org.id, severity="high")
+        asset = _make_asset(organization_id=org.id)
+
+        import asyncio
+        asyncio.run(process_finding_alerts(db, finding, asset))
+        db.expire_all()
+        assert integration.last_error is not None
+        assert integration.last_error_at is not None
+        assert db.query(AlertModel).filter(
+            AlertModel.organization_id == org.id).count() == 1
+
+        # Second failure in the same streak: stamp refreshes, no new alert.
+        asyncio.run(process_finding_alerts(db, finding, asset))
+        db.expire_all()
+        assert db.query(AlertModel).filter(
+            AlertModel.organization_id == org.id).count() == 1
+
+    @patch("services.alerts.alerting_service.send_slack_alert", new_callable=AsyncMock)
+    def test_success_clears_failure(self, mock_slack, db, org_factory):
+        from services.alerts.alerting_service import process_finding_alerts
+
+        org, _ = org_factory("Clear Org", "clear", "clear@example.com")
+        integration = self._integration(db, org.id)
+        finding = _make_finding(organization_id=org.id, severity="high")
+        asset = _make_asset(organization_id=org.id)
+
+        import asyncio
+        mock_slack.return_value = False
+        asyncio.run(process_finding_alerts(db, finding, asset))
+        db.expire_all()
+        assert integration.last_error is not None
+
+        mock_slack.return_value = True
+        asyncio.run(process_finding_alerts(db, finding, asset))
+        db.expire_all()
+        assert integration.last_error is None
+        assert integration.last_error_at is None
