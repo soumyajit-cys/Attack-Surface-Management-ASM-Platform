@@ -464,3 +464,106 @@ class TestRunNowGate:
         scan = db.query(ScanHistory).filter(
             ScanHistory.id == allowed.json()["scan_id"]).one()
         assert scan.scope == "passive"
+
+
+class TestCheckTokenBinding:
+    def _headers(self, client, username, org):
+        _register(client, username=username, org=org)
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "password123"},
+        )
+        assert login.status_code == 200, login.text
+        return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    def _token_for(self, db, org_id, domain):
+        return db.query(VerifiedDomain).filter(
+            VerifiedDomain.organization_id == org_id,
+            VerifiedDomain.domain == domain,
+        ).one().token
+
+    def _org_id_for(self, db, username):
+        from models.user import User
+        return db.query(User).filter(User.username == username).one().organization_id
+
+    def test_txt_stale_token_rejected(self, client, db):
+        headers = self._headers(client, "tokuser", "Tok Org")
+        first = client.post(
+            "/api/v1/scans/verify-ownership",
+            json={"domain": "tok.example.com", "method": "dns_txt"},
+            headers=headers,
+        ).json()
+        client.post(
+            "/api/v1/scans/verify-ownership",
+            json={"domain": "tok.example.com", "method": "dns_txt"},
+            headers=headers,
+        )
+        stale = client.get(
+            "/api/v1/scans/verify-ownership/check"
+            f"?domain=tok.example.com&token={first['challenge_token']}",
+            headers=headers,
+        )
+        assert stale.status_code == 400
+        assert stale.json()["error"]["code"] == "verification_failed"
+
+    def test_http_stale_token_rejected_without_fetch(self, client, db, monkeypatch):
+        from unittest.mock import Mock
+        headers = self._headers(client, "htokuser", "HTok Org")
+        first = client.post(
+            "/api/v1/scans/verify-ownership",
+            json={"domain": "htok.example.com", "method": "http_file"},
+            headers=headers,
+        ).json()
+        client.post(
+            "/api/v1/scans/verify-ownership",
+            json={"domain": "htok.example.com", "method": "http_file"},
+            headers=headers,
+        )
+        fetch = Mock(side_effect=AssertionError("must not fetch on token mismatch"))
+        monkeypatch.setattr(verification, "_check_http_file", fetch)
+        check = client.get(
+            "/api/v1/scans/verify-ownership/check"
+            f"?domain=htok.example.com&token={first['challenge_token']}",
+            headers=headers,
+        )
+        assert check.status_code == 400
+        assert fetch.call_count == 0
+
+    def test_cross_org_token_rejected(self, client, db):
+        headers_a = self._headers(client, "orgusera", "Org A")
+        headers_b = self._headers(client, "orguserb", "Org B")
+        org_a = self._org_id_for(db, "orgusera")
+        org_b = self._org_id_for(db, "orguserb")
+
+        client.post(
+            "/api/v1/scans/verify-ownership",
+            json={"domain": "shared.example.com", "method": "dns_txt"},
+            headers=headers_a,
+        )
+        client.post(
+            "/api/v1/scans/verify-ownership",
+            json={"domain": "shared.example.com", "method": "dns_txt"},
+            headers=headers_b,
+        )
+        token_a = self._token_for(db, org_a, "shared.example.com")
+
+        forged = client.get(
+            "/api/v1/scans/verify-ownership/check"
+            f"?domain=shared.example.com&token={token_a}",
+            headers=headers_b,
+        )
+        assert forged.status_code == 400
+
+        with patch(
+            "services.verification.verification_service.verify_domain_ownership",
+            new=AsyncMock(return_value=(True, "Domain ownership verified")),
+        ):
+            ok_a = client.get(
+                "/api/v1/scans/verify-ownership/check?domain=shared.example.com",
+                headers=headers_a,
+            )
+        assert ok_a.status_code == 200
+
+        # A's success changes nothing for B.
+        assert verification.is_scan_allowed(db, org_b, "shared.example.com")[0] is False
+        assert verification.is_scan_allowed(db, org_a, "shared.example.com")[0] is True
