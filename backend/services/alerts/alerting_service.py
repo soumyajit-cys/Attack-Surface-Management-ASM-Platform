@@ -6,18 +6,15 @@ Chunk 2 changes:
 - ``process_finding_alerts`` is called from the scan pipeline (was dead code).
 """
 
-import httpx
+import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from urllib.parse import urlparse
-
-import socket
 
 from sqlalchemy.orm import Session
 
 from models import AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
 from services.alerts.email_service import send_email
-from utils.ssrf_guard import is_allowed_target
+from utils.egress import EgressBlocked, fetch_url_validated, validate_webhook_url
 from utils.logger import logger
 from config import settings
 
@@ -46,27 +43,46 @@ def severity_meets_threshold(finding_severity: str, min_severity: AlertSeverity)
 
 
 async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None = None) -> bool:
-    """POST to *url* with exponential-backoff retry on transient failures."""
+    """POST to *url* with exponential-backoff retry on transient failures.
+
+    The destination is validated (https, no userinfo, allowlisted port,
+    all-resolved-IPs routable) before every attempt, delivery goes through
+    the shared egress helper with redirects refused, and the response is
+    size-capped. Validation failures fail closed immediately (no retry).
+    """
+    try:
+        validate_webhook_url(url)
+    except EgressBlocked as exc:
+        logger.warning("Webhook %s blocked: %s", url, exc)
+        return False
+
+    import asyncio
+
+    body = json.dumps(payload).encode("utf-8")
     last_error = None
     for attempt in range(_WEBHOOK_MAX_RETRIES + 1):
         try:
-            async with httpx.AsyncClient(timeout=_WEBHOOK_TIMEOUT) as client:
-                resp = await client.post(url, json=payload, auth=auth)
-                resp.raise_for_status()
-                return True
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code >= 500:
-                last_error = exc
+            result = await fetch_url_validated(
+                url, method="POST", content=body, auth=auth,
+                headers={"Content-Type": "application/json"},
+                timeout=_WEBHOOK_TIMEOUT, max_redirects=0,
+            )
+            if result.status_code >= 500:
+                last_error = f"HTTP {result.status_code}"
                 wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
                 logger.debug(
                     "Webhook %s returned %s, retrying in %.1fs (attempt %s/%s)",
-                    url, exc.response.status_code, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
+                    url, result.status_code, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
                 )
-                import asyncio
                 await asyncio.sleep(wait)
-            else:
-                logger.warning("Webhook %s returned client error %s", url, exc.response.status_code)
+            elif result.status_code >= 400:
+                logger.warning("Webhook %s returned client error %s", url, result.status_code)
                 return False
+            else:
+                return True
+        except EgressBlocked as exc:
+            logger.warning("Webhook %s blocked: %s", url, exc)
+            return False
         except Exception as exc:
             last_error = exc
             wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
@@ -74,7 +90,6 @@ async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None
                 "Webhook %s failed (%s), retrying in %.1fs (attempt %s/%s)",
                 url, exc, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
             )
-            import asyncio
             await asyncio.sleep(wait)
 
     logger.warning("Webhook %s delivery failed after %s attempts: %s", url, _WEBHOOK_MAX_RETRIES + 1, last_error)
@@ -82,9 +97,7 @@ async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None
 
 
 async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
-    if not is_allowed_target(webhook_url):
-        logger.warning("Slack webhook URL blocked by SSRF guard: %s", webhook_url)
-        return False
+    # Destination validated inside _post_with_retry (fail-closed, no retry).
 
     severity_emoji = {
         "critical": "\U0001f534",
@@ -146,25 +159,15 @@ async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> 
 def assert_https_host_safe(url: str) -> str:
     """Resolve *url*'s hostname and fail closed on blocked targets.
 
-    Complements :func:`utils.ssrf_guard.is_allowed_target` (which only
-    inspects literal IPs): the hostname is resolved and the resulting IP is
-    checked, so DNS pointing a connector at a private/cloud-metadata address
-    refuses delivery. Returns the resolved IP. Raises ``ValueError`` for
-    non-HTTPS URLs, unresolvable hosts, or blocked IPs.
+    Kept for backwards compatibility; delegates to
+    :func:`utils.egress.validate_webhook_url`, which additionally requires
+    https, rejects userinfo/odd ports, and validates *every* resolved IP
+    (the old single-``gethostbyname`` check is superseded). Returns the
+    validated hostname. Raises ``ValueError`` (via ``EgressBlocked``) on
+    any violation.
     """
-    parsed = urlparse(url or "")
-    if parsed.scheme != "https":
-        raise ValueError(f"Connector URL must use https: {url!r}")
-    host = parsed.hostname
-    if not host:
-        raise ValueError(f"Connector URL has no hostname: {url!r}")
-    try:
-        ip = socket.gethostbyname(host)
-    except socket.gaierror as exc:
-        raise ValueError(f"Connector host {host!r} does not resolve: {exc}") from exc
-    if not is_allowed_target(ip):
-        raise ValueError(f"Connector host {host!r} resolved to blocked IP {ip!r}")
-    return ip
+    host, _port, _path = validate_webhook_url(url)
+    return host
 
 
 def _adf_paragraph(text: str) -> dict:
@@ -229,9 +232,7 @@ async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset
 
 
 async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
-    if not is_allowed_target(webhook_url):
-        logger.warning("Discord webhook URL blocked by SSRF guard: %s", webhook_url)
-        return False
+    # Destination validated inside _post_with_retry (fail-closed, no retry).
 
     severity_color = {
         "critical": 15548997,
