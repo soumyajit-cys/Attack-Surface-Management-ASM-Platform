@@ -56,6 +56,23 @@ class TestPublicSuffixRejection:
         with pytest.raises(ValueError):
             verification.initiate_verification(db, org.id, "example.com", "carrier-pigeon")
 
+    def test_suffix_check_needs_no_network(self, monkeypatch):
+        import socket as real_socket
+
+        def _no_network(*a, **k):
+            raise AssertionError("public-suffix check must not touch the network")
+
+        monkeypatch.setattr(real_socket, "getaddrinfo", _no_network)
+        monkeypatch.setattr(real_socket, "gethostbyname", _no_network)
+        monkeypatch.setattr(real_socket, "socket", _no_network)
+
+        assert verification.is_public_suffix("co.uk") is True
+        assert verification.is_public_suffix("github.io") is True
+        assert verification.is_public_suffix("example.co.uk") is False
+        assert verification.is_public_suffix("a.github.io") is False
+        assert verification.parent_candidates("a.b.example.com") == [
+            "b.example.com", "example.com"]
+
 
 class TestScanAllowed:
     def test_parent_covers_subdomain_but_not_reverse_or_sibling(self, db, org_factory):
