@@ -412,3 +412,55 @@ class TestVerifyApi:
         listed = client.get("/api/v1/scans/verified-domains", headers=headers)
         domains = {i["domain"]: i["status"] for i in listed.json()["items"]}
         assert domains["flow.example.com"] == "verified"
+
+
+class TestRunNowGate:
+    def test_run_now_blocked_then_allowed(self, client, db, org_factory, monkeypatch):
+        from models import Asset, ScanPolicy
+        from models.user import User
+
+        headers = _register(client, username="rnu", org="RNU Org")
+        user = db.query(User).filter(User.username == "rnu").one()
+        asset = Asset(organization_id=user.organization_id, name="rnu.example.com")
+        db.add(asset)
+        db.flush()
+        policy = ScanPolicy(
+            organization_id=user.organization_id, asset_id=asset.id,
+            name="p-rnu", frequency="daily", scope="passive", is_active=True,
+            next_run_at=datetime.now(timezone.utc),
+        )
+        db.add(policy)
+        db.commit()
+
+        import tasks.discovery_tasks as ddt
+        calls = []
+        monkeypatch.setattr(
+            ddt.run_discovery, "delay",
+            lambda scan_id=None, scope=None, **kw: calls.append((scan_id, scope)),
+        )
+
+        blocked = client.post(
+            f"/api/v1/scan-policies/{policy.id}/run-now", headers=headers
+        )
+        assert blocked.status_code == 403
+        assert blocked.json()["error"]["code"] == "domain_not_verified"
+        assert calls == []
+
+        now = datetime.now(timezone.utc)
+        db.add(VerifiedDomain(
+            organization_id=user.organization_id, domain="rnu.example.com",
+            method="dns_txt", status="verified", token="t",
+            verified_at=now, expires_at=now + timedelta(days=90),
+        ))
+        db.commit()
+
+        allowed = client.post(
+            f"/api/v1/scan-policies/{policy.id}/run-now", headers=headers
+        )
+        assert allowed.status_code == 200, allowed.text
+        assert calls == [(allowed.json()["scan_id"], "passive")]
+
+        from models.scan_history import ScanHistory
+        scan = db.query(ScanHistory).filter(
+            ScanHistory.id == allowed.json()["scan_id"]).one()
+        assert scan.scope == "passive"
