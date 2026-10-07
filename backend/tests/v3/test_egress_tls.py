@@ -145,3 +145,52 @@ class TestFetchHttps:
         # Origin-form request line carries no host; Host header pins the name.
         raw = tls_server["received"][-1]
         assert b"Host: right.example" in raw
+
+
+class TestHeaderTlsFallback:
+    def test_invalid_cert_fallback_emits_finding(self, monkeypatch):
+        import httpx
+
+        from services.scanner import header_scanner as hs
+        from utils.egress import FetchResult
+
+        try:
+            raise stdlib_ssl.SSLCertVerificationError("certificate verify failed")
+        except stdlib_ssl.SSLError as tls_cause:
+            err = httpx.ConnectError("tls failed")
+            err.__cause__ = tls_cause
+
+        calls = []
+
+        async def fake_fetch(url, **kw):
+            calls.append((url, kw.get("verify_tls", True)))
+            if len(calls) == 1:
+                raise err
+            return FetchResult(status_code=200, headers={}, body=b"")
+
+        monkeypatch.setattr(hs, "fetch_url_validated", fake_fetch)
+        findings = _aio(hs.analyze_headers("https://example.com"))
+        titles = [f["title"] for f in findings]
+        assert "Invalid TLS certificate" in titles
+        assert calls[0][0].startswith("https://")
+        assert calls[1][0].startswith("https://") and calls[1][1] is False
+
+    def test_non_tls_error_uses_http_downgrade(self, monkeypatch):
+        import httpx
+
+        from services.scanner import header_scanner as hs
+        from utils.egress import FetchResult
+
+        calls = []
+
+        async def fake_fetch(url, **kw):
+            calls.append(url)
+            if len(calls) == 1:
+                raise httpx.ConnectError("connection refused")
+            return FetchResult(status_code=200, headers={}, body=b"")
+
+        monkeypatch.setattr(hs, "fetch_url_validated", fake_fetch)
+        findings = _aio(hs.analyze_headers("https://example.com"))
+        titles = [f["title"] for f in findings]
+        assert "Invalid TLS certificate" not in titles
+        assert calls[1].startswith("http://")
