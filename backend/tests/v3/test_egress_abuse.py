@@ -362,15 +362,6 @@ class TestNoDirectSocketUse:
             "socket.create_connection",
             "httpx.AsyncClient",
         },
-        # crt.sh subdomain API: third-party fetch, feed host validated (B.1
-        # moves it onto fetch_url_validated; exception removed then).
-        "backend/services/discovery/subdomain_service.py": {"requests.get"},
-        # OSV.dev CVE API: third-party fetch, feed host validated (B.1 moves
-        # it onto fetch_url_validated; exception removed then).
-        "backend/services/enrichment/cve_service.py": {"requests.post"},
-        # CISA KEV catalog: third-party fetch (B.1 moves it onto
-        # fetch_url_validated; exception removed then).
-        "backend/services/scoring/risk_engine.py": {"requests.get"},
         # Operator-configured SMTP relay (settings.SMTP_HOST), never a
         # user-supplied URL.
         "backend/services/alerts/email_service.py": {"smtplib.SMTP"},
