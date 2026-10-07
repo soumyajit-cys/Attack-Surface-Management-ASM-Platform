@@ -209,6 +209,30 @@ def record_grace_notice(
     return alert
 
 
+def record_skip_notice(
+    db: Session,
+    org_id: int,
+    asset_id: int | None,
+    target: str,
+    reason: str,
+) -> Alert:
+    """In-app alert recording a verification-gated skip (never silent)."""
+    alert = Alert(
+        organization_id=org_id,
+        asset_id=asset_id,
+        title=f"Scan skipped for {target}: {reason}",
+        severity="medium",
+        message=json.dumps({
+            "type": "verification_skip",
+            "target": target,
+            "reason": reason,
+        }),
+    )
+    db.add(alert)
+    db.flush()
+    return alert
+
+
 async def check_row(db: Session, row: VerifiedDomain) -> tuple[bool, str]:
     """Run the row's method check and persist the outcome (caller commits)."""
     expected = challenge_value(row.token)
