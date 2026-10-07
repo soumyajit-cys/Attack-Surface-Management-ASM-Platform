@@ -18,18 +18,23 @@ Outbound-request safety (same posture as the rest of the codebase):
 
 from __future__ import annotations
 
+import json
 import re
 import socket
 from urllib.parse import urlparse
 
-import requests
+import httpx
 
+from utils.egress import EgressBlocked, fetch_url_validated_sync
 from utils.logger import logger
 from utils.ssrf_guard import is_allowed_target
 
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
 
 OSV_QUERY_PATH = "/v1/query"
+
+# Single package+version query responses are a few KB; fail closed above this.
+OSV_MAX_BYTES = 65536
 
 
 def _settings():
@@ -143,20 +148,33 @@ def extract_software(banner: str | None, service: str | None = None) -> dict | N
 def query_osv(package_name: str, ecosystem: str, version: str) -> list[dict]:
     """Query OSV.dev for vulns affecting ``package_name@version``.
 
-    Raises ``ValueError`` if the feed host fails the SSRF check; transient
-    network errors propagate as ``requests.RequestException`` so Celery can
-    retry with backoff.
+    The feed itself travels through the validated egress helper (resolved +
+    validated, capped). Raises ``ValueError`` for guard violations (fail
+    closed, no retry); transient network errors surface as
+    ``httpx.HTTPError`` or ``socket.gaierror`` so Celery can retry.
     """
     url = feed_url()
-    assert_feed_host_safe(url)
     timeout = float(_settings().osv_timeout_seconds or 10.0)
-    resp = requests.post(
-        url,
-        json={"package": {"name": package_name, "ecosystem": ecosystem}, "version": version},
-        timeout=timeout,
-    )
-    resp.raise_for_status()
-    return parse_osv_response(resp.json())
+    try:
+        result = fetch_url_validated_sync(
+            url,
+            method="POST",
+            content=json.dumps({
+                "package": {"name": package_name, "ecosystem": ecosystem},
+                "version": version,
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            timeout=timeout,
+            max_bytes=OSV_MAX_BYTES,
+        )
+    except EgressBlocked as exc:
+        if "does not resolve" in str(exc):
+            # Transient DNS failure keeps the old retry behavior.
+            raise socket.gaierror(str(exc)) from exc
+        raise ValueError(str(exc)) from exc
+    if result.status_code != 200:
+        raise httpx.HTTPError(f"OSV.dev HTTP {result.status_code}")
+    return parse_osv_response(json.loads(result.body))
 
 
 def parse_osv_response(data: dict) -> list[dict]:
