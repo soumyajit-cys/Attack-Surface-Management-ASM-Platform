@@ -342,35 +342,103 @@ class TestWebhookValidation:
 
 
 class TestNoDirectSocketUse:
-    """Scanner paths must go through utils.egress (grep-style guard)."""
+    """No raw egress outside utils/egress.py (AST guard).
+
+    Resolution APIs (getaddrinfo/gethostbyname/dns.resolver for lookups) are
+    intentionally NOT denied: only connections and HTTP/client fetches can
+    exfiltrate or pivot. Every exception below carries its justification.
+    """
 
     ALLOW: ClassVar[dict] = {
-        # Third-party API fetches, not target connections; each feed hostname
-        # is validated before use. Kept visible so new direct uses fail loudly.
+        # THE single validated egress point: dial-after-validate lives here.
+        "backend/utils/egress.py": {
+            "asyncio.open_connection",
+            "socket.create_connection",
+            "httpx.AsyncClient",
+        },
+        # crt.sh subdomain API: third-party fetch, feed host validated (B.1
+        # moves it onto fetch_url_validated; exception removed then).
         "backend/services/discovery/subdomain_service.py": {"requests.get"},
+        # OSV.dev CVE API: third-party fetch, feed host validated (B.1 moves
+        # it onto fetch_url_validated; exception removed then).
         "backend/services/enrichment/cve_service.py": {"requests.post"},
+        # CISA KEV catalog: third-party fetch (B.1 moves it onto
+        # fetch_url_validated; exception removed then).
         "backend/services/scoring/risk_engine.py": {"requests.get"},
-        # The helper itself + legacy guard internals.
-        "backend/utils/egress.py": set(),
-        "backend/utils/ssrf_guard.py": set(),
+        # Operator-configured SMTP relay (settings.SMTP_HOST), never a
+        # user-supplied URL.
+        "backend/services/alerts/email_service.py": {"smtplib.SMTP"},
+        # DNS resolution only (dnspython): lookups, never connections.
+        "backend/services/discovery/dns_service.py": {
+            "dns.resolver.resolve",
+            "dns.resolver.Resolver",
+        },
+        "backend/utils/ssrf_guard.py": {"dns.resolver.Resolver"},
+        # Registry WHOIS lookups (port 43/registries), no attacker connection.
+        "backend/services/discovery/whois_service.py": {"whois.whois"},
+        # Token blacklist + rate-limit storage on the operator's Redis.
+        "backend/utils/redis_client.py": {"redis.Redis", "redis.from_url"},
+        "backend/auth/token_store.py": {"redis.Redis"},
     }
     DENY: ClassVar[set] = {
         "socket.create_connection",
+        "socket.socket",
         "asyncio.open_connection",
         "httpx.get",
         "httpx.post",
         "httpx.request",
+        "httpx.AsyncClient",
+        "httpx.Client",
+        "httpx.stream",
         "requests.get",
         "requests.post",
+        "requests.request",
+        "requests.Session",
+        "urllib.request.urlopen",
+        "urllib.request.Request",
+        "urllib.request.urlretrieve",
+        "urllib.request.build_opener",
+        "aiohttp.ClientSession",
+        "aiohttp.request",
+        "aiohttp.get",
+        "aiohttp.post",
+        "aiohttp.TCPConnector",
+        "smtplib.SMTP",
+        "whois.whois",
+        "redis.Redis",
+        "redis.from_url",
+        "dns.resolver.resolve",
+        "dns.resolver.Resolver",
     }
     SCOPES: ClassVar[list] = [
         "backend/services/scanner",
         "backend/services/discovery",
         "backend/services/verification",
+        "backend/services/enrichment",
+        "backend/services/scoring",
         "backend/services/alerts",
+        "backend/services/dashboard",
         "backend/scanner_modules",
         "backend/tasks",
+        "backend/workers",
+        "backend/utils",
+        "backend/app",
+        "backend/auth",
     ]
+
+    @staticmethod
+    def _dotted(node) -> str | None:
+        """Full dotted path for attribute chains (dns.resolver.resolve)."""
+        import ast
+
+        parts = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if not isinstance(node, ast.Name):
+            return None
+        parts.append(node.id)
+        return ".".join(reversed(parts))
 
     def test_no_bypass(self):
         import ast
@@ -383,8 +451,9 @@ class TestNoDirectSocketUse:
                 tree = ast.parse(path.read_text())
                 used = set()
                 for node in ast.walk(tree):
-                    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-                        used.add(f"{node.value.id}.{node.attr}")
+                    dotted = self._dotted(node)
+                    if dotted is not None:
+                        used.add(dotted)
                 denied = used & self.DENY
                 rel = str(path.relative_to(root))
                 allowed = self.ALLOW.get(rel, set())
