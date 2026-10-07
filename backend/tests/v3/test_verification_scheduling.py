@@ -161,3 +161,25 @@ class TestRecheckTask:
         row = db.query(VerifiedDomain).filter(
             VerifiedDomain.domain == "stale.example.com").one()
         assert row.status == "expired"
+
+    def test_lapsed_grandfathered_row_expires_without_live_check(
+        self, db, org_factory
+    ):
+        org, _ = org_factory("Grace Gone Org", "gracegone", "gracegone@example.com")
+        now = datetime.now(timezone.utc)
+        db.add(VerifiedDomain(
+            organization_id=org.id, domain="grace.example.com",
+            method="grandfathered", status="grandfathered", token="grandfathered",
+            expires_at=now - timedelta(days=1),
+        ))
+        db.commit()
+        with patch(
+            "tasks.verification_tasks.check_row",
+            new=AsyncMock(side_effect=AssertionError("must not be called")),
+        ):
+            result = recheck_verified_domains()
+        assert result["time_expired"] == 1
+        db.expire_all()
+        row = db.query(VerifiedDomain).filter(
+            VerifiedDomain.domain == "grace.example.com").one()
+        assert row.status == "expired"
