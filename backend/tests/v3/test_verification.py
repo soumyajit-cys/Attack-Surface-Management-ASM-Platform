@@ -244,12 +244,11 @@ class TestHttpFileCheck:
         import socket as real_socket
 
         def responder(url, headers):
-            Fake = self._fake_client([], None)[1]
             if "93.184.216.34" in url:
-                return Fake(302, "", {"location": "http://internal.example/.well-known/x"})
+                return self._stream(302, "", {"location": "http://internal.example/.well-known/x"})
             raise AssertionError(f"unexpected fetch: {url}")
 
-        FakeClient, _ = self._fake_client([], responder)
+        FakeClient = self._fake_client([], responder)
         monkeypatch.setattr(
             "socket.getaddrinfo",
             lambda host, *a, **k: [(
@@ -265,6 +264,62 @@ class TestHttpFileCheck:
                 "example.com", "tok", verification.challenge_value("tok"))
         )
         assert not ok and "blocked" in reason
+
+    def test_oversized_body_rejected_without_buffering(self, monkeypatch):
+        import asyncio
+        import socket as real_socket
+
+        seen_chunks = []
+
+        class CountingStream(self.FakeStream):
+            async def aiter_bytes(self):
+                # Simulate a body far over the cap arriving in chunks.
+                for _ in range(10):
+                    seen_chunks.append(1)
+                    yield b"x" * 20000
+                    if len(seen_chunks) >= 4:
+                        break
+
+        def responder(url, headers):
+            return CountingStream(200, "")
+
+        FakeClient = self._fake_client([], responder)
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(real_socket.AF_INET, 1, 6, "", ("93.184.216.34", 80))],
+        )
+        monkeypatch.setattr(verification.httpx, "AsyncClient", FakeClient)
+
+        ok, reason = asyncio.run(
+            verification._check_http_file(
+                "example.com", "tok", verification.challenge_value("tok"))
+        )
+        assert not ok and "too large" in reason
+        # Stopped reading after crossing the cap, not after the whole body.
+        assert len(seen_chunks) <= 5
+
+    def test_declared_content_length_over_cap_rejected(self, monkeypatch):
+        import asyncio
+        import socket as real_socket
+
+        calls = []
+
+        def responder(url, headers):
+            calls.append(url)
+            return self._stream(200, "short", {"content-length": str(10 ** 9)})
+
+        FakeClient = self._fake_client([], responder)
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(real_socket.AF_INET, 1, 6, "", ("93.184.216.34", 80))],
+        )
+        monkeypatch.setattr(verification.httpx, "AsyncClient", FakeClient)
+
+        ok, reason = asyncio.run(
+            verification._check_http_file(
+                "example.com", "tok", verification.challenge_value("tok"))
+        )
+        assert not ok and "too large" in reason
 
 
 class TestVerifyApi:
