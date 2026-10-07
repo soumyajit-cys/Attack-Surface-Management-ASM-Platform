@@ -138,6 +138,8 @@ export interface AlertIntegration {
   min_severity: string
   is_active: boolean
   last_triggered_at: string | null
+  last_error: string | null
+  last_error_at: string | null
   created_at: string
   jira_base_url?: string | null
   jira_project_key?: string | null
