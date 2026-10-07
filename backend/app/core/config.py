@@ -103,6 +103,18 @@ class Settings(BaseSettings):
     # owners verify; afterwards they are treated as unverified.
     verification_grace_days: int = 14
 
+    # Comma-separated list of TCP ports webhooks (Slack/Discord/Jira) may
+    # target. Anything else is rejected at save time and send time.
+    webhook_allowed_ports: str = "443,8443"
+
+    @property
+    def webhook_allowed_port_set(self) -> frozenset[int]:
+        """Parsed ``webhook_allowed_ports`` (validated non-empty at startup)."""
+        return frozenset(
+            int(part.strip()) for part in self.webhook_allowed_ports.split(",")
+            if part.strip()
+        )
+
     log_level: str = "INFO"
     log_format: str = "json"
 
@@ -144,6 +156,19 @@ class Settings(BaseSettings):
                     "Default database credentials are not allowed in production. "
                     "Set DATABASE_URL explicitly."
                 )
+
+        try:
+            ports = self.webhook_allowed_port_set
+        except ValueError:
+            raise ConfigError(
+                "WEBHOOK_ALLOWED_PORTS must be comma-separated integers, "
+                f"got {self.webhook_allowed_ports!r}."
+            )
+        if not ports or any(not 1 <= p <= 65535 for p in ports):
+            raise ConfigError(
+                "WEBHOOK_ALLOWED_PORTS must be non-empty with ports 1-65535, "
+                f"got {self.webhook_allowed_ports!r}."
+            )
         return self
 
 
