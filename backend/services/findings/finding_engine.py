@@ -56,6 +56,11 @@ def _port_severity(port: int) -> str:
 
 
 async def run_nuclei_scan(target: str) -> list[dict]:
+    # Phase 4 wiring constraint (task 1.3): when this is wired into the
+    # pipeline, it MUST receive a validated IP literal (see
+    # utils.egress.resolve_validated_ips), never a hostname -- nuclei
+    # resolves targets itself, which would bypass pinning and egress
+    # validation (DNS rebinding). Until then this stays unwired.
     nuclei_path = shutil.which("nuclei")
     if not nuclei_path:
         logger.debug("nuclei not found, skipping template-based scanning")
