@@ -83,9 +83,10 @@ def mock_scan_pipeline(monkeypatch):
     monkeypatch.setattr(tasks, "enumerate_dns", fake_dns)
     monkeypatch.setattr(tasks, "discover_subdomains", fake_subdomains)
     monkeypatch.setattr(tasks, "get_whois", fake_whois)
-    monkeypatch.setattr(tasks, "scan_ports", fake_ports)
-    monkeypatch.setattr(tasks, "analyze_ssl", fake_ssl)
-    monkeypatch.setattr(tasks, "analyze_headers", fake_headers)
+    # Registry-path scanners are called via their own modules now.
+    monkeypatch.setattr("services.scanner.port_scanner.scan_ports", fake_ports)
+    monkeypatch.setattr("services.scanner.ssl_scanner.analyze_ssl", fake_ssl)
+    monkeypatch.setattr("services.scanner.header_scanner.analyze_headers", fake_headers)
 
 
 def test_full_scan_pipeline(client, db, mock_scan_pipeline):
