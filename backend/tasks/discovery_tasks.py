@@ -49,16 +49,12 @@ from services.history.change_detector import (
     detect_changes,
     persist_alerts,
 )
-from services.scanner.header_scanner import analyze_headers
 from services.scanner.persistence import (
     persist_discovery_results,
     persist_port_results,
     persist_ssl_result,
     persist_subdomain_ips,
 )
-from services.scanner.port_scanner import scan_ports
-from services.scanner.ssl_scanner import analyze_ssl
-from services.scanner.ssl_risk import assess_ssl_risk
 from services.scoring.risk_engine import calculate_risk
 from utils.database import SessionLocal
 from utils.logger import (
@@ -350,6 +346,11 @@ def _resolve_subdomain_ips(db: Session, subdomains) -> None:
             if ips:
                 persist_subdomain_ips(db, sub, ips)
                 sub.ip_address = ips[0]
+                # Pin so the scan phase never re-resolves (DNS-rebind safe).
+                try:
+                    pin_ip(sub.subdomain, ips[0])
+                except Exception:
+                    logger.debug("Failed to pin IP for %s", sub.subdomain)
         except Exception:
             logger.debug("Failed to resolve IPs for %s", sub.subdomain)
     db.commit()
@@ -376,6 +377,7 @@ def _scan_targets(
         "headers": {"scanned": 0, "issues": 0},
         "ssl_findings": [],
         "header_findings": [],
+        "unpinned_skipped": [],
     }
     org_label = str(scan.organization_id)
 
@@ -395,22 +397,14 @@ def _scan_targets(
         try:
             pinned_ip = pinned_resolve(host)
         except PinnedResolutionMissing:
-            if can_port:
-                try:
-                    ports = _run_async(lambda h=host: scan_ports(h))
-                    open_ports = [p for p in ports if p.get("status") == "open"]
-                    summary["ports_total"] += len(ports)
-                    summary["ports_open"] += len(open_ports)
-                    summary["open_port_numbers"].extend(p["port"] for p in open_ports)
-                    persist_port_results(db, sub, ports)
-                    for p in ports:
-                        PORTS_SCANNED.labels(
-                            organization=org_label,
-                            status=p.get("status", "unknown"),
-                        ).inc()
-                except Exception:
-                    continue
-            _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None, scope=scope)
+            # No raw-host fallback (task 1.3): an unpinned target is skipped,
+            # logged, and recorded -- never probed via fresh DNS.
+            logger.warning(
+                "Skipping %s: no pinned IP (possible DNS rebind); "
+                "not scanning without a pin",
+                host,
+            )
+            summary["unpinned_skipped"].append(host)
             continue
 
         ctx = ScanContext(
@@ -476,41 +470,6 @@ def _run_in_context(ctx, modules) -> dict:
         except Exception:
             logger.debug("Scanner module %s failed for %s", mod.name, ctx.domain)
     return merged
-
-
-def _scan_ssl_and_headers(db, summary, sub, host, pinned_ip=None, scope: str = "full"):
-    """Fallback SSL + header scan when no pinned IP exists for *host*.
-
-    Phase-gated like the registry path (task 1.3 removes this raw-host
-    fallback entirely).
-    """
-    from app.scanning.registry import ScanPhase
-
-    if scope_policy.phase_allowed(scope, ScanPhase.SSL):
-        try:
-            target = pinned_ip if pinned_ip else host
-            ssl_data = _run_async(lambda h=target: analyze_ssl(h))
-            ssl_assessment = assess_ssl_risk(ssl_data)
-            persist_ssl_result(db, sub, ssl_data)
-            summary["ssl"]["scanned"] += 1
-            if ssl_assessment["risk_level"] in ("high", "critical"):
-                summary["ssl"]["issues"] += 1
-            for finding in ssl_assessment["findings"]:
-                summary["ssl_findings"].append(finding)
-        except Exception:
-            logger.debug("SSL analysis failed for %s", host)
-
-    if not scope_policy.phase_allowed(scope, ScanPhase.HEADER):
-        return
-
-    try:
-        header_issues = _run_async(lambda h=host: analyze_headers(f"https://{h}"))
-        summary["headers"]["scanned"] += 1
-        summary["headers"]["issues"] += len(header_issues)
-        for issue in header_issues:
-            summary["header_findings"].append(issue)
-    except Exception:
-        logger.debug("Header analysis failed for %s", host)
 
 
 def _generate_and_persist_findings(
