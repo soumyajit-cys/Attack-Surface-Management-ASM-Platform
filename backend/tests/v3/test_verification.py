@@ -167,14 +167,23 @@ class TestTxtCheck:
 
 
 class TestHttpFileCheck:
-    def _fake_client(self, calls, responder):
-        service = verification
+    class FakeStream:
+        def __init__(self, status_code, text, headers=None):
+            self.status_code = status_code
+            self._text = text
+            self.headers = headers or {}
 
-        class FakeResponse:
-            def __init__(self, status_code, text, headers=None):
-                self.status_code = status_code
-                self.text = text
-                self.headers = headers or {}
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def aiter_bytes(self):
+            yield self._text.encode()
+
+    def _fake_client(self, calls, responder):
+        stream_cls = self.FakeStream
 
         class FakeClient:
             def __init__(self, *a, **kw):
@@ -186,10 +195,13 @@ class TestHttpFileCheck:
             async def __aexit__(self, *a):
                 return False
 
-            async def get(self, url, headers=None):
+            def stream(self, method, url, headers=None, **kw):
                 return responder(url, headers)
 
-        return FakeClient, FakeResponse
+        return FakeClient
+
+    def _stream(self, status_code, text, headers=None):
+        return self.FakeStream(status_code, text, headers)
 
     def test_success_and_blocked_ip(self, monkeypatch):
         import asyncio
@@ -200,9 +212,9 @@ class TestHttpFileCheck:
 
         def responder(url, headers):
             assert headers["Host"] == "example.com"
-            return self._fake_client(calls, None)[1](200, expected + "\n")
+            return self._stream(200, expected + "\n")
 
-        FakeClient, _ = self._fake_client(calls, responder)
+        FakeClient = self._fake_client(calls, responder)
         monkeypatch.setattr(
             "socket.getaddrinfo",
             lambda *a, **k: [(real_socket.AF_INET, 1, 6, "", ("93.184.216.34", 80))],

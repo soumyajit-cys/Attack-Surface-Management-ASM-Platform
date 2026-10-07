@@ -40,6 +40,8 @@ STATUS_GRANDFATHERED = "grandfathered"
 
 HTTP_FILE_TIMEOUT_SECONDS = 10
 HTTP_MAX_REDIRECT_HOPS = 3
+# Verification bodies are under 100 bytes; never buffer more than this.
+HTTP_MAX_BODY_BYTES = 65536
 
 _EXTRACTOR = tldextract.TLDExtract(
     cache_dir=None,
@@ -249,6 +251,24 @@ def _resolve_validated_ips(host: str) -> tuple[list[str], str | None]:
     return ips, None
 
 
+async def _read_capped_text(response: httpx.Response) -> str | None:
+    """Read at most ``HTTP_MAX_BODY_BYTES``; ``None`` when over the cap."""
+    try:
+        declared = int(response.headers.get("content-length", 0) or 0)
+    except (TypeError, ValueError):
+        declared = 0
+    if declared > HTTP_MAX_BODY_BYTES:
+        return None
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in response.aiter_bytes():
+        total += len(chunk)
+        if total > HTTP_MAX_BODY_BYTES:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
+
 async def _check_http_file(domain: str, token: str, expected: str) -> tuple[bool, str]:
     """Fetch the verification file through validated IPs (Host header pinned).
 
@@ -271,35 +291,39 @@ async def _check_http_file(domain: str, token: str, expected: str) -> tuple[bool
             url = f"http://{ips[0]}{path}"
             host = domain
             for _ in range(HTTP_MAX_REDIRECT_HOPS + 1):
-                response = await client.get(url, headers={**headers, "Host": host})
-                if response.status_code in (301, 302, 303, 307, 308):
-                    location = response.headers.get("location")
-                    if not location:
-                        return False, "Verification redirect has no Location"
-                    nxt = urlparse(urljoin(url, location))
-                    if nxt.scheme not in ("http", "https"):
-                        return False, "Verification redirect left http(s)"
-                    if not nxt.hostname:
-                        return False, "Verification redirect has no host"
-                    hop_ips, hop_error = _resolve_validated_ips(nxt.hostname)
-                    if hop_error:
-                        return False, hop_error
-                    if nxt.scheme == "https":
-                        ok, message = await _check_https_hop(
-                            client, nxt.hostname, hop_ips, nxt.path or path,
-                            headers, expected,
+                async with client.stream(
+                    "GET", url, headers={**headers, "Host": host}
+                ) as response:
+                    if response.status_code in (301, 302, 303, 307, 308):
+                        location = response.headers.get("location")
+                        if not location:
+                            return False, "Verification redirect has no Location"
+                        nxt = urlparse(urljoin(url, location))
+                        if nxt.scheme not in ("http", "https"):
+                            return False, "Verification redirect left http(s)"
+                        if not nxt.hostname:
+                            return False, "Verification redirect has no host"
+                        hop_ips, hop_error = _resolve_validated_ips(nxt.hostname)
+                        if hop_error:
+                            return False, hop_error
+                        if nxt.scheme == "https":
+                            return await _check_https_hop(
+                                client, nxt.hostname, hop_ips, nxt.path or path,
+                                headers, expected,
+                            )
+                        url = f"http://{hop_ips[0]}{nxt.path or path}"
+                        host = nxt.hostname
+                        continue
+                    if response.status_code != 200:
+                        return False, (
+                            f"Verification file returned HTTP {response.status_code}"
                         )
-                        return ok, message
-                    url = f"http://{hop_ips[0]}{nxt.path or path}"
-                    host = nxt.hostname
-                    continue
-                if response.status_code != 200:
-                    return False, (
-                        f"Verification file returned HTTP {response.status_code}"
-                    )
-                if response.text.strip() == expected:
-                    return True, "Domain ownership verified"
-                return False, "Verification file content does not match"
+                    body = await _read_capped_text(response)
+                    if body is None:
+                        return False, "Verification file too large"
+                    if body.strip() == expected:
+                        return True, "Domain ownership verified"
+                    return False, "Verification file content does not match"
             return False, "Too many redirects while verifying"
     except Exception as exc:
         logger.warning("HTTP verification fetch failed for %s: %s", domain, type(exc).__name__)
@@ -318,17 +342,21 @@ async def _check_https_hop(
     try:
         pre = set(validated_ips)
         hop_headers = {**headers, "Host": hostname}
-        response = await client.get(
-            f"https://{hostname}{path}", headers=hop_headers, follow_redirects=False
-        )
-        post_ips, post_error = _resolve_validated_ips(hostname)
-        if post_error or set(post_ips) != pre:
-            return False, "Verification target changed during redirect"
-        if response.status_code != 200:
-            return False, f"Verification file returned HTTP {response.status_code}"
-        if response.text.strip() == expected:
-            return True, "Domain ownership verified"
-        return False, "Verification file content does not match"
+        async with client.stream(
+            "GET", f"https://{hostname}{path}",
+            headers=hop_headers, follow_redirects=False,
+        ) as response:
+            post_ips, post_error = _resolve_validated_ips(hostname)
+            if post_error or set(post_ips) != pre:
+                return False, "Verification target changed during redirect"
+            if response.status_code != 200:
+                return False, f"Verification file returned HTTP {response.status_code}"
+            body = await _read_capped_text(response)
+            if body is None:
+                return False, "Verification file too large"
+            if body.strip() == expected:
+                return True, "Domain ownership verified"
+            return False, "Verification file content does not match"
     except Exception as exc:
         logger.warning(
             "HTTPS verification hop failed for %s: %s", hostname, type(exc).__name__
