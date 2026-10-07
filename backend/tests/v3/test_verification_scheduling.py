@@ -9,6 +9,68 @@ from tasks.scheduler_tasks import process_due_scan_policies
 from tasks.verification_tasks import recheck_verified_domains
 
 
+class TestBackstopGate:
+    def _scan_row(self, db, org_factory, domain):
+        org, _ = org_factory("Backstop Org", "backstop", "backstop@example.com")
+        scan = ScanHistory(
+            organization_id=org.id, target=domain, status="pending")
+        db.add(scan)
+        db.commit()
+        return org, scan
+
+    def test_direct_enqueue_skipped_before_pipeline_starts(
+        self, db, org_factory, monkeypatch
+    ):
+        import tasks.discovery_tasks as dt
+
+        async def _must_not_run(*a, **k):
+            raise AssertionError("pipeline must not start for unverified target")
+
+        monkeypatch.setattr(dt, "_collect", _must_not_run)
+        _, scan = self._scan_row(db, org_factory, "direct.example.com")
+
+        result = dt.run_discovery(scan.id)
+        assert result == {"scan_id": scan.id, "status": "skipped"}
+
+        db.expire_all()
+        row = db.get(ScanHistory, scan.id)
+        assert row.status == "skipped"
+        assert "domain_not_verified" in (row.error or "")
+
+    def test_direct_enqueue_grandfathered_passes_gate_and_alerts(
+        self, db, org_factory, monkeypatch
+    ):
+        import tasks.discovery_tasks as dt
+
+        org, scan = self._scan_row(db, org_factory, "gdirect.example.com")
+        now = datetime.now(timezone.utc)
+        db.add(VerifiedDomain(
+            organization_id=org.id, domain="gdirect.example.com",
+            method="grandfathered", status="grandfathered", token="grandfathered",
+            expires_at=now + timedelta(days=14),
+        ))
+        db.commit()
+
+        async def _stop_after_gate(*a, **k):
+            raise RuntimeError("passed-gate")
+
+        monkeypatch.setattr(dt, "_collect", _stop_after_gate)
+        # _with_retry would convert the sentinel; call the gate path only by
+        # patching _with_retry to re-raise.
+        monkeypatch.setattr(
+            dt, "_with_retry",
+            lambda task_self, scan_id, phase, fn: fn(),
+        )
+        with patch.object(dt, "_run_async", side_effect=RuntimeError("passed-gate")):
+            import pytest
+            with pytest.raises(RuntimeError, match="passed-gate"):
+                dt.run_discovery(scan.id)
+
+        db.expire_all()
+        alert = db.query(Alert).filter(Alert.organization_id == org.id).one()
+        assert "gdirect.example.com" in alert.title
+
+
 def _policy(db, org_factory, domain, org_name="SchedV Org", username="schedv"):
     org, _ = org_factory(org_name, username, f"{username}@example.com")
     asset = Asset(organization_id=org.id, name=domain)
