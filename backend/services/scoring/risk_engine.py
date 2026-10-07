@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import requests
 from datetime import datetime, timezone
 from functools import lru_cache
 
@@ -37,6 +36,9 @@ TIME_DECAY_HALF_LIFE_DAYS = 30
 CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 CISA_KEV_FILE = "cisa_kev_cache.json"
 CISA_KEV_TTL_HOURS = 24
+
+# Full multi-year catalog JSON (hundreds of KB); fail closed above this.
+KEV_MAX_BYTES = 1048576
 
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
 
@@ -123,9 +125,14 @@ def _fetch_cisa_kev() -> set:
             if (datetime.now(timezone.utc) - cached_at).total_seconds() < CISA_KEV_TTL_HOURS * 3600:
                 return set(cache["cves"])
 
-        resp = requests.get(CISA_KEV_URL, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
+        from utils.egress import fetch_url_validated_sync
+
+        result = fetch_url_validated_sync(
+            CISA_KEV_URL, timeout=15, max_bytes=KEV_MAX_BYTES
+        )
+        if result.status_code != 200:
+            raise RuntimeError(f"CISA KEV HTTP {result.status_code}")
+        data = json.loads(result.body)
         cves = set()
         for vuln in data.get("vulnerabilities", []):
             cve = vuln.get("cveID", "").upper()
