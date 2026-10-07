@@ -19,6 +19,7 @@ import asyncio
 import concurrent.futures
 import socket
 
+import httpx
 import requests
 
 from models.asset import Asset
@@ -33,6 +34,7 @@ from workers.celery_app import celery, move_to_dlq
 
 RETRYABLE_ERRORS = (
     requests.RequestException,
+    httpx.HTTPError,
     socket.gaierror,
     socket.timeout,
     TimeoutError,
