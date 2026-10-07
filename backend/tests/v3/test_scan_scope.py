@@ -58,9 +58,6 @@ class TestPipelineGating:
         def _boom(*a, **k):
             raise AssertionError("passive scope must not touch the network")
 
-        monkeypatch.setattr(dt, "scan_ports", _boom)
-        monkeypatch.setattr(dt, "analyze_ssl", _boom)
-        monkeypatch.setattr(dt, "analyze_headers", _boom)
         monkeypatch.setattr(socket, "create_connection", _boom)
         monkeypatch.setattr(socket, "getaddrinfo", _boom)
         monkeypatch.setattr(dt, "pinned_resolve", lambda host: "93.184.216.34")
@@ -105,6 +102,27 @@ class TestPipelineGating:
             _, scan, persisted = self._targets(db)
             dt._scan_targets(db, scan, persisted, "example.com", None, scope)
             assert seen[scope] == {ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER}
+
+    def test_unpinned_target_skipped_and_recorded(self, db, monkeypatch):
+        import tasks.discovery_tasks as dt
+        from app.core.ssrf import PinnedResolutionMissing
+
+        def _no_pin(host):
+            raise PinnedResolutionMissing(host)
+
+        monkeypatch.setattr(dt, "pinned_resolve", _no_pin)
+
+        async def _boom(*a, **k):
+            raise AssertionError("unpinned targets must not be probed")
+
+        monkeypatch.setattr(dt, "_run_in_context", _boom)
+
+        _, scan, _ = self._targets(db)
+        persisted = {"subdomains": [SimpleNamespace(subdomain="ghost.example.com")]}
+        summary = dt._scan_targets(db, scan, persisted, "example.com", None, "full")
+
+        assert summary["unpinned_skipped"] == ["ghost.example.com"]
+        assert summary["ports_total"] == 0
 
     def test_enrichment_dispatched_only_for_full(self, monkeypatch):
         import tasks.discovery_tasks as dt
