@@ -66,38 +66,50 @@ def _asset(org_id):
     return Asset(organization_id=org_id, name="jira.example.com")
 
 
-def _mock_http_client(mock_client_cls, status_code=201):
-    mock_resp = MagicMock()
-    mock_resp.status_code = status_code
-    mock_resp.raise_for_status = MagicMock()
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post.return_value = mock_resp
-    mock_client_cls.return_value = mock_client
-    return mock_client
+def _mock_fetch(monkeypatch, status_code=201):
+    """Stub validated fetch; returns (calls, FetchResult factory)."""
+    from utils.egress import FetchResult
+
+    calls = []
+
+    async def fake_fetch(url, **kw):
+        calls.append((url, kw))
+        return FetchResult(status_code=status_code, headers={}, body=b'{"id":"1"}')
+
+    monkeypatch.setattr(
+        "services.alerts.alerting_service.fetch_url_validated", fake_fetch
+    )
+    return calls
+
+
+def _public_dns(monkeypatch, ip="18.65.100.20"):
+    import socket as stdlib_socket
+
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", (ip, 443))],
+    )
 
 
 class TestSendJiraAlert:
-    @patch("services.alerts.alerting_service.httpx.AsyncClient")
-    def test_creates_issue_with_basic_auth(self, mock_client_cls, monkeypatch):
+    def test_creates_issue_with_basic_auth(self, monkeypatch):
+        import json
+
         from services.alerts.alerting_service import send_jira_alert
 
-        monkeypatch.setattr(
-            "services.alerts.alerting_service.socket.gethostbyname",
-            lambda host: "18.65.100.20",
-        )
-        mock_client = _mock_http_client(mock_client_cls)
+        _public_dns(monkeypatch)
+        calls = _mock_fetch(monkeypatch)
 
         integration = _jira_integration(org_id=1)
         result = asyncio.run(send_jira_alert(integration, _finding(1), _asset(1)))
 
         assert result is True
-        assert mock_client.post.call_count == 1
-        url, kwargs = mock_client.post.call_args.args[0], mock_client.post.call_args.kwargs
+        assert len(calls) == 1
+        url, kwargs = calls[0]
         assert url == "https://sec-example.atlassian.net/rest/api/3/issue"
         assert kwargs["auth"] == ("security@example.com", "token-123")
-        fields = kwargs["json"]["fields"]
+        assert kwargs["method"] == "POST"
+        fields = json.loads(kwargs["content"])["fields"]
         assert fields["project"] == {"key": "SEC"}
         assert fields["issuetype"] == {"name": "Task"}
         assert "[SentinelASM:HIGH]" in fields["summary"]
@@ -105,36 +117,52 @@ class TestSendJiraAlert:
         assert fields["labels"] == ["sentinelasm", "severity-high"]
         assert fields["description"]["type"] == "doc"  # Jira ADF format
 
-    @patch("services.alerts.alerting_service.httpx.AsyncClient")
-    def test_missing_settings_returns_false(self, mock_client_cls):
+    def test_missing_settings_returns_false(self, monkeypatch):
         from services.alerts.alerting_service import send_jira_alert
 
+        async def _boom(*a, **k):
+            raise AssertionError("no fetch without settings")
+
+        monkeypatch.setattr(
+            "services.alerts.alerting_service.fetch_url_validated", _boom
+        )
         integration = _jira_integration(org_id=1, jira_api_token=None)
         result = asyncio.run(send_jira_alert(integration, _finding(1), _asset(1)))
         assert result is False
-        mock_client_cls.assert_not_called()
 
-    @patch("services.alerts.alerting_service.httpx.AsyncClient")
-    def test_blocked_ip_fails_closed_without_request(self, mock_client_cls, monkeypatch):
+    def test_blocked_ip_fails_closed_without_request(self, monkeypatch):
         from services.alerts.alerting_service import send_jira_alert
 
+        import socket as stdlib_socket
+
         monkeypatch.setattr(
-            "services.alerts.alerting_service.socket.gethostbyname",
-            lambda host: "169.254.169.254",
+            "socket.getaddrinfo",
+            lambda *a, **k: [(
+                stdlib_socket.AF_INET, 1, 6, "", ("169.254.169.254", 443))],
+        )
+
+        async def _boom(*a, **k):
+            raise AssertionError("blocked hosts must not be fetched")
+
+        monkeypatch.setattr(
+            "services.alerts.alerting_service.fetch_url_validated", _boom
         )
         integration = _jira_integration(org_id=1)
         result = asyncio.run(send_jira_alert(integration, _finding(1), _asset(1)))
         assert result is False
-        mock_client_cls.assert_not_called()
 
-    @patch("services.alerts.alerting_service.httpx.AsyncClient")
-    def test_plain_http_base_url_rejected(self, mock_client_cls):
+    def test_plain_http_base_url_rejected(self, monkeypatch):
         from services.alerts.alerting_service import send_jira_alert
 
+        async def _boom(*a, **k):
+            raise AssertionError("plain-http must not be fetched")
+
+        monkeypatch.setattr(
+            "services.alerts.alerting_service.fetch_url_validated", _boom
+        )
         integration = _jira_integration(org_id=1, jira_base_url="http://jira.internal/hook")
         result = asyncio.run(send_jira_alert(integration, _finding(1), _asset(1)))
         assert result is False
-        mock_client_cls.assert_not_called()
 
 
 class TestJiraRouting:
