@@ -94,7 +94,7 @@ def tls_server(tmp_path, monkeypatch):
 
     thread = threading.Thread(target=serve, daemon=True)
     thread.start()
-    yield {"port": port, "received": received}
+    yield {"port": port, "received": received, "ca": str(anchor / "ca.pem")}
     stop.set()
     thread.join(timeout=10)
 
@@ -133,11 +133,13 @@ class TestFetchHttps:
     def test_wrong_hostname_fails(self, tls_server):
         with pytest.raises(Exception, match="(?i)certificate|ssl|verify"):
             _aio(fetch_url_validated(
-                f"https://wrong.example:{tls_server['port']}/"))
+                f"https://wrong.example:{tls_server['port']}/",
+                verify_tls=tls_server["ca"]))
 
     def test_right_hostname_succeeds_with_pinned_host(self, tls_server):
         result = _aio(fetch_url_validated(
-            f"https://right.example:{tls_server['port']}/.well-known/x"))
+            f"https://right.example:{tls_server['port']}/.well-known/x",
+            verify_tls=tls_server["ca"]))
         assert result.status_code == 200
         assert result.body == b"verified-body"
         # Origin-form request line carries no host; Host header pins the name.
