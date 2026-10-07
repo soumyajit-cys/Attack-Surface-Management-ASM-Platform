@@ -23,7 +23,6 @@ from app.core.errors import (
 from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
-from utils.ssrf_guard import is_allowed_target
 
 router = APIRouter(prefix="/alerting", tags=["alerting"])
 
@@ -115,9 +114,14 @@ class EmailDigestConfigResponse(BaseModel):
 
 
 def _check_webhook(url: str) -> None:
-    if not is_allowed_target(url):
+    """Save-time webhook validation (fail-closed, stable error code)."""
+    from utils.egress import EgressBlocked, validate_webhook_url
+
+    try:
+        validate_webhook_url(url)
+    except EgressBlocked as exc:
         raise BadRequestError(
-            "Webhook URL not allowed (private/cloud metadata IP)",
+            f"Webhook URL not allowed: {exc}",
             code="webhook_target_not_allowed",
         )
 
