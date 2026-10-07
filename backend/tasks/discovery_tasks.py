@@ -124,6 +124,10 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
                 scan.status = "skipped"
                 scan.error = f"domain_not_verified: {mode_or_reason}"
                 scan.completed_at = _now()
+                verification.record_skip_notice(
+                    db, scan.organization_id, scan.asset_id, scan.target,
+                    mode_or_reason,
+                )
                 db.commit()
                 SCAN_COUNTER.labels(status="skipped", organization=org_label).inc()
                 logger.warning(
