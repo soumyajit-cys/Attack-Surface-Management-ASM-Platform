@@ -212,6 +212,11 @@ async def enrich_asset(
     Matches banner-grabbed software versions against OSV.dev, attaches
     CVEs/CVSS to new ``vulnerability`` findings, and refreshes risk scores.
     Scoped to the caller's organisation like every other asset route.
+
+    Deliberately NOT gated on domain verification: enrichment only reads
+    already-stored banners and queries the third-party OSV.dev feed (whose
+    hostname is SSRF-checked per request). It opens no connection to the
+    scanned target.
     """
     from utils.logger import logger
 
