@@ -219,6 +219,15 @@ export function Alerting() {
                       {' · '}
                       {integration.min_severity} severity
                     </p>
+                    {integration.last_error && (
+                      <p className="text-sm text-danger-600" role="alert">
+                        Delivery failing
+                        {integration.last_error_at
+                          ? ` since ${new Date(integration.last_error_at).toLocaleString()}`
+                          : ''}
+                        : {integration.last_error}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
