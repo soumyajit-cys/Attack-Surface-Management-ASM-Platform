@@ -200,13 +200,18 @@ async def fetch_url_validated(
     timeout: float = 10.0,
     max_redirects: int = 3,
     max_bytes: int = 65536,
+    verify_tls: bool = True,
 ) -> FetchResult:
     """Fetch *url* through validated IPs with no client-side resolution trust.
 
     Raises :class:`EgressBlocked` for non-http(s) URLs, unresolvable or
     blocked destinations, redirect loops/scheme changes, and over-cap bodies.
-    ``content``/``auth`` support POST delivery (webhooks); pass
-    ``max_redirects=0`` where redirects must be refused outright.
+
+    ``verify_tls=False`` skips TLS certificate verification for that fetch.
+    It exists for ONE caller only -- the header scanner's invalid-certificate
+    fallback, which sends no credentials or cookies, stays IP-validated and
+    redirect-validated, and records an "Invalid TLS certificate" finding
+    whenever the fallback was needed. Never use it elsewhere.
     """
     parsed = urlparse(url or "")
     if parsed.scheme not in ("http", "https"):
@@ -214,7 +219,12 @@ async def fetch_url_validated(
     host = parsed.hostname or ""
     base_headers = dict(headers or {})
 
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout, follow_redirects=False, verify=verify_tls,
+        # Never honor environment proxies: the destination was validated,
+        # a proxy would re-route it elsewhere.
+        trust_env=False,
+    ) as client:
         scheme = parsed.scheme
         current_host = host
         current_target = parsed.path or "/"
