@@ -89,6 +89,63 @@ async def open_tcp_validated(
     )
 
 
+async def open_tcp_ip(
+    ip: str,
+    port: int,
+    *,
+    timeout: float = 10.0,
+    ssl_context=None,
+    server_hostname: str | None = None,
+):
+    """Open TCP to one already-validated *ip* literal (no resolution).
+
+    Re-validates the literal fail-closed, then connects. Lets callers
+    resolve once (e.g. a 37-port sweep) while keeping every connection
+    guarded.
+    """
+    if not is_globally_routable_ip(ip):
+        raise EgressBlocked(f"Blocked destination address {ip}")
+    kwargs: dict = {}
+    if ssl_context is not None:
+        kwargs["ssl"] = ssl_context
+    if server_hostname is not None:
+        kwargs["server_hostname"] = server_hostname
+    return await asyncio.wait_for(
+        asyncio.open_connection(ip, port, **kwargs), timeout
+    )
+
+
+def connect_tls_socket(
+    host: str,
+    port: int = 443,
+    *,
+    server_hostname: str | None = None,
+    verified: bool = True,
+    timeout: float = 10.0,
+):
+    """Blocking TLS socket to a validated IP (for cert-detail inspection).
+
+    SNI and hostname verification pin to ``server_hostname`` (or *host*),
+    never to the dialed IP. ``verified=False`` mirrors the legacy
+    unverified-analysis path (expired/self-signed certs); the destination
+    IP is still validated. Call from an executor; close when done.
+    """
+    import ssl as stdlib_ssl
+
+    ips = resolve_validated_ips(host, port)
+    name = server_hostname or host
+    context = stdlib_ssl.create_default_context()
+    if not verified:
+        context.check_hostname = False
+        context.verify_mode = stdlib_ssl.CERT_NONE
+    raw = socket.create_connection((ips[0], port), timeout=timeout)
+    try:
+        return context.wrap_socket(raw, server_hostname=name)
+    except Exception:
+        raw.close()
+        raise
+
+
 @dataclass
 class FetchResult:
     """Small completed HTTP response."""
