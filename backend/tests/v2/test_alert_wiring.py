@@ -140,72 +140,94 @@ class TestProcessFindingAlerts:
 
 
 class TestPostWithRetry:
-    @patch("services.alerts.alerting_service.httpx.AsyncClient")
-    def test_succeeds_on_first_try(self, mock_client_cls):
-        from unittest.mock import MagicMock
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status = MagicMock()
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post.return_value = mock_resp
-        mock_client_cls.return_value = mock_client
+    def _no_validate(self, monkeypatch):
+        import services.alerts.alerting_service as service
 
+        monkeypatch.setattr(
+            service, "validate_webhook_url",
+            lambda url: ("hook.example", 443, "/"),
+        )
+        return service
+
+    def test_succeeds_on_first_try(self, monkeypatch):
         import asyncio
+
+        from utils.egress import FetchResult
+
+        service = self._no_validate(monkeypatch)
+        calls = []
+
+        async def fake_fetch(url, **kw):
+            calls.append((url, kw))
+            return FetchResult(status_code=200, headers={}, body=b"ok")
+
+        monkeypatch.setattr(service, "fetch_url_validated", fake_fetch)
+        monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
         result = asyncio.run(_post_with_retry("https://hook.example", {"text": "hi"}))
         assert result is True
+        assert len(calls) == 1
+        url, kw = calls[0]
+        assert url == "https://hook.example"
+        assert kw["method"] == "POST"
+        assert kw["max_redirects"] == 0
+        assert b'"text": "hi"' in kw["content"] or b'"text":"hi"' in kw["content"]
 
-    @patch("services.alerts.alerting_service.httpx.AsyncClient")
-    def test_retries_on_500_then_succeeds(self, mock_client_cls):
-        import httpx as real_httpx
-        from unittest.mock import MagicMock
-
-        fail_resp = MagicMock()
-        fail_resp.status_code = 500
-
-        http_error = real_httpx.HTTPStatusError(
-            "Server Error",
-            request=MagicMock(),
-            response=fail_resp,
-        )
-        fail_resp.raise_for_status.side_effect = http_error
-
-        ok_resp = MagicMock()
-        ok_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post.side_effect = [fail_resp, ok_resp]
-        mock_client_cls.return_value = mock_client
-
+    def test_retries_on_500_then_succeeds(self, monkeypatch):
         import asyncio
+
+        from utils.egress import FetchResult
+
+        service = self._no_validate(monkeypatch)
+        calls = []
+
+        async def fake_fetch(url, **kw):
+            calls.append(url)
+            code = 500 if len(calls) == 1 else 200
+            return FetchResult(status_code=code, headers={}, body=b"")
+
+        monkeypatch.setattr(service, "fetch_url_validated", fake_fetch)
+        monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
         result = asyncio.run(_post_with_retry("https://hook.example", {"text": "hi"}))
         assert result is True
-        assert mock_client.post.call_count == 2
+        assert len(calls) == 2
 
-    @patch("services.alerts.alerting_service.httpx.AsyncClient")
-    def test_returns_false_on_400_no_retry(self, mock_client_cls):
-        import httpx as real_httpx
-        from unittest.mock import MagicMock
-
-        fail_resp = MagicMock()
-        fail_resp.status_code = 400
-
-        http_error = real_httpx.HTTPStatusError(
-            "Bad Request",
-            request=MagicMock(),
-            response=fail_resp,
-        )
-        fail_resp.raise_for_status.side_effect = http_error
-
-        mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.post.return_value = fail_resp
-        mock_client_cls.return_value = mock_client
-
+    def test_returns_false_on_400_no_retry(self, monkeypatch):
         import asyncio
+
+        from utils.egress import FetchResult
+
+        service = self._no_validate(monkeypatch)
+        calls = []
+
+        async def fake_fetch(url, **kw):
+            calls.append(url)
+            return FetchResult(status_code=400, headers={}, body=b"")
+
+        monkeypatch.setattr(service, "fetch_url_validated", fake_fetch)
+        monkeypatch.setattr("asyncio.sleep", AsyncMock())
+
         result = asyncio.run(_post_with_retry("https://hook.example", {"text": "hi"}))
         assert result is False
-        assert mock_client.post.call_count == 1
+        assert len(calls) == 1
+
+    def test_blocked_url_fails_without_fetch(self, monkeypatch):
+        import asyncio
+        import socket as stdlib_socket
+
+        async def _boom(*a, **k):
+            raise AssertionError("blocked webhooks must not be fetched")
+
+        monkeypatch.setattr(
+            "services.alerts.alerting_service.fetch_url_validated", _boom
+        )
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(
+                stdlib_socket.AF_INET, 1, 6, "", ("10.9.9.9", 443))],
+        )
+
+        result = asyncio.run(
+            _post_with_retry("https://hook.example", {"text": "hi"}))
+        assert result is False
