@@ -1,9 +1,12 @@
 import asyncio
-import socket
-import subprocess
 import json
 import shutil
 
+from utils.egress import (
+    EgressBlocked,
+    open_tcp_ip,
+    resolve_validated_ips,
+)
 from utils.logger import logger
 
 COMMON_PORTS = [
@@ -24,8 +27,11 @@ SERVICE_MAP = {
     27017: "mongodb", 27018: "mongodb", 27019: "mongodb",
 }
 
+BANNER_PORTS = frozenset({21, 22, 25, 80, 110, 143, 443, 993, 995, 3306, 5432, 6379})
 
-async def _naabu_scan(host: str) -> list[dict] | None:
+
+async def _naabu_scan(ip: str) -> list[dict] | None:
+    """naabu sweep of a validated IP literal (never a hostname)."""
     naabu_path = shutil.which("naabu")
     if not naabu_path:
         return None
@@ -33,7 +39,7 @@ async def _naabu_scan(host: str) -> list[dict] | None:
     try:
         cmd = [
             naabu_path,
-            "-host", host,
+            "-host", ip,
             "-p", ",".join(str(p) for p in COMMON_PORTS),
             "-json",
             "-silent",
@@ -68,25 +74,26 @@ async def _naabu_scan(host: str) -> list[dict] | None:
                 continue
         return results
     except asyncio.TimeoutError:
-        logger.warning("naabu scan timed out for %s", host)
+        logger.warning("naabu scan timed out for %s", ip)
         return None
     except Exception as exc:
-        logger.warning("naabu scan failed for %s: %s", host, exc)
+        logger.warning("naabu scan failed for %s: %s", ip, exc)
         return None
 
 
-async def _socket_scan(host: str) -> list[dict]:
+async def _socket_scan(ip: str) -> list[dict]:
+    """TCP connect sweep of a validated IP literal (no resolution)."""
+
     async def check_port(port: int):
         try:
-            conn = asyncio.open_connection(host, port)
-            reader, writer = await asyncio.wait_for(conn, timeout=2)
+            _reader, writer = await open_tcp_ip(ip, port, timeout=2)
             writer.close()
             await writer.wait_closed()
 
             banner = None
             try:
-                if port in (21, 22, 25, 80, 110, 143, 443, 993, 995, 3306, 5432, 6379):
-                    banner = await _grab_banner(host, port)
+                if port in BANNER_PORTS:
+                    banner = await _grab_banner(ip, port)
             except Exception:
                 pass
 
@@ -104,12 +111,9 @@ async def _socket_scan(host: str) -> list[dict]:
     return await asyncio.gather(*tasks)
 
 
-async def _grab_banner(host: str, port: int) -> str | None:
+async def _grab_banner(ip: str, port: int) -> str | None:
     try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, port),
-            timeout=3,
-        )
+        reader, writer = await open_tcp_ip(ip, port, timeout=3)
         writer.write(b"\r\n")
         await writer.drain()
         data = await asyncio.wait_for(reader.read(1024), timeout=2)
@@ -121,7 +125,15 @@ async def _grab_banner(host: str, port: int) -> str | None:
 
 
 async def scan_ports(host: str) -> list[dict]:
-    naabu_results = await _naabu_scan(host)
+    """Scan *host* after fail-closed resolution (raises ``EgressBlocked``).
+
+    Every connection below goes to the validated IP: naabu receives the
+    literal (no hostname for it to resolve) and the socket sweep connects
+    per validated IP.
+    """
+    ips = resolve_validated_ips(host)
+    ip = ips[0]
+    naabu_results = await _naabu_scan(ip)
     if naabu_results is not None:
         return naabu_results
-    return await _socket_scan(host)
+    return await _socket_scan(ip)
