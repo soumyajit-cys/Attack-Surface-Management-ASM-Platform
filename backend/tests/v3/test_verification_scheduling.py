@@ -179,8 +179,8 @@ class TestRecheckTask:
         return org
 
     def test_failed_recheck_expires_verified_row(self, db, org_factory):
-        org, _ = self._row(db, org_factory, "gone.example.com", "verified", 90,
-                           "Gone Org", "gone")
+        org = self._row(db, org_factory, "gone.example.com", "verified", 90,
+                        "Gone Org", "gone")
         with patch(
             "tasks.verification_tasks.check_row",
             new=AsyncMock(return_value=(False, "gone")),
