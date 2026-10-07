@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
+import { scanStatusBadgeClass, verificationBadgeClass } from '../lib/statusBadges'
 import type { Scan, VerificationChallenge, VerifiedDomain } from '../lib/types'
 import {
   Scan as ScanIcon,
@@ -11,6 +12,7 @@ import {
   AlertCircle,
   MinusCircle,
   ShieldCheck,
+  Ban,
 } from 'lucide-react'
 
 const PAGE_SIZE = 50
@@ -115,35 +117,9 @@ export function Scans() {
     }
   }
 
-  const getVerificationBadge = (status: string) => {
-    switch (status) {
-      case 'verified':
-        return 'text-success-600 bg-success-100'
-      case 'pending':
-        return 'text-warning-600 bg-warning-100'
-      case 'grandfathered':
-        return 'text-amber-700 bg-amber-100'
-      case 'failed':
-        return 'text-danger-600 bg-danger-100'
-      default:
-        return 'text-gray-600 bg-gray-100'
-    }
-  }
+  const getVerificationBadge = (status: string) => verificationBadgeClass(status)
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'text-success-600 bg-success-100'
-      case 'running':
-        return 'text-primary-600 bg-primary-100'
-      case 'pending':
-        return 'text-warning-600 bg-warning-100'
-      case 'failed':
-        return 'text-danger-600 bg-danger-100'
-      default:
-        return 'text-gray-600 bg-gray-100'
-    }
-  }
+  const getStatusColor = (status: string) => scanStatusBadgeClass(status)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -155,6 +131,9 @@ export function Scans() {
         return <Clock className="w-4 h-4" />
       case 'failed':
         return <AlertCircle className="w-4 h-4" />
+      case 'skipped':
+        // Phase 1: gated by domain verification — see the error column.
+        return <Ban className="w-4 h-4" />
       default:
         return <MinusCircle className="w-4 h-4" />
     }
