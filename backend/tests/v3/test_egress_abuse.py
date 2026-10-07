@@ -318,14 +318,11 @@ class TestWebhookValidation:
 
         monkeypatch.setattr(
             "socket.getaddrinfo", lambda *a, **k: _addrs("169.254.169.254"))
-        sent = []
 
-        class NoTrafficClient:
-            def __init__(self, *a, **kw):
-                sent.append("constructed")
-                raise AssertionError("no HTTP client may be built for blocked hosts")
+        async def _boom(*a, **k):
+            raise AssertionError("blocked webhooks must not be fetched")
 
-        monkeypatch.setattr(alerts.httpx, "AsyncClient", NoTrafficClient)
+        monkeypatch.setattr(alerts, "fetch_url_validated", _boom)
         import asyncio
         from models.asset import Asset
         from models.finding import Finding
@@ -337,16 +334,18 @@ class TestWebhookValidation:
                           title="T", severity="high")
         db.add(finding)
         db.flush()
-        with pytest.raises(EgressBlocked):
-            asyncio.run(alerts.send_slack_alert(
-                "https://hooks.example.com/x", finding, asset))
-        assert sent == []
+        # Blocked webhooks fail delivery (False) without any HTTP traffic.
+        result = asyncio.run(alerts.send_slack_alert(
+            "https://hooks.example.com/x", finding, asset))
+        assert result is False
 
 
 class TestNoDirectSocketUse:
     """Scanner paths must go through utils.egress (grep-style guard)."""
 
-    ALLOW = {
+    from typing import ClassVar
+
+    ALLOW: ClassVar[dict] = {
         # Third-party API fetches, not target connections; each feed hostname
         # is validated before use. Kept visible so new direct uses fail loudly.
         "backend/services/discovery/subdomain_service.py": {"requests.get"},
@@ -356,7 +355,7 @@ class TestNoDirectSocketUse:
         "backend/utils/egress.py": set(),
         "backend/utils/ssrf_guard.py": set(),
     }
-    DENY = {
+    DENY: ClassVar[set] = {
         "socket.create_connection",
         "asyncio.open_connection",
         "httpx.get",
@@ -365,7 +364,7 @@ class TestNoDirectSocketUse:
         "requests.get",
         "requests.post",
     }
-    SCOPES = [
+    SCOPES: ClassVar[list] = [
         "backend/services/scanner",
         "backend/services/discovery",
         "backend/services/verification",
