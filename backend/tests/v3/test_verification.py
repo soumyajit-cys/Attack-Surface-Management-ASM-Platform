@@ -231,12 +231,18 @@ class TestHttpFileCheck:
             assert headers["Host"] == "example.com"
             return self._stream(200, expected + "\n")
 
-        FakeClient = self._fake_client(calls, responder)
+        streams = []
+
+        def counting_responder(url, headers):
+            streams.append(url)
+            return responder(url, headers)
+
+        FakeClient = self._fake_client(calls, counting_responder)
         monkeypatch.setattr(
             "socket.getaddrinfo",
             lambda *a, **k: [(real_socket.AF_INET, 1, 6, "", ("93.184.216.34", 80))],
         )
-        monkeypatch.setattr(verification.httpx, "AsyncClient", FakeClient)
+        monkeypatch.setattr("utils.egress.httpx.AsyncClient", FakeClient)
 
         ok, _ = asyncio.run(
             verification._check_http_file("example.com", "tok123", expected)
@@ -246,6 +252,7 @@ class TestHttpFileCheck:
 
         # Metadata IP is rejected before any HTTP happens.
         calls.clear()
+        streams.clear()
         monkeypatch.setattr(
             "socket.getaddrinfo",
             lambda *a, **k: [(real_socket.AF_INET, 1, 6, "", ("169.254.169.254", 80))],
@@ -254,7 +261,7 @@ class TestHttpFileCheck:
             verification._check_http_file("example.com", "tok123", expected)
         )
         assert not ok and "blocked" in reason
-        assert not calls
+        assert streams == []
 
     def test_redirect_to_internal_blocked(self, monkeypatch):
         import asyncio
@@ -274,7 +281,7 @@ class TestHttpFileCheck:
                   "internal.example": "10.9.9.9"}[host], 80),
             )],
         )
-        monkeypatch.setattr(verification.httpx, "AsyncClient", FakeClient)
+        monkeypatch.setattr("utils.egress.httpx.AsyncClient", FakeClient)
 
         ok, reason = asyncio.run(
             verification._check_http_file(
@@ -305,7 +312,7 @@ class TestHttpFileCheck:
             "socket.getaddrinfo",
             lambda *a, **k: [(real_socket.AF_INET, 1, 6, "", ("93.184.216.34", 80))],
         )
-        monkeypatch.setattr(verification.httpx, "AsyncClient", FakeClient)
+        monkeypatch.setattr("utils.egress.httpx.AsyncClient", FakeClient)
 
         ok, reason = asyncio.run(
             verification._check_http_file(
@@ -330,7 +337,7 @@ class TestHttpFileCheck:
             "socket.getaddrinfo",
             lambda *a, **k: [(real_socket.AF_INET, 1, 6, "", ("93.184.216.34", 80))],
         )
-        monkeypatch.setattr(verification.httpx, "AsyncClient", FakeClient)
+        monkeypatch.setattr("utils.egress.httpx.AsyncClient", FakeClient)
 
         ok, reason = asyncio.run(
             verification._check_http_file(
