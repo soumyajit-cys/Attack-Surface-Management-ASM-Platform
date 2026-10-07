@@ -212,40 +212,105 @@ def test_feed_host_blocked_ip_fails_closed(monkeypatch):
         assert_feed_host_safe("https://api.osv.dev/v1/query")
 
 
-def test_query_osv_blocks_before_request(monkeypatch):
-    monkeypatch.setattr("socket.gethostbyname", lambda host: "10.0.0.5")
+def _fake_egress_client(responder):
+    """httpx.AsyncClient stand-in routing through *responder(url, headers)."""
 
-    def _boom(*args, **kwargs):
+    class FakeStream:
+        def __init__(self, url, headers):
+            self._response = responder(url, headers)
+            self.status_code = self._response[0]
+            self.headers = self._response[2]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def aiter_bytes(self):
+            yield self._response[1]
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def stream(self, method, url, headers=None, **kw):
+            return FakeStream(url, headers)
+
+    return FakeClient
+
+
+def _public_dns(monkeypatch, ip="8.8.8.8"):
+    import socket as stdlib_socket
+
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", (ip, 443))],
+    )
+
+
+def test_query_osv_blocks_before_request(monkeypatch):
+    import socket as stdlib_socket
+
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("10.0.0.5", 443))],
+    )
+
+    def responder(url, headers):
         raise AssertionError("no HTTP request must be issued to a blocked IP")
 
-    monkeypatch.setattr("requests.post", _boom)
-    with pytest.raises(ValueError, match="blocked IP"):
+    monkeypatch.setattr(
+        "utils.egress.httpx.AsyncClient", _fake_egress_client(responder))
+    with pytest.raises(ValueError, match="blocked"):
         query_osv("nginx", "Debian", "1.18.0")
 
 
 def test_query_osv_success(monkeypatch):
-    monkeypatch.setattr("socket.gethostbyname", lambda host: "8.8.8.8")
+    import json as jsonlib
 
-    class _Resp:
-        def raise_for_status(self):
-            pass
-
-        def json(self):
-            return {"vulns": [{"id": "CVE-2022-1234", "summary": "x", "severity": []}]}
-
+    _public_dns(monkeypatch)
     captured = {}
 
-    def _post(url, json, timeout):
+    def responder(url, headers):
         captured["url"] = url
-        captured["json"] = json
-        captured["timeout"] = timeout
-        return _Resp()
+        return (200, jsonlib.dumps(
+            {"vulns": [{"id": "CVE-2022-1234", "summary": "x", "severity": []}]}
+        ).encode(), {})
 
-    monkeypatch.setattr("requests.post", _post)
+    monkeypatch.setattr(
+        "utils.egress.httpx.AsyncClient", _fake_egress_client(responder))
     results = query_osv("nginx", "Debian", "1.18.0")
-    assert captured["url"].startswith("https://")
-    assert captured["json"]["version"] == "1.18.0"
+    # Dialed by validated IP, addressed to the feed hostname.
+    assert captured["url"].startswith("https://8.8.8.8:")
+    assert "api.osv.dev" not in captured["url"].split("/")[2]
     assert results[0]["cve_id"] == "CVE-2022-1234"
+
+
+def test_query_osv_posts_package_payload(monkeypatch):
+    import json as jsonlib
+
+    _public_dns(monkeypatch)
+    seen = {}
+
+    orig = _fake_egress_client(lambda url, headers: (200, b'{"vulns": []}', {}))
+
+    class SpyClient(orig):
+        def stream(self, method, url, headers=None, **kw):
+            seen.update(kw)
+            return super().stream(method, url, headers=headers, **kw)
+
+    monkeypatch.setattr("utils.egress.httpx.AsyncClient", SpyClient)
+    query_osv("nginx", "Debian", "1.18.0")
+    body = jsonlib.loads(seen["content"])
+    assert body["version"] == "1.18.0"
+    assert body["package"] == {"name": "nginx", "ecosystem": "Debian"}
 
 
 # ── Celery task ───────────────────────────────────────────────────────────
