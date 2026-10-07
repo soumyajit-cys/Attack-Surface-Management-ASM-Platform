@@ -82,6 +82,8 @@ class AlertIntegrationResponse(BaseModel):
     min_severity: AlertSeverity
     is_active: bool
     last_triggered_at: datetime | None
+    last_error: str | None = None
+    last_error_at: datetime | None = None
     created_by: int | None
     created_at: datetime | None
     updated_at: datetime | None
