@@ -152,6 +152,10 @@ documented there). `make setup` creates both without overwriting existing files.
 | `SMTP_FROM` | `sentinelasm@example.com` | No | |
 | `FRONTEND_URL` | `http://localhost:5173` | No | Used in password-reset links |
 | `OSV_API_URL` / `_TIMEOUT_SECONDS` / `_ENABLED` | `https://api.osv.dev/v1/query` / `10.0` / `True` | No | CVE enrichment feed |
+| `WEBHOOK_ALLOWED_PORTS` | `443,8443` | No | Ports Slack/Discord/Jira deliveries may target (save + send enforced) |
+| `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
+| `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
+| `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
 | `APP_NAME` | `SentinelASM` | No | |
 | `DEBUG` | `True` (local example; `False` in compose) | No | `True` also enables Celery eager mode |
 
