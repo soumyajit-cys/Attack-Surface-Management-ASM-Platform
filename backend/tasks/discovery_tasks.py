@@ -20,6 +20,7 @@ import uuid
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.ssrf import pin_ip, pinned_resolve, PinnedResolutionMissing
 from app.scanning import scope as scope_policy
 from metrics.prometheus import (
@@ -109,6 +110,39 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
         org_label = str(scan.organization_id)
         scope = scope_policy.normalize_scope(scope)
         scan.scope = scope
+
+        # ── Phase 1 backstop ownership gate ─────────────────────────────
+        # Dispatch sites (POST /scans, scheduler, run-now) already gate, but
+        # anything enqueuing this task directly must not bypass verification.
+        if settings.require_domain_verification:
+            from services.verification import verification_service as verification
+
+            allowed, mode_or_reason, covering = verification.is_scan_allowed(
+                db, scan.organization_id, scan.target
+            )
+            if not allowed:
+                scan.status = "skipped"
+                scan.error = f"domain_not_verified: {mode_or_reason}"
+                scan.completed_at = _now()
+                db.commit()
+                SCAN_COUNTER.labels(status="skipped", organization=org_label).inc()
+                logger.warning(
+                    "Skipping scan %s (%s): %s",
+                    scan_id, scan.target, mode_or_reason,
+                )
+                return {"scan_id": scan_id, "status": "skipped"}
+            if (
+                mode_or_reason == verification.STATUS_GRANDFATHERED
+                and covering is not None
+            ):
+                logger.warning(
+                    "Scan %s on grandfathered domain %s (verify before %s)",
+                    scan_id, covering.domain, covering.expires_at,
+                )
+                verification.record_grace_notice(
+                    db, scan.organization_id, scan.asset_id, covering
+                )
+
         _set_status(db, scan, "running")
         ACTIVE_SCANS.labels(organization=org_label).inc()
         SCAN_COUNTER.labels(status="started", organization=org_label).inc()
