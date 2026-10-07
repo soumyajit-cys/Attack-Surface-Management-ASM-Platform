@@ -1,27 +1,18 @@
 import ssl
-import socket
 import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
+from utils.egress import connect_tls_socket, EgressBlocked
 from utils.logger import logger
 
 
 async def analyze_ssl(host: str) -> Optional[dict]:
     try:
-        context = ssl.create_default_context()
-        context.check_hostname = True
-        context.verify_mode = ssl.CERT_REQUIRED
-
         loop = asyncio.get_event_loop()
-        sock = await loop.run_in_executor(
-            None,
-            lambda: socket.create_connection((host, 443), timeout=10)
-        )
-
         ssl_sock = await loop.run_in_executor(
             None,
-            lambda: context.wrap_socket(sock, server_hostname=host)
+            lambda: connect_tls_socket(host, 443, server_hostname=host),
         )
 
         cert = ssl_sock.getpeercert(binary_form=False)
@@ -30,7 +21,6 @@ async def analyze_ssl(host: str) -> Optional[dict]:
         cipher = ssl_sock.cipher()
 
         ssl_sock.close()
-        sock.close()
 
         if not cert:
             return None
@@ -46,19 +36,12 @@ async def analyze_ssl(host: str) -> Optional[dict]:
 
 async def _analyze_ssl_unverified(host: str, error: str) -> Optional[dict]:
     try:
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-
         loop = asyncio.get_event_loop()
-        sock = await loop.run_in_executor(
-            None,
-            lambda: socket.create_connection((host, 443), timeout=10)
-        )
-
         ssl_sock = await loop.run_in_executor(
             None,
-            lambda: context.wrap_socket(sock, server_hostname=host)
+            lambda: connect_tls_socket(
+                host, 443, server_hostname=host, verified=False
+            ),
         )
 
         cert = ssl_sock.getpeercert(binary_form=False)
@@ -67,7 +50,6 @@ async def _analyze_ssl_unverified(host: str, error: str) -> Optional[dict]:
         cipher = ssl_sock.cipher()
 
         ssl_sock.close()
-        sock.close()
 
         if not cert:
             return None
