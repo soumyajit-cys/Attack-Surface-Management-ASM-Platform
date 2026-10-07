@@ -15,18 +15,15 @@ from __future__ import annotations
 
 import json
 import secrets
-import socket
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urljoin, urlparse
 
-import httpx
 import tldextract
 from sqlalchemy.orm import Session
 
 from models.alert import Alert
 from models.verified_domain import VerifiedDomain
 from utils.logger import logger
-from utils.ssrf_guard import is_allowed_target, verify_domain_ownership
+from utils.ssrf_guard import verify_domain_ownership
 
 METHOD_DNS_TXT = "dns_txt"
 METHOD_HTTP_FILE = "http_file"
@@ -256,133 +253,36 @@ async def check_row(db: Session, row: VerifiedDomain) -> tuple[bool, str]:
     return ok, message
 
 
-def _resolve_validated_ips(host: str) -> tuple[list[str], str | None]:
-    """All resolved IPs for *host*, or an error. Every IP must pass the guard."""
-    try:
-        infos = socket.getaddrinfo(host, 80, type=socket.SOCK_STREAM)
-    except socket.gaierror:
-        return [], f"Host {host} does not resolve"
-    ips: list[str] = []
-    for info in infos:
-        ip = info[4][0]
-        if ip not in ips:
-            ips.append(ip)
-    for ip in ips:
-        if not is_allowed_target(ip):
-            return [], f"Host {host} resolves to a blocked address"
-    if not ips:
-        return [], f"Host {host} does not resolve"
-    return ips, None
-
-
-async def _read_capped_text(response: httpx.Response) -> str | None:
-    """Read at most ``HTTP_MAX_BODY_BYTES``; ``None`` when over the cap."""
-    try:
-        declared = int(response.headers.get("content-length", 0) or 0)
-    except (TypeError, ValueError):
-        declared = 0
-    if declared > HTTP_MAX_BODY_BYTES:
-        return None
-    chunks: list[bytes] = []
-    total = 0
-    async for chunk in response.aiter_bytes():
-        total += len(chunk)
-        if total > HTTP_MAX_BODY_BYTES:
-            return None
-        chunks.append(chunk)
-    return b"".join(chunks).decode("utf-8", errors="replace")
-
-
 async def _check_http_file(domain: str, token: str, expected: str) -> tuple[bool, str]:
-    """Fetch the verification file through validated IPs (Host header pinned).
+    """Fetch the verification file through the shared egress helper.
 
-    Plain HTTP only with manual redirect handling (max 3 hops, each hop
-    re-resolved and re-validated; an https hop is fetched by hostname with
-    certificate verification plus a pre/post resolution-equality check as a
-    best-effort rebind tripwire). Task 1.3 replaces this with the shared
-    hardened connect helper. The token never appears in messages or logs.
+    Single resolution per hop, validated IPs only, manual 3-hop redirects,
+    64 KiB cap -- see :mod:`utils.egress`. The token never appears in
+    messages or logs. ``EgressBlocked`` reasons already name the cause
+    ("blocked address", "Too many redirects"); only the over-cap message
+    is normalized to the long-standing verification wording.
     """
-    ips, error = _resolve_validated_ips(domain)
-    if error:
-        return False, error
+    from utils.egress import EgressBlocked, fetch_url_validated
+
     path = http_file_path(token)
-    headers = {"Host": domain, "User-Agent": "SentinelASM-verifier/1.0"}
-
     try:
-        async with httpx.AsyncClient(
-            timeout=HTTP_FILE_TIMEOUT_SECONDS, follow_redirects=False
-        ) as client:
-            url = f"http://{ips[0]}{path}"
-            host = domain
-            for _ in range(HTTP_MAX_REDIRECT_HOPS + 1):
-                async with client.stream(
-                    "GET", url, headers={**headers, "Host": host}
-                ) as response:
-                    if response.status_code in (301, 302, 303, 307, 308):
-                        location = response.headers.get("location")
-                        if not location:
-                            return False, "Verification redirect has no Location"
-                        nxt = urlparse(urljoin(url, location))
-                        if nxt.scheme not in ("http", "https"):
-                            return False, "Verification redirect left http(s)"
-                        if not nxt.hostname:
-                            return False, "Verification redirect has no host"
-                        hop_ips, hop_error = _resolve_validated_ips(nxt.hostname)
-                        if hop_error:
-                            return False, hop_error
-                        if nxt.scheme == "https":
-                            return await _check_https_hop(
-                                client, nxt.hostname, hop_ips, nxt.path or path,
-                                headers, expected,
-                            )
-                        url = f"http://{hop_ips[0]}{nxt.path or path}"
-                        host = nxt.hostname
-                        continue
-                    if response.status_code != 200:
-                        return False, (
-                            f"Verification file returned HTTP {response.status_code}"
-                        )
-                    body = await _read_capped_text(response)
-                    if body is None:
-                        return False, "Verification file too large"
-                    if body.strip() == expected:
-                        return True, "Domain ownership verified"
-                    return False, "Verification file content does not match"
-            return False, "Too many redirects while verifying"
-    except Exception as exc:
-        logger.warning("HTTP verification fetch failed for %s: %s", domain, type(exc).__name__)
-        return False, "Verification fetch failed"
-
-
-async def _check_https_hop(
-    client: httpx.AsyncClient,
-    hostname: str,
-    validated_ips: list[str],
-    path: str,
-    headers: dict,
-    expected: str,
-) -> tuple[bool, str]:
-    """Fetch an https redirect hop by hostname with rebind detection."""
-    try:
-        pre = set(validated_ips)
-        hop_headers = {**headers, "Host": hostname}
-        async with client.stream(
-            "GET", f"https://{hostname}{path}",
-            headers=hop_headers, follow_redirects=False,
-        ) as response:
-            post_ips, post_error = _resolve_validated_ips(hostname)
-            if post_error or set(post_ips) != pre:
-                return False, "Verification target changed during redirect"
-            if response.status_code != 200:
-                return False, f"Verification file returned HTTP {response.status_code}"
-            body = await _read_capped_text(response)
-            if body is None:
-                return False, "Verification file too large"
-            if body.strip() == expected:
-                return True, "Domain ownership verified"
-            return False, "Verification file content does not match"
-    except Exception as exc:
-        logger.warning(
-            "HTTPS verification hop failed for %s: %s", hostname, type(exc).__name__
+        result = await fetch_url_validated(
+            f"http://{domain}{path}",
+            timeout=HTTP_FILE_TIMEOUT_SECONDS,
+            max_redirects=HTTP_MAX_REDIRECT_HOPS,
+            max_bytes=HTTP_MAX_BODY_BYTES,
         )
+    except EgressBlocked as exc:
+        if "exceeds" in str(exc):
+            return False, "Verification file too large"
+        return False, str(exc)
+    except Exception:
+        logger.warning("HTTP verification fetch failed for %s", domain)
         return False, "Verification fetch failed"
+    if result.status_code != 200:
+        return False, (
+            f"Verification file returned HTTP {result.status_code}"
+        )
+    if result.body.decode("utf-8", errors="replace").strip() == expected:
+        return True, "Domain ownership verified"
+    return False, "Verification file content does not match"
