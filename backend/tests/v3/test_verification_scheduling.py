@@ -39,6 +39,11 @@ class TestBackstopGate:
         assert row.status == "skipped"
         assert "domain_not_verified" in (row.error or "")
 
+        from models import Alert
+        alert = db.query(Alert).filter(
+            Alert.organization_id == row.organization_id).one()
+        assert "direct.example.com" in alert.title
+
     def test_direct_enqueue_grandfathered_passes_gate_and_alerts(
         self, db, org_factory, monkeypatch
     ):
@@ -117,6 +122,13 @@ class TestScheduledGating:
         ).one()
         assert scan.status == "skipped"
         assert "domain_not_verified" in (scan.error or "")
+
+        # Skips are never silent: an in-app alert records them too.
+        alert = db.query(Alert).filter(
+            Alert.organization_id == org.id
+        ).one()
+        assert "never.example.com" in alert.title
+        assert "not verified" in alert.title.lower()
 
         db.refresh(policy)
         assert policy.next_run_at > datetime(2026, 1, 1, tzinfo=timezone.utc)
