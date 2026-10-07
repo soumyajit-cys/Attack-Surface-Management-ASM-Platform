@@ -75,6 +75,23 @@ class TestScanAllowed:
         ok, _, _ = verification.is_scan_allowed(db, org.id, "other-example.com")
         assert not ok
 
+    def test_lookalike_suffix_match_does_not_cover(self, db, org_factory):
+        # "evilexample.com" merely ends with the string "example.com" but is a
+        # different registrable domain: label-boundary matching is required.
+        org, _ = org_factory("Look Org", "look", "look@example.com")
+        now = datetime.now(timezone.utc)
+        db.add(VerifiedDomain(
+            organization_id=org.id, domain="example.com", method="dns_txt",
+            status="verified", token="t", verified_at=now,
+            expires_at=now + timedelta(days=90),
+        ))
+        db.commit()
+
+        ok, _, _ = verification.is_scan_allowed(db, org.id, "evilexample.com")
+        assert not ok
+        ok, _, _ = verification.is_scan_allowed(db, org.id, "example.com.evil.com")
+        assert not ok
+
     def test_subdomain_verification_does_not_cover_parent(self, db, org_factory):
         org, _ = org_factory("Sub Org", "sub", "sub@example.com")
         now = datetime.now(timezone.utc)
