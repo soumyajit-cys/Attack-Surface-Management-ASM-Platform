@@ -3,6 +3,8 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from models import Alert, Asset, ScanFrequency, ScanHistory, ScanPolicy
 from models.verified_domain import VerifiedDomain
 from tasks.scheduler_tasks import process_due_scan_policies
@@ -62,7 +64,6 @@ class TestBackstopGate:
             lambda task_self, scan_id, phase, fn: fn(),
         )
         with patch.object(dt, "_run_async", side_effect=RuntimeError("passed-gate")):
-            import pytest
             with pytest.raises(RuntimeError, match="passed-gate"):
                 dt.run_discovery(scan.id)
 
