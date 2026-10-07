@@ -81,6 +81,12 @@ class AlertIntegration(Base):
 
     last_triggered_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Last delivery failure (set on failed sends, cleared on success).
+    # Surfaced in the API/UI so silently-broken integrations are visible.
+    last_error = Column(Text, nullable=True)
+
+    last_error_at = Column(DateTime(timezone=True), nullable=True)
+
     created_by = Column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
