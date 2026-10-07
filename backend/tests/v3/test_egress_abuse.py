@@ -45,6 +45,12 @@ class TestGloballyRoutableTable:
         "224.0.0.1", "ff02::1", "ff05::1",
         # Reserved / unspecified / broadcast.
         "240.0.0.1", "0.0.0.0", "::", "255.255.255.255",
+        # Documentation / benchmark / special-purpose (explicit denies on top
+        # of is_global).
+        "192.0.2.1", "198.51.100.1", "203.0.113.1", "2001:db8::1",
+        "192.0.0.1", "198.18.0.1",
+        # Deprecated / tunneling / discard prefixes.
+        "fec0::1", "2001::1", "100::1", "64:ff9b:1::1",
         # IPv4-mapped IPv6 hiding blocked v4.
         "::ffff:127.0.0.1", "::ffff:10.0.0.1", "::ffff:169.254.169.254",
         # NAT64 embedding blocked v4 (well-known prefix + embedded private).
