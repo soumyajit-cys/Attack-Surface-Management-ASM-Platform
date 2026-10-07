@@ -1,10 +1,13 @@
 import asyncio
+import json
 import socket
-import requests
 
 from utils.logger import logger
 
 CRT_API = "https://crt.sh/?q=%25.{}&output=json"
+
+# Subdomain enumeration arrays scale with the target footprint; bounded here.
+CRTSH_MAX_BYTES = 524288
 
 COMMON_SUBDOMAINS = [
     "www", "mail", "ftp", "localhost", "webmail", "smtp", "pop", "ns1", "ns2",
@@ -56,13 +59,18 @@ async def discover_subdomains(domain):
 
 
 async def _crt_sh_discovery(domain):
+    from utils.egress import fetch_url_validated
+
     try:
-        response = requests.get(
-            CRT_API.format(domain),
-            timeout=15,
+        result = await fetch_url_validated(
+            CRT_API.format(domain), timeout=15, max_bytes=CRTSH_MAX_BYTES
         )
-        response.raise_for_status()
-        data = response.json()
+        if result.status_code != 200:
+            logger.warning(
+                "crt.sh discovery failed for %s: HTTP %s", domain, result.status_code
+            )
+            return []
+        data = json.loads(result.body)
     except Exception as exc:
         logger.warning("crt.sh discovery failed for %s: %s", domain, exc)
         return []
