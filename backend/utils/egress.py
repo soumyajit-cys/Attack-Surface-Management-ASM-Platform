@@ -21,6 +21,7 @@ Every connection to a scanned target goes through here:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import socket
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
@@ -170,6 +171,23 @@ async def _read_capped(client_response, max_bytes: int) -> bytes | None:
             return None
         chunks.append(chunk)
     return b"".join(chunks)
+
+
+def fetch_url_validated_sync(url: str, **kwargs) -> FetchResult:
+    """Sync bridge for Celery-task contexts (no running loop there).
+
+    Runs the validated fetch on a fresh loop, isolating on a thread when
+    called from inside a running loop (e.g. eager-task tests under a
+    request). Same fail-closed semantics as :func:`fetch_url_validated`.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(fetch_url_validated(url, **kwargs))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(
+            lambda: asyncio.run(fetch_url_validated(url, **kwargs))
+        ).result()
 
 
 async def fetch_url_validated(
