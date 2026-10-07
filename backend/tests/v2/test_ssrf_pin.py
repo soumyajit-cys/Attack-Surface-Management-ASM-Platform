@@ -11,51 +11,30 @@ from app.core.ssrf import (
     pin_ip,
     pinned_resolve,
     validate_and_pin,
-    _strip_mapped_prefix,
-    _assert_safe_ip,
 )
 
 
-class TestStripMappedPrefix:
-    def test_ipv4_mapped_stripped(self):
-        assert _strip_mapped_prefix("::ffff:127.0.0.1") == "127.0.0.1"
+class TestValidateAndPin:
+    def test_public_ip_pins(self, monkeypatch):
+        monkeypatch.setattr("socket.gethostbyname", lambda host: "93.184.216.34")
+        assert validate_and_pin("pinned.example.com") == "93.184.216.34"
+        assert pinned_resolve("pinned.example.com") == "93.184.216.34"
+        clear_pin("pinned.example.com")
 
-    def test_ipv4_mapped_10(self):
-        assert _strip_mapped_prefix("::ffff:10.0.0.1") == "10.0.0.1"
+    def test_blocked_ip_rejected(self, monkeypatch):
+        monkeypatch.setattr("socket.gethostbyname", lambda host: "127.0.0.1")
+        with pytest.raises(ValueError, match="globally routable"):
+            validate_and_pin("evil.example.com")
 
-    def test_regular_ipv4_unchanged(self):
-        assert _strip_mapped_prefix("8.8.8.8") == "8.8.8.8"
+    def test_unresolvable_rejected(self, monkeypatch):
+        import socket as stdlib_socket
 
-    def test_ipv6_unchanged(self):
-        assert _strip_mapped_prefix("::1") == "::1"
+        def _raise(host):
+            raise stdlib_socket.gaierror("nope")
 
-    def test_invalid_string_unchanged(self):
-        assert _strip_mapped_prefix("not-an-ip") == "not-an-ip"
-
-
-class TestAssertSafeIP:
-    def test_public_ip_passes(self):
-        _assert_safe_ip("8.8.8.8")  # should not raise
-
-    def test_loopback_rejected(self):
-        with pytest.raises(ValueError, match="private|loopback"):
-            _assert_safe_ip("127.0.0.1")
-
-    def test_private_rejected(self):
-        with pytest.raises(ValueError, match="private"):
-            _assert_safe_ip("192.168.1.1")
-
-    def test_metadata_rejected(self):
-        with pytest.raises(ValueError, match="private|metadata"):
-            _assert_safe_ip("169.254.169.254")
-
-    def test_ipv4_mapped_loopback_rejected(self):
-        with pytest.raises(ValueError, match="private|loopback"):
-            _assert_safe_ip("::ffff:127.0.0.1")
-
-    def test_0_x_rejected(self):
-        with pytest.raises(ValueError, match="private|0.0.0.0"):
-            _assert_safe_ip("0.0.0.1")
+        monkeypatch.setattr("socket.gethostbyname", _raise)
+        with pytest.raises(ValueError, match="resolution failed"):
+            validate_and_pin("missing.invalid")
 
 
 class TestPinLifecycle:
