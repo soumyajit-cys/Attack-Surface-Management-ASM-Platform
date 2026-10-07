@@ -32,8 +32,6 @@ from utils.ssrf_guard import is_globally_routable_ip
 
 REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 
-_ALLOWED_WEBHOOK_PORTS = frozenset({443, 8443})
-
 
 class EgressBlocked(ValueError):
     """Raised when a destination fails egress validation (fail-closed)."""
@@ -296,13 +294,18 @@ def _port_for(scheme: str, parsed) -> int:
 
 
 def validate_webhook_url(
-    url: str, *, allowed_ports: frozenset[int] = _ALLOWED_WEBHOOK_PORTS
+    url: str, *, allowed_ports: frozenset[int] | None = None
 ) -> tuple[str, int, str]:
     """Validate a webhook URL at save time AND send time.
 
     Requires https, rejects userinfo and non-allowlisted ports, then
-    resolves every IP and validates them. Returns ``(host, port, path)``.
+    resolves every IP and validates them. ``allowed_ports`` defaults to the
+    ``WEBHOOK_ALLOWED_PORTS`` setting (validated at startup). Returns
+    ``(host, port, path)``.
     """
+    if allowed_ports is None:
+        from app.core.config import settings
+        allowed_ports = settings.webhook_allowed_port_set
     parsed = urlparse(url or "")
     if parsed.scheme != "https":
         raise EgressBlocked("Webhook URL must use https")
