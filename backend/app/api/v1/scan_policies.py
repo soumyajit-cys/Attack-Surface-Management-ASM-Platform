@@ -19,10 +19,13 @@ from schemas.scan_policy import (
 from tasks.scheduler_tasks import compute_next_run
 
 from app.core.audit import record_audit
-from app.core.errors import BadRequestError, NotFoundError
+from app.core.config import settings
+from app.core.errors import BadRequestError, ForbiddenError, NotFoundError
 from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
+from app.scanning import scope as scope_policy
+from services.verification import verification_service as verification
 
 router = APIRouter(prefix="/scan-policies", tags=["scan-policies"])
 
@@ -231,18 +234,40 @@ async def run_scan_policy_now(
     if not asset:
         raise NotFoundError("Asset not found", code="asset_not_found")
 
+    policy_scope = scope_policy.normalize_scope(policy.scope)
+    if settings.require_domain_verification:
+        from utils.logger import logger
+
+        ok, mode_or_reason, covering = verification.is_scan_allowed(
+            db, principal.organization_id, asset.name
+        )
+        if not ok:
+            raise ForbiddenError(
+                f"Scan blocked: {mode_or_reason}",
+                code="domain_not_verified",
+            )
+        if mode_or_reason == verification.STATUS_GRANDFATHERED and covering is not None:
+            logger.warning(
+                "Policy run-now on grandfathered domain %s (verify before %s)",
+                covering.domain, covering.expires_at,
+            )
+            verification.record_grace_notice(
+                db, principal.organization_id, asset.id, covering
+            )
+
     scan = ScanHistory(
         organization_id=principal.organization_id,
         asset_id=asset.id,
         target=asset.name,
         status="pending",
+        scope=policy_scope,
     )
     db.add(scan)
     db.commit()
     db.refresh(scan)
 
     from tasks.discovery_tasks import run_discovery
-    run_discovery.delay(scan_id=scan.id)
+    run_discovery.delay(scan_id=scan.id, scope=policy_scope)
 
     policy.last_run_at = datetime.now(timezone.utc)
     policy.next_run_at = _next_run(policy, datetime.now(timezone.utc))
