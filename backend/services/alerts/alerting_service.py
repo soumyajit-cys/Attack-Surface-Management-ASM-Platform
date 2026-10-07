@@ -12,7 +12,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from models import AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
+from models import Alert, AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
 from services.alerts.email_service import send_email
 from utils.egress import EgressBlocked, fetch_url_validated, validate_webhook_url
 from utils.logger import logger
@@ -281,9 +281,37 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
         elif integration.channel == AlertChannel.JIRA:
             success = await send_jira_alert(integration, finding, asset)
 
-        if success:
-            integration.last_triggered_at = datetime.now(timezone.utc)
-            db.commit()
+        _record_delivery(db, integration, success)
+        db.commit()
+
+
+def _record_delivery(db: Session, integration: AlertIntegration, success: bool) -> None:
+    """Stamp a delivery outcome; alert once per failure streak.
+
+    Success clears any previous failure. The first failure of a streak
+    creates one in-app alert; subsequent failures only refresh the stamp.
+    Commit is left to the caller.
+    """
+    now = datetime.now(timezone.utc)
+    if success:
+        integration.last_triggered_at = now
+        integration.last_error = None
+        integration.last_error_at = None
+        return
+    if integration.last_error is None:
+        db.add(Alert(
+            organization_id=integration.organization_id,
+            asset_id=None,
+            title=f"Alert delivery failing for integration {integration.name}",
+            severity="medium",
+            message=json.dumps({
+                "type": "integration_delivery_failed",
+                "integration_id": integration.id,
+                "channel": str(integration.channel),
+            }),
+        ))
+    integration.last_error = "delivery failed"
+    integration.last_error_at = now
 
 
 def _change_alert_as_finding(alert) -> Finding:
@@ -333,9 +361,8 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
             elif integration.channel == AlertChannel.JIRA:
                 success = await send_jira_alert(integration, finding_like, asset)
 
-            if success:
-                integration.last_triggered_at = datetime.now(timezone.utc)
-                db.commit()
+            _record_delivery(db, integration, success)
+            db.commit()
 
 
 async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
