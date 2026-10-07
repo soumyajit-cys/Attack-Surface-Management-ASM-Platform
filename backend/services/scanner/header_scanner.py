@@ -1,6 +1,8 @@
 from utils.egress import EgressBlocked, fetch_url_validated
 from utils.logger import logger
 
+import ssl as stdlib_ssl
+
 SECURITY_HEADERS = {
     "Strict-Transport-Security": {
         "name": "HSTS",
@@ -64,8 +66,10 @@ async def analyze_headers(url: str) -> list[dict]:
     """Fetch through the validated egress helper (no client-side redirects).
 
     Blocked destinations raise ``EgressBlocked``; other failures return [].
-    A failed TLS fetch retries once over plain HTTP through the same
-    validated path -- never with verification disabled.
+    A TLS verification failure retries once with verification explicitly
+    disabled (recording an "Invalid TLS certificate" finding); any other
+    HTTPS failure retries once over plain HTTP through the same validated
+    path.
     """
     if not url.startswith("http"):
         url = f"https://{url}"
@@ -75,7 +79,9 @@ async def analyze_headers(url: str) -> list[dict]:
         return _headers_to_findings(result.headers, http_fallback=False)
     except EgressBlocked:
         raise
-    except Exception:
+    except Exception as exc:
+        if _is_tls_error(exc):
+            return await _analyze_unverified(url, exc)
         if not url.startswith("https://"):
             logger.warning("Header analysis failed for %s", url)
             return []
@@ -88,6 +94,47 @@ async def analyze_headers(url: str) -> list[dict]:
         except Exception as exc:
             logger.warning("Header analysis failed for %s: %s", url, exc)
             return []
+
+
+def _is_tls_error(exc: BaseException) -> bool:
+    """True when *exc* was caused by TLS/certificate verification failure."""
+    seen = 0
+    current: BaseException | None = exc
+    while current is not None and seen < 5:
+        if isinstance(current, stdlib_ssl.SSLError):
+            return True
+        current = current.__cause__ or current.__context__
+        seen += 1
+    return False
+
+
+async def _analyze_unverified(url: str, exc: Exception) -> list[dict]:
+    """Analyze over an explicitly unverified connection (invalid cert only).
+
+    Sends no credentials or cookies and stays IP/redirect-validated; records
+    an "Invalid TLS certificate" finding so the downgrade is never silent.
+    """
+    logger.warning("Header analysis retrying without TLS verification for %s", url)
+    try:
+        result = await fetch_url_validated(url, timeout=15.0, verify_tls=False)
+    except EgressBlocked:
+        raise
+    except Exception as retry_exc:
+        logger.warning("Header analysis failed for %s: %s", url, retry_exc)
+        return []
+    findings = _headers_to_findings(result.headers, http_fallback=False)
+    findings.append({
+        "title": "Invalid TLS certificate",
+        "severity": "high",
+        "category": "tls",
+        "description": (
+            "The TLS certificate could not be verified "
+            f"({type(exc).__name__}); headers were read over an "
+            "unverified connection"
+        ),
+        "recommendation": "Install a valid publicly-trusted TLS certificate",
+    })
+    return findings
 
 
 def _headers_to_findings(headers: dict, http_fallback: bool) -> list[dict]:
