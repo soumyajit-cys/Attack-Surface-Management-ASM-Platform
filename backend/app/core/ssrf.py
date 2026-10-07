@@ -9,12 +9,12 @@ scanner resolved independently.
 
 from __future__ import annotations
 
-import ipaddress
 import socket
 from typing import Optional
 
 from utils.logger import logger
 from utils.redis_client import get_redis
+from utils.ssrf_guard import is_globally_routable_ip
 
 _PIN_TTL_SECONDS = 600  # 10 minutes
 _PIN_PREFIX = "ssrf:pin:"
@@ -90,15 +90,18 @@ def is_valid_pin(host: str) -> bool:
 def validate_and_pin(domain: str) -> str:
     """Resolve *domain*, validate the IP is safe, and pin it.
 
-    Returns the pinned IP on success.
-    Raises ``ValueError`` if the IP is private/metadata or resolution fails.
+    Validation uses the single shared validator
+    (:func:`utils.ssrf_guard.is_globally_routable_ip`). Returns the pinned
+    IP on success. Raises ``ValueError`` if the IP is not globally routable
+    or resolution fails.
     """
     try:
         ip = socket.gethostbyname(domain)
     except socket.gaierror as exc:
         raise ValueError(f"DNS resolution failed for {domain!r}: {exc}") from exc
 
-    _assert_safe_ip(ip)
+    if not is_globally_routable_ip(ip):
+        raise ValueError(f"IP is not globally routable: {ip!r}")
     pin_ip(domain, ip)
     return ip
 
@@ -122,40 +125,3 @@ def assert_pin_consistent(host: str) -> str:
         raise PinnedIPMismatch(host, pinned, actual)
 
     return pinned
-
-
-def _strip_mapped_prefix(ip_str: str) -> str:
-    """Strip IPv4-mapped IPv6 prefix (``::ffff:x.x.x.x`` → ``x.x.x.x``)."""
-    try:
-        addr = ipaddress.ip_address(ip_str)
-        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
-            return str(addr.ipv4_mapped)
-    except ValueError:
-        pass
-    return ip_str
-
-
-def _assert_safe_ip(ip_str: str) -> None:
-    """Raise ``ValueError`` if *ip_str* is private, loopback, or metadata."""
-    canonical = _strip_mapped_prefix(ip_str)
-
-    try:
-        addr = ipaddress.ip_address(canonical)
-    except ValueError:
-        raise ValueError(f"Invalid IP address: {ip_str!r}")
-
-    if addr.is_private:
-        raise ValueError(f"IP is private/reserved: {ip_str!r}")
-    if addr.is_loopback:
-        raise ValueError(f"IP is loopback: {ip_str!r}")
-    if addr.is_link_local:
-        raise ValueError(f"IP is link-local: {ip_str!r}")
-
-    # Cloud metadata IPs (AWS/GCP/Azure).
-    metadata_ips = {"169.254.169.254", "169.254.170.2", "100.100.100.200", "169.254.169.253"}
-    if canonical in metadata_ips:
-        raise ValueError(f"IP is cloud metadata endpoint: {ip_str!r}")
-
-    # 0.0.0.0/8
-    if canonical.startswith("0."):
-        raise ValueError(f"IP is in 0.0.0.0/8: {ip_str!r}")
