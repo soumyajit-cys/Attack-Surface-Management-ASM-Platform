@@ -162,6 +162,10 @@ def process_due_scan_policies() -> dict:
                         "Skipping scheduled scan for policy %s (%s): %s",
                         policy.id, target, mode_or_reason,
                     )
+                    verification.record_skip_notice(
+                        db, policy.organization_id, asset.id, target,
+                        mode_or_reason,
+                    )
                     continue
                 if (
                     mode_or_reason == verification.STATUS_GRANDFATHERED
