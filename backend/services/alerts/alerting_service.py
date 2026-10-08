@@ -13,7 +13,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import Alert, AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
-from app.core.crypto import DecryptFailedError, UndecryptableSecret
+from app.core.crypto import UndecryptableSecret
 from services.alerts.email_service import send_email
 from utils.egress import EgressBlocked, fetch_url_validated, validate_webhook_url
 from utils.logger import logger
@@ -196,9 +196,13 @@ async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset
     email = (integration.jira_email or "").strip()
     raw_token = integration.jira_api_token
     if isinstance(raw_token, UndecryptableSecret):
-        # Stored token cannot be decrypted: fail without raising or leaking.
-        # The caller records last_error (dispatch loops do this with streak
-        # alerts; see _unreadable_credential below).
+        # Stored token cannot be decrypted: record specifically and fail
+        # without raising (the dispatch loop commits and keeps this message
+        # over the generic one) or leaking details.
+        integration.last_error = (
+            "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+        )
+        integration.last_error_at = datetime.now(timezone.utc)
         return False
     api_token = raw_token or ""
     issue_type = (integration.jira_issue_type or "Task").strip() or "Task"
@@ -269,6 +273,21 @@ async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -
     return await _post_with_retry(webhook_url, payload)
 
 
+def _unreadable_credential(integration: AlertIntegration) -> str | None:
+    """Specific message if a needed credential is unreadable, else None.
+
+    Checked before every send so unreadable integrations fail with the
+    actionable message (and streak alerts) instead of generic failures.
+    """
+    if isinstance(integration.webhook_url, UndecryptableSecret):
+        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+    if integration.channel == AlertChannel.JIRA and isinstance(
+        integration.jira_api_token, UndecryptableSecret
+    ):
+        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+    return None
+
+
 async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
     """Dispatch finding to all matching alert integrations for the org.
 
@@ -283,15 +302,15 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
 
     skipped = 0
     for (integration_id,) in id_rows:
-        try:
-            integration = db.get(AlertIntegration, integration_id)
-        except DecryptFailedError:
-            db.rollback()
-            _record_unreadable(db, integration_id)
+        integration = db.get(AlertIntegration, integration_id)
+        if not severity_meets_threshold(finding.severity, integration.min_severity):
+            continue
+
+        unreadable = _unreadable_credential(integration)
+        if unreadable is not None:
+            _record_delivery(db, integration, False, detail=unreadable)
             db.commit()
             skipped += 1
-            continue
-        if not severity_meets_threshold(finding.severity, integration.min_severity):
             continue
 
         success = False
@@ -311,40 +330,6 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
             "secrets; check SECRETS_ENCRYPTION_KEY",
             skipped,
         )
-
-
-def _record_unreadable(db: Session, integration_id: int) -> None:
-    """Persist unreadable-credential state without ORM-decrypting the row.
-
-    Reads and writes plain columns only (Core), so it works under a wrong
-    key. Alerts once per failure streak like :func:`_record_delivery`.
-    """
-    from sqlalchemy import select, update
-
-    org_id, name, previous = db.execute(
-        select(
-            AlertIntegration.organization_id,
-            AlertIntegration.name,
-            AlertIntegration.last_error,
-        ).where(AlertIntegration.id == integration_id)
-    ).one()
-    message = "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
-    if previous is None:
-        db.add(Alert(
-            organization_id=org_id,
-            asset_id=None,
-            title=f"Alert delivery failing for integration {name}",
-            severity="medium",
-            message=json.dumps({
-                "type": "integration_delivery_failed",
-                "integration_id": integration_id,
-            }),
-        ))
-    db.execute(
-        update(AlertIntegration)
-        .where(AlertIntegration.id == integration_id)
-        .values(last_error=message, last_error_at=datetime.now(timezone.utc))
-    )
 
 
 def _record_delivery(
@@ -419,15 +404,15 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
     for alert in alerts:
         finding_like = _change_alert_as_finding(alert)
         for (integration_id,) in id_rows:
-            try:
-                integration = db.get(AlertIntegration, integration_id)
-            except DecryptFailedError:
-                db.rollback()
-                _record_unreadable(db, integration_id)
+            integration = db.get(AlertIntegration, integration_id)
+            if not severity_meets_threshold(finding_like.severity, integration.min_severity):
+                continue
+
+            unreadable = _unreadable_credential(integration)
+            if unreadable is not None:
+                _record_delivery(db, integration, False, detail=unreadable)
                 db.commit()
                 skipped += 1
-                continue
-            if not severity_meets_threshold(finding_like.severity, integration.min_severity):
                 continue
 
             success = False
