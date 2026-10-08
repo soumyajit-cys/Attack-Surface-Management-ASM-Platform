@@ -161,7 +161,10 @@ def _rewrite_rows(conn, encrypt: bool, keys: list[str] | None) -> dict[str, int]
 
     for table, column in ENCRYPTED_COLUMNS:
         done = 0
-        for row_id, value in _rows_needing(conn, table, column, encrypted=encrypt):
+        # NOTE: the filter flag is inverted relative to the operation --
+        # encrypting targets rows that are NOT yet encrypted and vice versa.
+        needles = _rows_needing(conn, table, column, encrypted=not encrypt)
+        for row_id, value in needles:
             new_value = encrypt_value(value, keys) if encrypt else decrypt_value(value, keys)
             conn.execute(
                 text(f"UPDATE {table} SET {column} = :value WHERE id = :id"),

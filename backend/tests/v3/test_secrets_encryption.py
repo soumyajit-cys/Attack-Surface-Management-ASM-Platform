@@ -30,7 +30,7 @@ KEY_B = _key(2)
 
 class TestRoundTrip:
     def test_encrypt_decrypt_round_trip(self, monkeypatch):
-        monkeypatch.setattr("app.core.config.settings.SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr("app.core.config.settings.secrets_encryption_key", KEY_A)
         stored = encrypt_value("s3cret-token")
         assert stored != "s3cret-token"
         assert stored.startswith("enc:v1:")
@@ -39,12 +39,12 @@ class TestRoundTrip:
         assert is_encrypted("s3cret-token") is False
 
     def test_none_passthrough(self, monkeypatch):
-        monkeypatch.setattr("app.core.config.settings.SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr("app.core.config.settings.secrets_encryption_key", KEY_A)
         assert encrypt_value(None) is None
         assert decrypt_value(None) is None
 
     def test_idempotent_double_encrypt(self, monkeypatch):
-        monkeypatch.setattr("app.core.config.settings.SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr("app.core.config.settings.secrets_encryption_key", KEY_A)
         once = encrypt_value("s3cret-token")
         assert encrypt_value(once) == once
 
@@ -53,10 +53,9 @@ class TestRotation:
     def test_old_rows_decrypt_after_prepend(self, monkeypatch):
         import app.core.config as config_mod
 
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         stored = encrypt_value("s3cret-token")
-        monkeypatch.setattr(
-            config_mod.settings, "SECRETS_ENCRYPTION_KEY", f"{KEY_B},{KEY_A}")
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", f"{KEY_B},{KEY_A}")
         assert decrypt_value(stored) == "s3cret-token"
 
     def test_rotate_reencrypts_under_first_key(self, monkeypatch, db, org_factory):
@@ -65,11 +64,11 @@ class TestRotation:
         from sqlalchemy import text
 
         org, _ = org_factory("Rot Org", "rotuser", "rot@example.com")
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         db.execute(text(
             "INSERT INTO alert_integrations "
             "(organization_id, name, channel, min_severity, is_active, secret) "
-            "VALUES (:org, 'rot', 'slack', 'HIGH', true, 'plain-secret')"
+            "VALUES (:org, 'rot', 'SLACK', 'HIGH', true, 'plain-secret')"
         ), {"org": org.id})
         from app.core.crypto import encrypt_existing_rows
         encrypt_existing_rows(db.connection())
@@ -78,17 +77,16 @@ class TestRotation:
             "SELECT secret FROM alert_integrations WHERE name = 'rot'")).scalar()
         assert before.startswith("enc:v1:")
 
-        monkeypatch.setattr(
-            config_mod.settings, "SECRETS_ENCRYPTION_KEY", f"{KEY_B},{KEY_A}")
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", f"{KEY_B},{KEY_A}")
         rotate_existing_rows(db.connection())
         db.commit()
         raw = db.execute(text(
             "SELECT secret FROM alert_integrations WHERE name = 'rot'")).scalar()
         assert raw.startswith("enc:v1:")
         # B-only decrypts (A can be dropped); A-only cannot.
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_B)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
         assert decrypt_value(raw) == "plain-secret"
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         with pytest.raises(DecryptFailedError):
             decrypt_value(raw)
 
@@ -97,9 +95,9 @@ class TestWrongKey:
     def test_wrong_key_fails_safely_without_leak(self, monkeypatch):
         import app.core.config as config_mod
 
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         stored = encrypt_value("s3cret-token")
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_B)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
         with pytest.raises(DecryptFailedError) as excinfo:
             decrypt_value(stored)
         assert "s3cret-token" not in str(excinfo.value)
@@ -120,11 +118,13 @@ class TestStartupValidation:
         with pytest.raises(ConfigError):
             Settings()
 
-    def test_missing_key_fails_fast_with_command(self, monkeypatch):
+    def test_missing_key_fails_fast_with_command(self, monkeypatch, tmp_path):
         from app.core.config import ConfigError, Settings
 
+        # No key anywhere: not in env and no .env file to fall back to.
         monkeypatch.delenv("SECRETS_ENCRYPTION_KEY", raising=False)
         monkeypatch.setenv("ENVIRONMENT", "development")
+        monkeypatch.chdir(tmp_path)
         with pytest.raises(ConfigError, match="Fernet.generate_key"):
             Settings()
 
@@ -146,7 +146,7 @@ class TestMigrationFunctions:
             "INSERT INTO alert_integrations "
             "(organization_id, name, channel, min_severity, is_active, secret, "
             "jira_api_token) "
-            "VALUES (:org, 'mig', 'slack', 'HIGH', true, 'plain-secret', 'plain-token')"
+            "VALUES (:org, 'mig', 'SLACK', 'HIGH', true, 'plain-secret', 'plain-token')"
         ), {"org": org_id})
         db.commit()
 
@@ -165,7 +165,7 @@ class TestMigrationFunctions:
 
         org, _ = org_factory("Mig Org", "miguser", "mig@example.com")
         self._seed_plaintext(db, org.id)
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
 
         counts = encrypt_existing_rows(db.connection())
         db.commit()
@@ -194,12 +194,12 @@ class TestMigrationFunctions:
 
         org, _ = org_factory("Mig Org2", "miguser2", "mig2@example.com")
         self._seed_plaintext(db, org.id)
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         encrypt_existing_rows(db.connection())
         db.commit()
         before = self._raw(db)
 
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_B)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
         with pytest.raises(DecryptFailedError):
             decrypt_existing_rows(db.connection())
         db.rollback()
@@ -221,9 +221,14 @@ class TestApiAndLogsSecretFree:
         )
         return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    def test_api_never_returns_secrets(self, client, db, caplog):
+    def test_api_never_returns_secrets(self, client, db, caplog, monkeypatch):
         import logging
+        import socket as stdlib_socket
 
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
+        )
         headers = self._headers(client)
         created = client.post(
             "/api/v1/alerting/integrations",
@@ -248,10 +253,15 @@ class TestApiAndLogsSecretFree:
         self, client, db, monkeypatch, caplog
     ):
         import logging
+        import socket as stdlib_socket
 
         from models import AlertIntegration
         from services.alerts import alerting_service as alerts
 
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
+        )
         headers = self._headers(client, username="secowner2", org="Sec Org 2")
         created = client.post(
             "/api/v1/alerting/integrations",
@@ -285,13 +295,18 @@ class TestSendTimeDecryptFailure:
         self, db, monkeypatch, org_factory, caplog
     ):
         import logging
+        import socket as stdlib_socket
 
         import app.core.config as config_mod
         from models import AlertIntegration, AlertChannel, AlertSeverity
         from services.alerts import alerting_service as alerts
 
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
+        )
         org, _ = org_factory("Jira Key Org", "jirakey", "jirakey@example.com")
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_A)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         integration = AlertIntegration(
             organization_id=org.id, name="Jira K", channel=AlertChannel.JIRA,
             min_severity=AlertSeverity.LOW, is_active=True,
@@ -302,7 +317,7 @@ class TestSendTimeDecryptFailure:
         db.add(integration)
         db.commit()
 
-        monkeypatch.setattr(config_mod.settings, "SECRETS_ENCRYPTION_KEY", KEY_B)
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
         db.expire_all()
         with caplog.at_level(logging.INFO):
             result = _aio(alerts.send_jira_alert(
