@@ -144,6 +144,7 @@ documented there). `make setup` creates both without overwriting existing files.
 | `DATABASE_URL` | `postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm` | Yes | SQLAlchemy connection string |
 | `REDIS_URL` | `redis://localhost:6379/0` | Yes | Celery broker + token blacklist |
 | `JWT_SECRET` | — | **Yes** | HS256 signing key; app **refuses to start** without one |
+| `SECRETS_ENCRYPTION_KEY` | — | **Yes** | Comma-separated Fernet key list for secrets at rest; first encrypts, all decrypt (rotation) |
 | `JWT_ALGORITHM` | `HS256` | No | |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | No | Access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | No | Refresh token lifetime |
