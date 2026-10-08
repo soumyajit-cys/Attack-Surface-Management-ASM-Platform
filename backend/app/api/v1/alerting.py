@@ -315,6 +315,7 @@ async def test_integration(
 ):
     from models import Asset, Finding
     from services.alerts.alerting_service import (
+        _record_delivery,
         send_discord_alert,
         send_jira_alert,
         send_slack_alert,
@@ -350,6 +351,8 @@ async def test_integration(
         success = await send_jira_alert(integration, test_finding, test_asset)
 
     if not success:
+        _record_delivery(db, integration, False)
+        db.commit()
         raise AppError(
             "Failed to send test alert",
             code="test_alert_failed",
