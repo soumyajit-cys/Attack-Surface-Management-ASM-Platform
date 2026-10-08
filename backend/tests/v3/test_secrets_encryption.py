@@ -245,7 +245,7 @@ class TestApiAndLogsSecretFree:
         assert self.DISTINCTIVE not in caplog.text
 
     def test_send_failure_avoids_logs_and_records_last_error(
-        self, client, db, monkeypatch
+        self, client, db, monkeypatch, caplog
     ):
         import logging
 
