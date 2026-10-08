@@ -373,9 +373,8 @@ class TestWebhookValidation:
 class TestNoDirectSocketUse:
     """No raw egress outside utils/egress.py (AST guard).
 
-    Resolution APIs (getaddrinfo/gethostbyname/dns.resolver for lookups) are
-    intentionally NOT denied: only connections and HTTP/client fetches can
-    exfiltrate or pivot. Every exception below carries its justification.
+    Bare resolution calls are denied by default and allowlisted only where
+    justified below; every exception carries its justification.
     """
 
     ALLOW: ClassVar[dict] = {
@@ -383,6 +382,7 @@ class TestNoDirectSocketUse:
         "backend/utils/egress.py": {
             "asyncio.open_connection",
             "socket.create_connection",
+            "socket.getaddrinfo",
             "httpx.AsyncClient",
         },
         # Operator-configured SMTP relay (settings.SMTP_HOST), never a
@@ -399,11 +399,37 @@ class TestNoDirectSocketUse:
         # Token blacklist + rate-limit storage on the operator's Redis.
         "backend/utils/redis_client.py": {"redis.Redis", "redis.from_url"},
         "backend/auth/token_store.py": {"redis.Redis"},
+        # Fixed-argv spawns of optional scanner binaries (no shell, argv
+        # list only; the target is always a validated IP literal).
+        "backend/services/scanner/port_scanner.py": {
+            "asyncio.create_subprocess_exec",
+        },
+        "backend/services/findings/finding_engine.py": {
+            "asyncio.create_subprocess_exec",
+        },
+        # Brute-force DNS existence checks + IP collection: resolution only;
+        # every collected IP passes the full guard before store/scan.
+        "backend/services/discovery/subdomain_service.py": {
+            "socket.gethostbyname",
+            "socket.getaddrinfo",
+        },
+        # Pin store reads raw DNS answers (including private ones) to detect
+        # rebinding; connections never use these values unvalidated.
+        "backend/app/core/ssrf.py": {
+            "socket.gethostbyname",
+        },
     }
     DENY: ClassVar[set] = {
         "socket.create_connection",
         "socket.socket",
+        "socket.gethostbyname",
+        "socket.getaddrinfo",
         "asyncio.open_connection",
+        "asyncio.create_subprocess_exec",
+        "subprocess.Popen",
+        "subprocess.run",
+        "subprocess.call",
+        "subprocess.check_output",
         "httpx.get",
         "httpx.post",
         "httpx.request",
