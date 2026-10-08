@@ -33,8 +33,15 @@ with open(path) as f:
     text = f.read()
 
 import secrets
+try:
+    from cryptography.fernet import Fernet
+    secrets_key = Fernet.generate_key().decode()
+except ImportError:
+    import base64
+    secrets_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
 replacements = {
     "change-me-generate-a-real-64-char-hex-secret": secrets.token_hex(32),
+    "change-me-generate-with-fernet": secrets_key,
 }
 for placeholder, value in replacements.items():
     if placeholder in text:
@@ -87,7 +94,6 @@ open(p, 'w').write(t)
   sync_compose_db_password
   echo "setup: created ./.env (JWT_SECRET + POSTGRES_PASSWORD generated)."
 fi
-
 if [ -e backend/.env ]; then
   echo "setup: ./backend/.env already exists -- leaving it untouched."
 else
