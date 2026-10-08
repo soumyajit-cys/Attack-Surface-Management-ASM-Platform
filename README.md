@@ -162,6 +162,18 @@ documented there). `make setup` creates both without overwriting existing files.
 
 Frontend: set `VITE_API_BASE` (e.g. `https://api.example.com/api/v1`) to point at a remote API instead of the local Vite proxy.
 
+### Secrets at rest and key rotation
+
+Alert credentials (`secret`, `jira_api_token`, `webhook_url`) are Fernet-encrypted
+in the database. **Back up `SECRETS_ENCRYPTION_KEY` in a password manager —
+losing it makes stored secrets unrecoverable** (sends fail closed with a
+"check SECRETS_ENCRYPTION_KEY" error until a working key is restored).
+
+To rotate: prepend the new key (`NEW,OLD`), run
+`scripts/encrypt_secrets.py --rotate` (use `--dry-run` first to preview
+counts), verify, then drop the old key. Back up the database before any
+rotation or downgrade.
+
 ---
 
 ## API surface — `/api/v1`
