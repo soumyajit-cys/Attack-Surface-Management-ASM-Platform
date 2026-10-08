@@ -1,7 +1,6 @@
 import asyncio
 import json
 import shutil
-import subprocess
 
 from utils.logger import logger
 
