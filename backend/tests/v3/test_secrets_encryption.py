@@ -401,3 +401,16 @@ def _aio(coro):
 def test_make_fernet_rejects_garbage():
     with pytest.raises(ValueError):
         make_fernet(["not-a-key"])
+
+
+def test_model_repr_never_includes_secrets():
+    from models import AlertChannel, AlertSeverity, AlertIntegration
+
+    row = AlertIntegration(
+        id=1, organization_id=2, name="x", channel=AlertChannel.SLACK,
+        min_severity=AlertSeverity.HIGH, secret="super-secret",
+        jira_api_token="token-secret",
+    )
+    assert "super-secret" not in repr(row)
+    assert "token-secret" not in repr(row)
+    assert "super-secret" not in str(row)
