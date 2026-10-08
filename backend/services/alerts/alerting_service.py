@@ -191,21 +191,20 @@ async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset
     (base URL, project key, email + API token); the token is only ever used
     as HTTP Basic auth and never logged. Returns True on issue creation.
     """
-    try:
-        base_url = (integration.jira_base_url or "").rstrip("/")
-        project_key = (integration.jira_project_key or "").strip().upper()
-        email = (integration.jira_email or "").strip()
-        api_token = integration.jira_api_token or ""
-    except DecryptFailedError:
-        # Wrong/missing SECRETS_ENCRYPTION_KEY: attribute access itself
-        # refreshes (and decrypts) the row. Record specifically and fail
-        # without raising (the dispatch loop commits and keeps this message
-        # over the generic one) or leaking details.
+    base_url = (integration.jira_base_url or "").rstrip("/")
+    project_key = (integration.jira_project_key or "").strip().upper()
+    email = (integration.jira_email or "").strip()
+    raw_token = integration.jira_api_token
+    if isinstance(raw_token, UndecryptableSecret):
+        # Stored token cannot be decrypted with the configured key: record
+        # specifically and fail without raising (the dispatch loop commits
+        # and keeps this message over the generic one) or leaking details.
         integration.last_error = (
             "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
         )
         integration.last_error_at = datetime.now(timezone.utc)
         return False
+    api_token = raw_token or ""
     issue_type = (integration.jira_issue_type or "Task").strip() or "Task"
 
     if not (base_url and project_key and email and api_token):
