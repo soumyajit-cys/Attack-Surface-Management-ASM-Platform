@@ -269,21 +269,6 @@ async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -
     return await _post_with_retry(webhook_url, payload)
 
 
-def _unreadable_credential(integration: AlertIntegration) -> str | None:
-    """Specific message if a needed credential is unreadable, else None.
-
-    Checked before every send so unreadable integrations fail with the
-    actionable message (and streak alerts) instead of generic failures.
-    """
-    if isinstance(integration.webhook_url, UndecryptableSecret):
-        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
-    if integration.channel == AlertChannel.JIRA and isinstance(
-        integration.jira_api_token, UndecryptableSecret
-    ):
-        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
-    return None
-
-
 async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
     """Dispatch finding to all matching alert integrations for the org.
 

@@ -205,7 +205,8 @@ class TestMigrationFunctions:
         counts = encrypt_existing_rows(db.connection())
         db.commit()
         assert counts == {"alert_integrations.secret": 0,
-                          "alert_integrations.jira_api_token": 0}
+                          "alert_integrations.jira_api_token": 0,
+                          "alert_integrations.webhook_url": 0}
         assert self._raw(db) == (secret, token)
 
         # Downgrade restores byte-for-byte.
@@ -408,6 +409,8 @@ class TestUndecryptableSentinel:
         assert "enc:v1" not in repr(sentinel)
 
     def test_binding_sentinel_raises(self, db, org_factory):
+        from sqlalchemy.exc import StatementError
+
         from app.core.crypto import EncryptedText, UndecryptableSecret
         from models import AlertIntegration, AlertChannel, AlertSeverity
 
@@ -421,8 +424,11 @@ class TestUndecryptableSentinel:
         db.commit()
 
         row.secret = EncryptedText().process_result_value("enc:v1:garbage!!", None)
-        with pytest.raises(ValueError):
+        # SQLAlchemy wraps bind-time failures; the original error stays a
+        # ValueError and nothing reaches the database.
+        with pytest.raises(StatementError) as excinfo:
             db.flush()
+        assert isinstance(excinfo.value.orig, ValueError)
         db.rollback()
         db.expire_all()
         assert db.get(AlertIntegration, row.id).secret is None
