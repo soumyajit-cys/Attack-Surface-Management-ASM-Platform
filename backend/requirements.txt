@@ -14,6 +14,8 @@ pydantic[email]
 pydantic-settings
 python-jose
 bcrypt
+# Fernet encryption for secrets at rest (alert integration credentials).
+cryptography
 
 httpx
 dnspython
