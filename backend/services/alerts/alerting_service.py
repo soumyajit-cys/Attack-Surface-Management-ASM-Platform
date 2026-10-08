@@ -13,7 +13,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import Alert, AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
-from app.core.crypto import DecryptFailedError
+from app.core.crypto import DecryptFailedError, UndecryptableSecret
 from services.alerts.email_service import send_email
 from utils.egress import EgressBlocked, fetch_url_validated, validate_webhook_url
 from utils.logger import logger
