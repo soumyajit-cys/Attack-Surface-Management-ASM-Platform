@@ -14,6 +14,7 @@ from app.core.crypto import (
     is_encrypted,
     make_fernet,
 )
+from models import AlertIntegration, Asset, Finding
 
 
 def _key(seed: int = 1) -> str:
