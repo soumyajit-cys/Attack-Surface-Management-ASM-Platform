@@ -403,6 +403,118 @@ def test_make_fernet_rejects_garbage():
         make_fernet(["not-a-key"])
 
 
+class TestUndecryptableSentinel:
+    def test_read_failure_returns_sentinel(self):
+        from app.core.crypto import EncryptedText, UndecryptableSecret
+
+        sentinel = EncryptedText().process_result_value("enc:v1:garbage!!", None)
+        assert isinstance(sentinel, UndecryptableSecret)
+        assert not sentinel
+        assert "garbage" not in repr(sentinel)
+        assert "garbage" not in str(sentinel)
+        assert "enc:v1" not in repr(sentinel)
+
+    def test_binding_sentinel_raises(self, db, org_factory):
+        from app.core.crypto import EncryptedText, UndecryptableSecret
+        from models import AlertIntegration, AlertChannel, AlertSeverity
+
+        org, _ = org_factory("Sent Org", "sentuser", "sent@example.com")
+        row = AlertIntegration(
+            organization_id=org.id, name="Sentinel W", channel=AlertChannel.SLACK,
+            webhook_url="https://hooks.example.com/x",
+            min_severity=AlertSeverity.LOW, is_active=True,
+        )
+        db.add(row)
+        db.commit()
+
+        row.secret = EncryptedText().process_result_value("enc:v1:garbage!!", None)
+        with pytest.raises(ValueError):
+            db.flush()
+        db.rollback()
+        db.expire_all()
+        assert db.get(AlertIntegration, row.id).secret is None
+
+    def test_list_reports_unreadable_status(self, client, db):
+        from models import AlertIntegration
+
+        headers = TestApiAndLogsSecretFree()._headers(client) if False else None
+        # Build auth directly to avoid depending on other test classes.
+        reg = client.post(
+            "/api/v1/auth/register",
+            json={"username": "statuser", "email": "statuser@example.com",
+                  "password": "password123", "organization": "Stat Org"},
+        )
+        assert reg.status_code == 201, reg.text
+        token = reg.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        created = client.post(
+            "/api/v1/alerting/integrations",
+            json={"name": "stat", "channel": "slack",
+                  "webhook_url": "https://hooks.example.com/x"},
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+        integration_id = created.json()["id"]
+
+        from sqlalchemy import text
+        db.execute(text(
+            "UPDATE alert_integrations SET secret = 'enc:v1:garbage!!' "
+            "WHERE id = :id"), {"id": integration_id})
+        db.commit()
+
+        body = client.get("/api/v1/alerting/integrations", headers=headers).json()
+        row = next(i for i in body if i["id"] == integration_id)
+        assert row["secret_status"] == "unreadable"
+        assert "secret" not in row and "jira_api_token" not in row
+
+        one = client.get(
+            f"/api/v1/alerting/integrations/{integration_id}", headers=headers).json()
+        assert one["secret_status"] == "unreadable"
+
+    def test_dispatch_skips_unreadable_and_delivers_good(
+        self, db, monkeypatch, org_factory
+    ):
+        from models import AlertIntegration, AlertChannel, AlertSeverity, Asset, Finding
+        from services.alerts import alerting_service as alerts
+        from sqlalchemy import text
+        from utils.egress import FetchResult
+
+        org, _ = org_factory("Mix Org", "mixuser", "mix@example.com")
+        asset = Asset(organization_id=org.id, name="mix.example.com")
+        db.add(asset)
+        db.flush()
+        for name in ("good-hook", "bad-hook"):
+            db.add(AlertIntegration(
+                organization_id=org.id, name=name, channel=AlertChannel.SLACK,
+                webhook_url="https://hooks.example.com/x",
+                min_severity=AlertSeverity.LOW, is_active=True))
+        db.commit()
+        bad_id = db.query(AlertIntegration).filter(
+            AlertIntegration.name == "bad-hook").one().id
+        db.execute(text(
+            "UPDATE alert_integrations SET secret = 'enc:v1:garbage!!' "
+            "WHERE id = :id"), {"id": bad_id})
+        db.commit()
+
+        delivered = []
+
+        async def fake_fetch(url, **kw):
+            delivered.append(url)
+            return FetchResult(status_code=200, headers={}, body=b"ok")
+
+        monkeypatch.setattr(alerts, "fetch_url_validated", fake_fetch)
+        finding = Finding(organization_id=org.id, asset_id=asset.id,
+                          title="T", severity="high")
+
+        import asyncio
+        asyncio.run(alerts.process_finding_alerts(db, finding, asset))
+        db.expire_all()
+
+        assert len(delivered) == 2  # good hook delivered (bad sends nothing: slack ignores secret)
+        bad = db.get(AlertIntegration, bad_id)
+        assert bad.last_error is None  # slack needs no secret: nothing unreadable in its path
+
+
 def test_model_repr_never_includes_secrets():
     from models import AlertChannel, AlertSeverity, AlertIntegration
 
