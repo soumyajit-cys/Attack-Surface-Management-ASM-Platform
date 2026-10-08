@@ -437,7 +437,6 @@ class TestUndecryptableSentinel:
     def test_list_reports_unreadable_status(self, client, db):
         from models import AlertIntegration
 
-        headers = TestApiAndLogsSecretFree()._headers(client) if False else None
         # Build auth directly to avoid depending on other test classes.
         reg = client.post(
             "/api/v1/auth/register",
@@ -474,25 +473,33 @@ class TestUndecryptableSentinel:
     def test_dispatch_skips_unreadable_and_delivers_good(
         self, db, monkeypatch, org_factory
     ):
+        import socket as stdlib_socket
+
         from models import AlertIntegration, AlertChannel, AlertSeverity, Asset, Finding
         from services.alerts import alerting_service as alerts
         from sqlalchemy import text
         from utils.egress import FetchResult
 
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
+        )
         org, _ = org_factory("Mix Org", "mixuser", "mix@example.com")
         asset = Asset(organization_id=org.id, name="mix.example.com")
         db.add(asset)
         db.flush()
-        for name in ("good-hook", "bad-hook"):
+        for name, base in (("good-jira", "https://good-jira.example"),
+                           ("bad-jira", "https://bad-jira.example")):
             db.add(AlertIntegration(
-                organization_id=org.id, name=name, channel=AlertChannel.SLACK,
-                webhook_url="https://hooks.example.com/x",
-                min_severity=AlertSeverity.LOW, is_active=True))
+                organization_id=org.id, name=name, channel=AlertChannel.JIRA,
+                min_severity=AlertSeverity.LOW, is_active=True,
+                jira_base_url=base, jira_project_key="SEC",
+                jira_email="e@example.com", jira_api_token="real-token"))
         db.commit()
         bad_id = db.query(AlertIntegration).filter(
-            AlertIntegration.name == "bad-hook").one().id
+            AlertIntegration.name == "bad-jira").one().id
         db.execute(text(
-            "UPDATE alert_integrations SET secret = 'enc:v1:garbage!!' "
+            "UPDATE alert_integrations SET jira_api_token = 'enc:v1:garbage!!' "
             "WHERE id = :id"), {"id": bad_id})
         db.commit()
 
@@ -500,7 +507,7 @@ class TestUndecryptableSentinel:
 
         async def fake_fetch(url, **kw):
             delivered.append(url)
-            return FetchResult(status_code=200, headers={}, body=b"ok")
+            return FetchResult(status_code=201, headers={}, body=b'{"id":"1"}')
 
         monkeypatch.setattr(alerts, "fetch_url_validated", fake_fetch)
         finding = Finding(organization_id=org.id, asset_id=asset.id,
@@ -510,9 +517,9 @@ class TestUndecryptableSentinel:
         asyncio.run(alerts.process_finding_alerts(db, finding, asset))
         db.expire_all()
 
-        assert len(delivered) == 2  # good hook delivered (bad sends nothing: slack ignores secret)
+        assert delivered == ["https://good-jira.example/rest/api/3/issue"]
         bad = db.get(AlertIntegration, bad_id)
-        assert bad.last_error is None  # slack needs no secret: nothing unreadable in its path
+        assert "check SECRETS_ENCRYPTION_KEY" in (bad.last_error or "")
 
 
 def test_model_repr_never_includes_secrets():

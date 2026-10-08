@@ -42,6 +42,29 @@ class DecryptFailedError(ValueError):
     """
 
 
+class UndecryptableSecret(str):
+    """Stand-in for a stored secret that cannot be decrypted.
+
+    Falsy with a redacted repr/str and no secret material, so template code
+    and truthiness checks degrade safely. It must never be written back:
+    binding it raises ``ValueError`` (see :class:`EncryptedText`).
+    """
+
+    _MARK = "<undecryptable secret>"
+
+    def __new__(cls) -> "UndecryptableSecret":
+        return super().__new__(cls, cls._MARK)
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:  # pragma: no cover - trivial
+        return "UndecryptableSecret()"
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return self._MARK
+
+
 def parse_keys(raw: str | None) -> list[str]:
     """Split a comma-separated key list, dropping blanks."""
     if not raw:
@@ -117,7 +140,14 @@ def decrypt_value(stored: str | None, keys: list[str] | None = None) -> str | No
 
 
 class EncryptedText(TypeDecorator):
-    """Transparent column encryption (prefix-tagged, idempotent)."""
+    """Transparent column encryption (prefix-tagged, idempotent).
+
+    Reads that fail to decrypt yield :class:`UndecryptableSecret` (falsy,
+    redacted) instead of raising, so listings keep working under a wrong
+    key; callers check for it where the plaintext is actually needed.
+    Writing a sentinel back raises ``ValueError`` so it can never
+    overwrite the real value.
+    """
 
     impl = String
     cache_ok = True
@@ -125,12 +155,20 @@ class EncryptedText(TypeDecorator):
     def process_bind_param(self, value, dialect):
         if value is None:
             return None
+        if isinstance(value, UndecryptableSecret):
+            raise ValueError(
+                "Refusing to persist an undecryptable secret placeholder; "
+                "re-enter the real value instead."
+            )
         return encrypt_value(value)
 
     def process_result_value(self, value, dialect):
         if value is None:
             return None
-        return decrypt_value(value)
+        try:
+            return decrypt_value(value)
+        except DecryptFailedError:
+            return UndecryptableSecret()
 
 
 def _rows_needing(conn, table: str, column: str, encrypted: bool):
