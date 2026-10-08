@@ -84,6 +84,8 @@ class AlertIntegrationResponse(BaseModel):
     last_triggered_at: datetime | None
     last_error: str | None = None
     last_error_at: datetime | None = None
+    # "ok" when every stored credential decrypts, "unreadable" otherwise.
+    secret_status: str = "ok"
     created_by: int | None
     created_at: datetime | None
     updated_at: datetime | None
@@ -154,6 +156,17 @@ def _validate_create(data: AlertIntegrationCreate) -> None:
                 code="webhook_url_required",
             )
         _check_webhook(str(data.webhook_url))
+
+
+def _with_secret_status(integration):
+    """Attach ``secret_status`` for API responses (never raises)."""
+    from app.core.crypto import UndecryptableSecret
+
+    unreadable = isinstance(
+        integration.secret, UndecryptableSecret
+    ) or isinstance(integration.jira_api_token, UndecryptableSecret)
+    integration.secret_status = "unreadable" if unreadable else "ok"
+    return integration
 
 
 @router.post("/integrations", response_model=AlertIntegrationResponse, status_code=status.HTTP_201_CREATED)
