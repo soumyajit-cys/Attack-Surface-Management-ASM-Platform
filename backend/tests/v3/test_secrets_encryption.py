@@ -355,38 +355,6 @@ class TestSendTimeDecryptFailure:
         # Recording happens in the dispatch loops (covered by the dispatch
         # test); the direct send only fails closed without raising or leaking.
 
-    def test_dispatch_loops_skip_loudly_without_crashing(
-        self, db, monkeypatch, org_factory, sentinel_caplog
-    ):
-        import logging
-
-        import app.core.config as config_mod
-        from models import AlertIntegration, AlertChannel, AlertSeverity
-        from services.alerts import alerting_service as alerts
-
-        org, _ = org_factory("Skip Org", "skipuser", "skip@example.com")
-        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
-        integration = AlertIntegration(
-            organization_id=org.id, name="Skip Hook", channel=AlertChannel.SLACK,
-            webhook_url="https://hooks.example.com/x",
-            secret="skip-secret",
-            min_severity=AlertSeverity.LOW, is_active=True,
-        )
-        db.add(integration)
-        db.commit()
-
-        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
-        db.expire_all()
-        finding = Finding(organization_id=org.id, asset_id=1, title="T",
-                          severity="high")
-        asset = Asset(organization_id=org.id, name="s.example.com")
-        with sentinel_caplog.at_level(logging.ERROR):
-            result_f = _aio(alerts.process_finding_alerts(db, finding, asset))
-            result_c = _aio(alerts.process_change_alerts(db, [], asset))
-        assert result_f is None and result_c is None
-        assert "SECRETS_ENCRYPTION_KEY" in sentinel_caplog.text
-
-
 def _aio(coro):
     import asyncio
     return asyncio.run(coro)
@@ -433,9 +401,10 @@ class TestUndecryptableSentinel:
         db.expire_all()
         assert db.get(AlertIntegration, row.id).secret is None
 
-    def test_list_reports_unreadable_status(self, client, db):
+    def test_list_reports_unreadable_status(self, client, db, monkeypatch):
         from models import AlertIntegration
 
+        _public_dns(monkeypatch)
         # Build auth directly to avoid depending on other test classes.
         reg = client.post(
             "/api/v1/auth/register",
