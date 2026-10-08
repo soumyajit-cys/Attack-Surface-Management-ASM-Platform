@@ -111,4 +111,7 @@ Next steps:
                   # + in other terminals: celery worker, celery beat, frontend (see README)
   2. Compose:     make up        # full stack on http://localhost (needs Docker)
   3. Tests:       make test
+
+IMPORTANT: back up SECRETS_ENCRYPTION_KEY in a password manager now. Losing
+it makes stored alert credentials unrecoverable (see README rotation notes).
 EOF
