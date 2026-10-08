@@ -260,7 +260,10 @@ async def update_integration(
     if data.webhook_url is not None:
         _check_webhook(str(data.webhook_url))
         integration.webhook_url = str(data.webhook_url)
-    if data.secret is not None:
+    # Omitted or blank credentials mean "unchanged": replacing a stored
+    # secret requires explicitly sending a new non-blank value (this also
+    # lets owners re-enter secrets on rows marked unreadable).
+    if data.secret:
         integration.secret = data.secret
     if data.jira_base_url is not None:
         _check_webhook(str(data.jira_base_url))
@@ -269,7 +272,7 @@ async def update_integration(
         integration.jira_project_key = data.jira_project_key.upper()
     if data.jira_email is not None:
         integration.jira_email = data.jira_email
-    if data.jira_api_token is not None:
+    if data.jira_api_token:
         integration.jira_api_token = data.jira_api_token
     if data.jira_issue_type is not None:
         integration.jira_issue_type = data.jira_issue_type
@@ -292,7 +295,7 @@ async def update_integration(
     )
     db.commit()
 
-    return integration
+    return _with_secret_status(integration)
 
 
 @router.delete("/integrations/{integration_id}")
