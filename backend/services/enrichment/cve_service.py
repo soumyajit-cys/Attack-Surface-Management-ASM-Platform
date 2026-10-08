@@ -21,13 +21,11 @@ from __future__ import annotations
 import json
 import re
 import socket
-from urllib.parse import urlparse
 
 import httpx
 
 from utils.egress import EgressBlocked, fetch_url_validated_sync
 from utils.logger import logger
-from utils.ssrf_guard import is_allowed_target
 
 CVE_RE = re.compile(r"CVE-\d{4}-\d{4,7}", re.IGNORECASE)
 

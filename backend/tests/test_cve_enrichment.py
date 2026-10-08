@@ -12,11 +12,11 @@ from celery.exceptions import Retry
 from models import Asset, Finding
 from services.enrichment import cve_service
 from services.enrichment.cve_service import (
-    assert_feed_host_safe,
     cvss_to_severity,
     cvss_v31_base_score,
     enrich_service_banner,
     extract_software,
+    feed_url,
     parse_osv_response,
     query_osv,
 )
@@ -203,13 +203,18 @@ def test_parse_osv_response_missing_cvss_defaults_medium():
 def test_feed_url_rejects_plain_http(monkeypatch):
     monkeypatch.setattr(cve_service._settings(), "osv_api_url", "http://api.osv.dev/v1/query")
     with pytest.raises(ValueError, match="https"):
-        assert_feed_host_safe(cve_service.feed_url())
+        query_osv("nginx", "Debian", "1.18.0")
 
 
 def test_feed_host_blocked_ip_fails_closed(monkeypatch):
-    monkeypatch.setattr("socket.gethostbyname", lambda host: "169.254.169.254")
-    with pytest.raises(ValueError, match="blocked IP"):
-        assert_feed_host_safe("https://api.osv.dev/v1/query")
+    import socket as stdlib_socket
+
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("169.254.169.254", 443))],
+    )
+    with pytest.raises(ValueError, match="blocked"):
+        query_osv("nginx", "Debian", "1.18.0")
 
 
 def _fake_egress_client(responder):
