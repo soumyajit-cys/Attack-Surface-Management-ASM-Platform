@@ -283,7 +283,6 @@ async def update_integration(
 
     integration.updated_at = datetime.now(timezone.utc)
     db.commit()
-    db.refresh(integration)
 
     record_audit(
         db,
@@ -295,6 +294,9 @@ async def update_integration(
     )
     db.commit()
 
+    # NOTE: no db.refresh() here on purpose -- refreshing would re-decrypt
+    # stored secrets and fail the whole request on unreadable rows. Response
+    # serialization degrades those to the "unreadable" status instead.
     return _with_secret_status(integration)
 
 
