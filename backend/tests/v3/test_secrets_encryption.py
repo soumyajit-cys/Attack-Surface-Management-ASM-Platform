@@ -5,6 +5,8 @@ used here except clearly-marked distinctive strings asserted ABSENT from
 outputs. All network touching is mocked.
 """
 
+import logging
+
 import pytest
 
 from app.core.crypto import (
@@ -15,6 +17,17 @@ from app.core.crypto import (
     make_fernet,
 )
 from models import AlertIntegration, Asset, Finding
+
+
+@pytest.fixture()
+def sentinel_caplog(caplog):
+    """Capture the app's non-propagating logger in tests."""
+    app_logger = logging.getLogger("sentinelasm")
+    app_logger.addHandler(caplog.handler)
+    try:
+        yield caplog
+    finally:
+        app_logger.removeHandler(caplog.handler)
 
 
 def _key(seed: int = 1) -> str:
@@ -235,7 +248,7 @@ class TestApiAndLogsSecretFree:
         )
         return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    def test_api_never_returns_secrets(self, client, db, caplog, monkeypatch):
+    def test_api_never_returns_secrets(self, client, db, sentinel_caplog, monkeypatch):
         import logging
         import socket as stdlib_socket
 
@@ -249,7 +262,7 @@ class TestApiAndLogsSecretFree:
             headers=headers,
         )
         assert created.status_code == 201, created.text
-        with caplog.at_level(logging.INFO):
+        with sentinel_caplog.at_level(logging.INFO):
             listed = client.get("/api/v1/alerting/integrations", headers=headers)
             detail = client.get(
                 f"/api/v1/alerting/integrations/{created.json()['id']}",
@@ -258,10 +271,10 @@ class TestApiAndLogsSecretFree:
         assert listed.status_code == 200 and detail.status_code == 200
         assert self.DISTINCTIVE not in listed.text
         assert self.DISTINCTIVE not in detail.text
-        assert self.DISTINCTIVE not in caplog.text
+        assert self.DISTINCTIVE not in sentinel_caplog.text
 
     def test_send_failure_avoids_logs_and_records_last_error(
-        self, client, db, monkeypatch, caplog
+        self, client, db, monkeypatch, sentinel_caplog
     ):
         import logging
         import socket as stdlib_socket
@@ -284,23 +297,29 @@ class TestApiAndLogsSecretFree:
             raise RuntimeError("delivery exploded")
 
         monkeypatch.setattr(alerts, "fetch_url_validated", _boom)
-        with caplog.at_level(logging.INFO):
+        with sentinel_caplog.at_level(logging.INFO):
             result = client.post(
                 f"/api/v1/alerting/integrations/{integration_id}/test",
                 headers=headers,
             )
-        assert result.status_code == 200
-        assert self.DISTINCTIVE not in caplog.text
+        # Failed delivery surfaces loudly, never silently, and the secret
+        # appears neither in the response nor in the logs. The manual test
+        # button also stamps last_error like the dispatch loops do.
+        assert result.status_code == 500
+        assert result.json()["error"]["code"] == "test_alert_failed"
+        assert self.DISTINCTIVE not in result.text
+        assert self.DISTINCTIVE not in sentinel_caplog.text
         db.expire_all()
         row = db.get(AlertIntegration, integration_id)
         assert row.last_error is not None
+        assert self.DISTINCTIVE not in (row.last_error or "")
 
 
 class TestSendTimeDecryptFailure:
     DISTINCTIVE = "zz-distinctive-jira-1a2b3c4d5e6f"
 
     def test_wrong_key_records_last_error_without_raising(
-        self, db, monkeypatch, org_factory, caplog
+        self, db, monkeypatch, org_factory, sentinel_caplog
     ):
         import logging
         import socket as stdlib_socket
@@ -324,7 +343,7 @@ class TestSendTimeDecryptFailure:
 
         monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
         db.expire_all()
-        with caplog.at_level(logging.INFO):
+        with sentinel_caplog.at_level(logging.INFO):
             result = _aio(alerts.send_jira_alert(
                 integration,
                 Finding(organization_id=org.id, asset_id=1, title="T", severity="high"),
@@ -332,7 +351,7 @@ class TestSendTimeDecryptFailure:
             ))
         assert result is False
         assert "check SECRETS_ENCRYPTION_KEY" in (integration.last_error or "")
-        assert self.DISTINCTIVE not in caplog.text
+        assert self.DISTINCTIVE not in sentinel_caplog.text
         # Swap the working key back to prove the specific message persisted.
         # (Nothing is committed under the wrong key: even flush-time refresh
         # of expired attributes would fail to decrypt.)
@@ -343,7 +362,7 @@ class TestSendTimeDecryptFailure:
             db.get(AlertIntegration, integration.id).last_error or "")
 
     def test_dispatch_loops_skip_loudly_without_crashing(
-        self, db, monkeypatch, org_factory, caplog
+        self, db, monkeypatch, org_factory, sentinel_caplog
     ):
         import logging
 
@@ -356,6 +375,7 @@ class TestSendTimeDecryptFailure:
         integration = AlertIntegration(
             organization_id=org.id, name="Skip Hook", channel=AlertChannel.SLACK,
             webhook_url="https://hooks.example.com/x",
+            secret="skip-secret",
             min_severity=AlertSeverity.LOW, is_active=True,
         )
         db.add(integration)
@@ -366,11 +386,11 @@ class TestSendTimeDecryptFailure:
         finding = Finding(organization_id=org.id, asset_id=1, title="T",
                           severity="high")
         asset = Asset(organization_id=org.id, name="s.example.com")
-        with caplog.at_level(logging.ERROR):
+        with sentinel_caplog.at_level(logging.ERROR):
             result_f = _aio(alerts.process_finding_alerts(db, finding, asset))
             result_c = _aio(alerts.process_change_alerts(db, [], asset))
         assert result_f is None and result_c is None
-        assert "SECRETS_ENCRYPTION_KEY" in caplog.text
+        assert "SECRETS_ENCRYPTION_KEY" in sentinel_caplog.text
 
 
 def _aio(coro):
