@@ -139,6 +139,8 @@ jobs:
           DATABASE_URL: postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm_test
           REDIS_URL: redis://localhost:6379/15
           JWT_SECRET: test-secret-key-for-ci
+          # Test-only Fernet key (never production).
+          SECRETS_ENCRYPTION_KEY: 65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8=
         run: |
           alembic upgrade head
 
@@ -147,6 +149,8 @@ jobs:
           DATABASE_URL: postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm_test
           REDIS_URL: redis://localhost:6379/15
           JWT_SECRET: test-secret-key-for-ci
+          # Test-only Fernet key (never production).
+          SECRETS_ENCRYPTION_KEY: 65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8=
         run: |
           pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing
 
