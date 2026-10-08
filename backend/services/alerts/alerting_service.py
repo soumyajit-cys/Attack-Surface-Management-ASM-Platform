@@ -276,10 +276,20 @@ async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -
 
 async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
     """Dispatch finding to all matching alert integrations for the org."""
-    integrations = db.query(AlertIntegration).filter(
-        AlertIntegration.organization_id == asset.organization_id,
-        AlertIntegration.is_active == True,
-    ).all()
+    try:
+        integrations = db.query(AlertIntegration).filter(
+            AlertIntegration.organization_id == asset.organization_id,
+            AlertIntegration.is_active == True,
+        ).all()
+    except DecryptFailedError:
+        # Wrong/missing SECRETS_ENCRYPTION_KEY: rows cannot even be listed.
+        # Skip the round loudly instead of crashing the worker; per-row
+        # recording resumes once a working key is configured.
+        logger.error(
+            "Alert dispatch skipped: stored secrets cannot be decrypted, "
+            "check SECRETS_ENCRYPTION_KEY"
+        )
+        return
 
     for integration in integrations:
         if not severity_meets_threshold(finding.severity, integration.min_severity):
@@ -360,10 +370,17 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
     thresholds, channel routing, and retry behavior are identical to
     :func:`process_finding_alerts`.
     """
-    integrations = db.query(AlertIntegration).filter(
-        AlertIntegration.organization_id == asset.organization_id,
-        AlertIntegration.is_active == True,
-    ).all()
+    try:
+        integrations = db.query(AlertIntegration).filter(
+            AlertIntegration.organization_id == asset.organization_id,
+            AlertIntegration.is_active == True,
+        ).all()
+    except DecryptFailedError:
+        logger.error(
+            "Alert dispatch skipped: stored secrets cannot be decrypted, "
+            "check SECRETS_ENCRYPTION_KEY"
+        )
+        return
 
     for alert in alerts:
         finding_like = _change_alert_as_finding(alert)
