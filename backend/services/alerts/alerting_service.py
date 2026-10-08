@@ -50,15 +50,19 @@ async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None
     all-resolved-IPs routable) before every attempt, delivery goes through
     the shared egress helper with redirects refused, and the response is
     size-capped. Validation failures fail closed immediately (no retry).
+    Logs carry the destination host only, never the URL path/query (webhook
+    URLs are bearer credentials), and exception text is reduced to the
+    error type for the same reason.
     """
     try:
         validate_webhook_url(url)
     except EgressBlocked as exc:
-        logger.warning("Webhook %s blocked: %s", url, exc)
+        logger.warning("Webhook %s blocked: %s", _log_host(url), exc)
         return False
 
     import asyncio
 
+    host = _log_host(url)
     body = json.dumps(payload).encode("utf-8")
     last_error = None
     for attempt in range(_WEBHOOK_MAX_RETRIES + 1):
@@ -73,28 +77,38 @@ async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None
                 wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
                 logger.debug(
                     "Webhook %s returned %s, retrying in %.1fs (attempt %s/%s)",
-                    url, result.status_code, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
+                    host, result.status_code, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
                 )
                 await asyncio.sleep(wait)
             elif result.status_code >= 400:
-                logger.warning("Webhook %s returned client error %s", url, result.status_code)
+                logger.warning("Webhook %s returned client error %s", host, result.status_code)
                 return False
             else:
                 return True
         except EgressBlocked as exc:
-            logger.warning("Webhook %s blocked: %s", url, exc)
+            logger.warning("Webhook %s blocked: %s", host, exc)
             return False
         except Exception as exc:
-            last_error = exc
+            last_error = type(exc).__name__
             wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
             logger.debug(
                 "Webhook %s failed (%s), retrying in %.1fs (attempt %s/%s)",
-                url, exc, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
+                host, type(exc).__name__, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
             )
             await asyncio.sleep(wait)
 
-    logger.warning("Webhook %s delivery failed after %s attempts: %s", url, _WEBHOOK_MAX_RETRIES + 1, last_error)
+    logger.warning("Webhook %s delivery failed after %s attempts: %s", host, _WEBHOOK_MAX_RETRIES + 1, last_error)
     return False
+
+
+def _log_host(url: str) -> str:
+    """Hostname for logs; never the path/query (bearer material)."""
+    from urllib.parse import urlparse
+
+    try:
+        return urlparse(url or "").hostname or "unknown-host"
+    except Exception:
+        return "unknown-host"
 
 
 async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
