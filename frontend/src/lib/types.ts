@@ -134,7 +134,11 @@ export interface AlertIntegration {
   id: number
   name: string
   channel: string
-  webhook_url: string | null
+  // The full webhook URL is never returned by the API (bearer credential).
+  has_webhook_url: boolean
+  webhook_url_masked: string | null
+  // "ok" when every stored credential decrypts, "unreadable" otherwise.
+  secret_status: string
   min_severity: string
   is_active: boolean
   last_triggered_at: string | null
