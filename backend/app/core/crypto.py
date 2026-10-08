@@ -5,12 +5,14 @@ encrypts, ALL keys decrypt (rotation: prepend the new key, re-encrypt,
 drop the old). Encrypted values carry the ``enc:v1:`` prefix so encryption
 is idempotent and legacy plaintext stays readable until migrated.
 
-Key resolution reads Django-style app settings on every call (no caching),
+Key resolution reads app settings on every call (no caching),
 so tests can swap keys with ``monkeypatch`` and rotation takes effect
 without a restart.
 """
 
 from __future__ import annotations
+
+from typing import Self
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from sqlalchemy.types import TypeDecorator, String
@@ -53,7 +55,7 @@ class UndecryptableSecret(str):
 
     _MARK = "<undecryptable secret>"
 
-    def __new__(cls) -> "UndecryptableSecret":
+    def __new__(cls) -> Self:
         return super().__new__(cls, cls._MARK)
 
     def __bool__(self) -> bool:
