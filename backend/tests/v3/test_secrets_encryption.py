@@ -28,6 +28,20 @@ KEY_A = _key(1)
 KEY_B = _key(2)
 
 
+def _public_dns(monkeypatch, ip="93.184.216.34"):
+    """Spoof public DNS answers, but leave localhost alone (Redis!)."""
+    import socket as stdlib_socket
+
+    real_getaddrinfo = stdlib_socket.getaddrinfo
+
+    def fake_getaddrinfo(host, *a, **k):
+        if host in ("localhost", "127.0.0.1", "::1"):
+            return real_getaddrinfo(host, *a, **k)
+        return [(stdlib_socket.AF_INET, 1, 6, "", (ip, 443))]
+
+    monkeypatch.setattr("socket.getaddrinfo", fake_getaddrinfo)
+
+
 class TestRoundTrip:
     def test_encrypt_decrypt_round_trip(self, monkeypatch):
         monkeypatch.setattr("app.core.config.settings.secrets_encryption_key", KEY_A)
@@ -225,10 +239,7 @@ class TestApiAndLogsSecretFree:
         import logging
         import socket as stdlib_socket
 
-        monkeypatch.setattr(
-            "socket.getaddrinfo",
-            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
-        )
+        _public_dns(monkeypatch)
         headers = self._headers(client)
         created = client.post(
             "/api/v1/alerting/integrations",
@@ -258,10 +269,7 @@ class TestApiAndLogsSecretFree:
         from models import AlertIntegration
         from services.alerts import alerting_service as alerts
 
-        monkeypatch.setattr(
-            "socket.getaddrinfo",
-            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
-        )
+        _public_dns(monkeypatch)
         headers = self._headers(client, username="secowner2", org="Sec Org 2")
         created = client.post(
             "/api/v1/alerting/integrations",
@@ -301,10 +309,7 @@ class TestSendTimeDecryptFailure:
         from models import AlertIntegration, AlertChannel, AlertSeverity
         from services.alerts import alerting_service as alerts
 
-        monkeypatch.setattr(
-            "socket.getaddrinfo",
-            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
-        )
+        _public_dns(monkeypatch)
         org, _ = org_factory("Jira Key Org", "jirakey", "jirakey@example.com")
         monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         integration = AlertIntegration(
@@ -328,6 +333,10 @@ class TestSendTimeDecryptFailure:
         assert result is False
         assert "check SECRETS_ENCRYPTION_KEY" in (integration.last_error or "")
         assert self.DISTINCTIVE not in caplog.text
+        # Swap the working key back to prove the specific message persisted
+        # (the dispatch loop commits in production; commit here explicitly).
+        db.commit()
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
         db.expire_all()
         assert "check SECRETS_ENCRYPTION_KEY" in (
             db.get(AlertIntegration, integration.id).last_error or "")
