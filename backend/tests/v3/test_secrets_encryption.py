@@ -333,13 +333,44 @@ class TestSendTimeDecryptFailure:
         assert result is False
         assert "check SECRETS_ENCRYPTION_KEY" in (integration.last_error or "")
         assert self.DISTINCTIVE not in caplog.text
-        # Swap the working key back to prove the specific message persisted
-        # (the dispatch loop commits in production; commit here explicitly).
-        db.commit()
+        # Swap the working key back to prove the specific message persisted.
+        # (Nothing is committed under the wrong key: even flush-time refresh
+        # of expired attributes would fail to decrypt.)
         monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
+        db.commit()
         db.expire_all()
         assert "check SECRETS_ENCRYPTION_KEY" in (
             db.get(AlertIntegration, integration.id).last_error or "")
+
+    def test_dispatch_loops_skip_loudly_without_crashing(
+        self, db, monkeypatch, org_factory, caplog
+    ):
+        import logging
+
+        import app.core.config as config_mod
+        from models import AlertIntegration, AlertChannel, AlertSeverity
+        from services.alerts import alerting_service as alerts
+
+        org, _ = org_factory("Skip Org", "skipuser", "skip@example.com")
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
+        integration = AlertIntegration(
+            organization_id=org.id, name="Skip Hook", channel=AlertChannel.SLACK,
+            webhook_url="https://hooks.example.com/x",
+            min_severity=AlertSeverity.LOW, is_active=True,
+        )
+        db.add(integration)
+        db.commit()
+
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
+        db.expire_all()
+        finding = Finding(organization_id=org.id, asset_id=1, title="T",
+                          severity="high")
+        asset = Asset(organization_id=org.id, name="s.example.com")
+        with caplog.at_level(logging.ERROR):
+            result_f = _aio(alerts.process_finding_alerts(db, finding, asset))
+            result_c = _aio(alerts.process_change_alerts(db, [], asset))
+        assert result_f is None and result_c is None
+        assert "SECRETS_ENCRYPTION_KEY" in caplog.text
 
 
 def _aio(coro):
