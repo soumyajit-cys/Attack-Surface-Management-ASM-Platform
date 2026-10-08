@@ -5,6 +5,8 @@ os.environ["DATABASE_URL"] = (
     "postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm_test"
 )
 os.environ["REDIS_URL"] = "redis://localhost:6379/15"
+# Test-only Fernet key (never production).
+os.environ["SECRETS_ENCRYPTION_KEY"] = "dAfqTOhyFU9KD--AqgBt9G3PyQprVe-lTx7PxHvO3bc="
 
 import pytest
 from fastapi.testclient import TestClient
