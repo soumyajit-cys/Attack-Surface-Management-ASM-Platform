@@ -525,29 +525,48 @@ class TestUndecryptableSentinel:
         assert reg.status_code == 201, reg.text
         token = reg.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
-        created = client.post(
+        good_id = client.post(
             "/api/v1/alerting/integrations",
-            json={"name": "stat", "channel": "slack",
+            json={"name": "stat-good", "channel": "slack",
                   "webhook_url": "https://hooks.example.com/x"},
             headers=headers,
-        )
-        assert created.status_code == 201, created.text
-        integration_id = created.json()["id"]
+        ).json()["id"]
+        bad_id = client.post(
+            "/api/v1/alerting/integrations",
+            json={"name": "stat-bad", "channel": "slack",
+                  "webhook_url": "https://hooks.example.com/x"},
+            headers=headers,
+        ).json()["id"]
 
         from sqlalchemy import text
         db.execute(text(
             "UPDATE alert_integrations SET secret = 'enc:v1:garbage!!' "
-            "WHERE id = :id"), {"id": integration_id})
+            "WHERE id = :id"), {"id": bad_id})
         db.commit()
 
-        body = client.get("/api/v1/alerting/integrations", headers=headers).json()
-        row = next(i for i in body if i["id"] == integration_id)
-        assert row["secret_status"] == "unreadable"
-        assert "secret" not in row and "jira_api_token" not in row
+        body = client.get("/api/v1/alerting/integrations", headers=headers)
+        assert body.status_code == 200, body.text
+        rows = {i["name"]: i for i in body.json()}
+        assert rows["stat-good"]["secret_status"] == "ok"
+        assert rows["stat-bad"]["secret_status"] == "unreadable"
+        assert "secret" not in rows["stat-bad"] and "jira_api_token" not in rows["stat-bad"]
 
-        one = client.get(
-            f"/api/v1/alerting/integrations/{integration_id}", headers=headers).json()
-        assert one["secret_status"] == "unreadable"
+        for name, expected in (("stat-good", "ok"), ("stat-bad", "unreadable")):
+            row_id = good_id if name == "stat-good" else bad_id
+            one = client.get(
+                f"/api/v1/alerting/integrations/{row_id}", headers=headers)
+            assert one.status_code == 200, one.text
+            assert one.json()["secret_status"] == expected
+
+        # The bad row still allows delete and re-entering the secret.
+        reenter = client.patch(
+            f"/api/v1/alerting/integrations/{bad_id}",
+            json={"secret": "fresh-secret"}, headers=headers)
+        assert reenter.status_code == 200, reenter.text
+        assert reenter.json()["secret_status"] == "ok"
+        deleted = client.delete(
+            f"/api/v1/alerting/integrations/{bad_id}", headers=headers)
+        assert deleted.status_code in (200, 204), deleted.text
 
     def test_dispatch_skips_unreadable_and_delivers_good(
         self, db, monkeypatch, org_factory
