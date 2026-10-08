@@ -214,12 +214,15 @@ async def list_integrations(
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ALERT_ADMIN_DEP),
 ):
-    return (
-        db.query(AlertIntegration)
-        .filter(AlertIntegration.organization_id == principal.organization_id)
-        .order_by(AlertIntegration.created_at.desc())
-        .all()
-    )
+    return [
+        _with_secret_status(integration)
+        for integration in (
+            db.query(AlertIntegration)
+            .filter(AlertIntegration.organization_id == principal.organization_id)
+            .order_by(AlertIntegration.created_at.desc())
+            .all()
+        )
+    ]
 
 
 @router.get("/integrations/{integration_id}", response_model=AlertIntegrationResponse)
