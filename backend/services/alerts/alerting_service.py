@@ -196,13 +196,9 @@ async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset
     email = (integration.jira_email or "").strip()
     raw_token = integration.jira_api_token
     if isinstance(raw_token, UndecryptableSecret):
-        # Stored token cannot be decrypted with the configured key: record
-        # specifically and fail without raising (the dispatch loop commits
-        # and keeps this message over the generic one) or leaking details.
-        integration.last_error = (
-            "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
-        )
-        integration.last_error_at = datetime.now(timezone.utc)
+        # Stored token cannot be decrypted: fail without raising or leaking.
+        # The caller records last_error (dispatch loops do this with streak
+        # alerts; see _unreadable_credential below).
         return False
     api_token = raw_token or ""
     issue_type = (integration.jira_issue_type or "Task").strip() or "Task"
@@ -273,6 +269,21 @@ async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -
     return await _post_with_retry(webhook_url, payload)
 
 
+def _unreadable_credential(integration: AlertIntegration) -> str | None:
+    """Specific message if a needed credential is unreadable, else None.
+
+    Checked before every send so unreadable integrations fail with the
+    actionable message (and streak alerts) instead of generic failures.
+    """
+    if isinstance(integration.webhook_url, UndecryptableSecret):
+        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+    if integration.channel == AlertChannel.JIRA and isinstance(
+        integration.jira_api_token, UndecryptableSecret
+    ):
+        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+    return None
+
+
 async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
     """Dispatch finding to all matching alert integrations for the org."""
     try:
@@ -292,6 +303,12 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
 
     for integration in integrations:
         if not severity_meets_threshold(finding.severity, integration.min_severity):
+            continue
+
+        unreadable = _unreadable_credential(integration)
+        if unreadable is not None:
+            _record_delivery(db, integration, False, detail=unreadable)
+            db.commit()
             continue
 
         success = False
@@ -385,6 +402,12 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
         finding_like = _change_alert_as_finding(alert)
         for integration in integrations:
             if not severity_meets_threshold(finding_like.severity, integration.min_severity):
+                continue
+
+            unreadable = _unreadable_credential(integration)
+            if unreadable is not None:
+                _record_delivery(db, integration, False, detail=unreadable)
+                db.commit()
                 continue
 
             success = False
