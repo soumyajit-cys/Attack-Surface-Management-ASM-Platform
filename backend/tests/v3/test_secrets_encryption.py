@@ -365,6 +365,117 @@ def test_make_fernet_rejects_garbage():
         make_fernet(["not-a-key"])
 
 
+class TestWebhookUrlSecrecy:
+    TOKEN = "tok-UNIQUE-7f3a9c2e1b"
+
+    def _url(self):
+        return f"https://hooks.example.com/services/T/B/{self.TOKEN}"
+
+    def test_api_never_returns_full_url(self, client, db, monkeypatch):
+        _public_dns(monkeypatch)
+        reg = client.post(
+            "/api/v1/auth/register",
+            json={"username": "wuser", "email": "wuser@example.com",
+                  "password": "password123", "organization": "W Org"},
+        )
+        assert reg.status_code == 201, reg.text
+        headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+        created = client.post(
+            "/api/v1/alerting/integrations",
+            json={"name": "w", "channel": "slack", "webhook_url": self._url()},
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert self.TOKEN not in body.get("webhook_url_masked", "")
+        assert body["has_webhook_url"] is True
+
+        listed = client.get("/api/v1/alerting/integrations", headers=headers).json()
+        assert self.TOKEN not in str(listed)
+        one = client.get(
+            f"/api/v1/alerting/integrations/{body['id']}", headers=headers).json()
+        assert self.TOKEN not in str(one)
+        assert one["webhook_url_masked"].endswith(self.TOKEN[-4:])
+
+    def _dispatch_with_fetch(self, db, org_factory, monkeypatch, fetch_behavior, tag=""):
+        import socket as stdlib_socket
+
+        from models import AlertIntegration, AlertChannel, AlertSeverity, Asset, Finding
+        from services.alerts import alerting_service as alerts
+
+        real_getaddrinfo = stdlib_socket.getaddrinfo
+
+        def fake_getaddrinfo(host, *a, **k):
+            if host in ("localhost", "127.0.0.1", "::1"):
+                return real_getaddrinfo(host, *a, **k)
+            return [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))]
+
+        monkeypatch.setattr("socket.getaddrinfo", fake_getaddrinfo)
+        org, _ = org_factory(f"W Org {tag}", f"wuser{tag}", f"w{tag}@example.com")
+        asset = Asset(organization_id=org.id, name=f"w{tag}.example.com")
+        db.add(asset)
+        db.flush()
+        db.add(AlertIntegration(
+            organization_id=org.id, name="w", channel=AlertChannel.SLACK,
+            webhook_url=self._url(), min_severity=AlertSeverity.LOW,
+            is_active=True))
+        db.commit()
+        monkeypatch.setattr(alerts, "fetch_url_validated", fetch_behavior)
+        finding = Finding(organization_id=org.id, asset_id=asset.id,
+                          title="T", severity="high")
+        return org, asset, finding
+
+    def _assert_clean(self, db, org, caplog_text):
+        from models import AlertIntegration
+
+        assert self.TOKEN not in caplog_text
+        db.expire_all()
+        for row in db.query(AlertIntegration).filter(
+                AlertIntegration.organization_id == org.id).all():
+            assert self.TOKEN not in (row.last_error or "")
+
+    def test_conn_error_leaks_nothing(self, db, monkeypatch, org_factory,
+                                      sentinel_caplog):
+        import logging
+
+        import httpx
+
+        from services.alerts import alerting_service as alerts
+
+        org, asset, finding = self._dispatch_with_fetch(
+            db, org_factory, monkeypatch, None)
+
+        async def _boom(*a, **k):
+            raise httpx.ConnectError(f"dial {self._url()} refused")
+
+        monkeypatch.setattr(alerts, "fetch_url_validated", _boom)
+        with sentinel_caplog.at_level(logging.DEBUG):
+            import asyncio
+            asyncio.run(alerts.process_finding_alerts(db, finding, asset))
+        self._assert_clean(db, org, sentinel_caplog.text)
+
+    def test_http_error_statuses_leak_nothing(
+        self, db, monkeypatch, org_factory, sentinel_caplog
+    ):
+        import logging
+
+        from services.alerts import alerting_service as alerts
+        from utils.egress import FetchResult
+
+        for status in (400, 500):
+            org, asset, finding = self._dispatch_with_fetch(
+                db, org_factory, monkeypatch, None, tag=str(status))
+
+            async def fake_fetch(url, status_code=status, **kw):
+                return FetchResult(status_code=status_code, headers={}, body=b"e")
+
+            monkeypatch.setattr(alerts, "fetch_url_validated", fake_fetch)
+            with sentinel_caplog.at_level(logging.DEBUG):
+                import asyncio
+                asyncio.run(alerts.process_finding_alerts(db, finding, asset))
+            self._assert_clean(db, org, sentinel_caplog.text)
+
+
 class TestUndecryptableSentinel:
     def test_read_failure_returns_sentinel(self):
         from app.core.crypto import EncryptedText, UndecryptableSecret
