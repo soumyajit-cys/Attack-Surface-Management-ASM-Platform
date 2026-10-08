@@ -282,7 +282,10 @@ class TestJiraApi:
             headers=headers,
         )
         assert response.status_code == 201, response.text
-        assert response.json()["webhook_url"] == "https://hooks.slack.com/services/T/B/X"
+        body = response.json()
+        assert "webhook_url" not in body
+        assert body["has_webhook_url"] is True
+        assert body["webhook_url_masked"] == "https://hooks.slack.com/…/B/X"
 
     def test_viewer_cannot_configure_integrations(self, client, db):
         from models.user import User
