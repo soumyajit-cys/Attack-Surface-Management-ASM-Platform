@@ -110,6 +110,13 @@ class AlertIntegration(Base):
     organization = relationship("Organization")
     creator = relationship("User", foreign_keys=[created_by])
 
+    def __repr__(self) -> str:  # never include secret material
+        return (
+            f"AlertIntegration(id={self.id!r}, "
+            f"organization_id={self.organization_id!r}, "
+            f"name={self.name!r}, channel={self.channel!r})"
+        )
+
 
 class EmailDigestConfig(Base):
 
