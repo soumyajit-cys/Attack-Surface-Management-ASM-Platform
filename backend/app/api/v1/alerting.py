@@ -187,14 +187,15 @@ def _with_secret_status(integration):
     unreadable = isinstance(
         integration.secret, UndecryptableSecret
     ) or isinstance(integration.jira_api_token, UndecryptableSecret)
-    integration.secret_status = "unreadable" if unreadable else "ok"
     raw_url = integration.webhook_url
     if isinstance(raw_url, UndecryptableSecret):
+        unreadable = True
         integration.has_webhook_url = True
         integration.webhook_url_masked = None
     else:
         integration.has_webhook_url = bool(raw_url)
         integration.webhook_url_masked = _mask_webhook_url(raw_url)
+    integration.secret_status = "unreadable" if unreadable else "ok"
     return integration
 
 
