@@ -53,27 +53,6 @@ def feed_url() -> str:
     return base + OSV_QUERY_PATH
 
 
-def assert_feed_host_safe(url: str) -> str:
-    """Resolve the feed hostname and fail closed if it maps to a blocked IP.
-
-    Returns the resolved IP. Raises ``ValueError`` for non-HTTPS URLs,
-    unresolvable hosts, or private/link-local/cloud-metadata targets.
-    """
-    parsed = urlparse(url)
-    if parsed.scheme != "https":
-        raise ValueError(f"OSV feed URL must use https: {url!r}")
-    host = parsed.hostname
-    if not host:
-        raise ValueError(f"OSV feed URL has no hostname: {url!r}")
-    try:
-        ip = socket.gethostbyname(host)
-    except socket.gaierror as exc:
-        raise ValueError(f"OSV feed host {host!r} does not resolve: {exc}") from exc
-    if not is_allowed_target(ip):
-        raise ValueError(f"OSV feed host {host!r} resolved to blocked IP {ip!r}")
-    return ip
-
-
 # ── Banner → software parsing ─────────────────────────────────────────────
 
 # product -> (banner regexes tried in order, OSV package candidates).
