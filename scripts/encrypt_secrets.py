@@ -15,9 +15,14 @@ import sys
 from pathlib import Path
 
 
-def _connect():
+def _repo_backend_dir() -> Path:
     here = Path(__file__).resolve()
-    sys.path.insert(0, str(here.parent.parent / "backend"))
+    return here.parent.parent / "backend"
+
+
+def _connect():
+    if str(_repo_backend_dir()) not in sys.path:
+        sys.path.insert(0, str(_repo_backend_dir()))
     from sqlalchemy import create_engine
 
     from app.core.config import settings  # validates SECRETS_ENCRYPTION_KEY
@@ -43,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--rotate", action="store_true")
     args = parser.parse_args(argv)
 
+    if str(_repo_backend_dir()) not in sys.path:
+        sys.path.insert(0, str(_repo_backend_dir()))
     from app.core import crypto
 
     conn, _settings = _connect()
