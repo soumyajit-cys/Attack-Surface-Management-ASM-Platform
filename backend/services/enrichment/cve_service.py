@@ -131,6 +131,8 @@ def query_osv(package_name: str, ecosystem: str, version: str) -> list[dict]:
     ``httpx.HTTPError`` or ``socket.gaierror`` so Celery can retry.
     """
     url = feed_url()
+    if not url.startswith("https://"):
+        raise ValueError(f"OSV feed URL must use https: {url!r}")
     timeout = float(_settings().osv_timeout_seconds or 10.0)
     try:
         result = fetch_url_validated_sync(
