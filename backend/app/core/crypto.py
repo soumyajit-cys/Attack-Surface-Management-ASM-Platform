@@ -21,6 +21,7 @@ PREFIX = "enc:v1:"
 ENCRYPTED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("alert_integrations", "secret"),
     ("alert_integrations", "jira_api_token"),
+    ("alert_integrations", "webhook_url"),
 )
 
 #: Values that are never valid secrets keys (fail fast with a clear message).
