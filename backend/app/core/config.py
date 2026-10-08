@@ -112,6 +112,11 @@ class Settings(BaseSettings):
     # drop the old). See app/core/crypto.py.
     secrets_encryption_key: str = ""
 
+    # Comma-separated Fernet keys for secrets at rest. The FIRST key
+    # encrypts; ALL keys decrypt (rotation: prepend the new key, re-encrypt,
+    # drop the old). See app/core/crypto.py.
+    secrets_encryption_key: str = ""
+
     @property
     def webhook_allowed_port_set(self) -> frozenset[int]:
         """Parsed ``webhook_allowed_ports`` (validated non-empty at startup)."""

@@ -13,6 +13,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import Alert, AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
+from app.core.crypto import DecryptFailedError
 from services.alerts.email_service import send_email
 from utils.egress import EgressBlocked, fetch_url_validated, validate_webhook_url
 from utils.logger import logger
@@ -193,7 +194,17 @@ async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset
     base_url = (integration.jira_base_url or "").rstrip("/")
     project_key = (integration.jira_project_key or "").strip().upper()
     email = (integration.jira_email or "").strip()
-    api_token = integration.jira_api_token or ""
+    try:
+        api_token = integration.jira_api_token or ""
+    except DecryptFailedError:
+        # Wrong/missing SECRETS_ENCRYPTION_KEY: record specifically and fail
+        # without raising (the dispatch loop commits and keeps this message
+        # over the generic one) or leaking details.
+        integration.last_error = (
+            "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+        )
+        integration.last_error_at = datetime.now(timezone.utc)
+        return False
     issue_type = (integration.jira_issue_type or "Task").strip() or "Task"
 
     if not (base_url and project_key and email and api_token):
@@ -285,12 +296,15 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
         db.commit()
 
 
-def _record_delivery(db: Session, integration: AlertIntegration, success: bool) -> None:
+def _record_delivery(
+    db: Session, integration: AlertIntegration, success: bool, detail: str = ""
+) -> None:
     """Stamp a delivery outcome; alert once per failure streak.
 
     Success clears any previous failure. The first failure of a streak
     creates one in-app alert; subsequent failures only refresh the stamp.
-    Commit is left to the caller.
+    A caller-supplied *detail* (e.g. an undecryptable secret) is preserved
+    over the generic message. Commit is left to the caller.
     """
     now = datetime.now(timezone.utc)
     if success:
@@ -310,7 +324,10 @@ def _record_delivery(db: Session, integration: AlertIntegration, success: bool) 
                 "channel": str(integration.channel),
             }),
         ))
-    integration.last_error = "delivery failed"
+    if detail:
+        integration.last_error = detail
+    elif integration.last_error is None:
+        integration.last_error = "delivery failed"
     integration.last_error_at = now
 
 
