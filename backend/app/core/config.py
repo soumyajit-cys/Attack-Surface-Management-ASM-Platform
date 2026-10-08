@@ -107,6 +107,11 @@ class Settings(BaseSettings):
     # target. Anything else is rejected at save time and send time.
     webhook_allowed_ports: str = "443,8443"
 
+    # Comma-separated Fernet keys for secrets at rest. The FIRST key
+    # encrypts; ALL keys decrypt (rotation: prepend the new key, re-encrypt,
+    # drop the old). See app/core/crypto.py.
+    secrets_encryption_key: str = ""
+
     @property
     def webhook_allowed_port_set(self) -> frozenset[int]:
         """Parsed ``webhook_allowed_ports`` (validated non-empty at startup)."""
@@ -168,6 +173,35 @@ class Settings(BaseSettings):
             raise ConfigError(
                 "WEBHOOK_ALLOWED_PORTS must be non-empty with ports 1-65535, "
                 f"got {self.webhook_allowed_ports!r}."
+            )
+
+        from app.core.crypto import PLACEHOLDER_KEYS, parse_keys
+        from cryptography.fernet import Fernet
+
+        for key in parse_keys(self.secrets_encryption_key):
+            if key in PLACEHOLDER_KEYS:
+                raise ConfigError(
+                    "SECRETS_ENCRYPTION_KEY looks like a placeholder. Generate "
+                    "a real key with: "
+                    'python -c "from cryptography.fernet import Fernet; '
+                    'print(Fernet.generate_key().decode())"'
+                )
+            try:
+                Fernet(key.encode("utf-8"))
+            except (ValueError, TypeError) as exc:
+                raise ConfigError(
+                    "SECRETS_ENCRYPTION_KEY holds an invalid Fernet key. "
+                    "Generate a real key with: "
+                    'python -c "from cryptography.fernet import Fernet; '
+                    'print(Fernet.generate_key().decode())"'
+                ) from exc
+        if not parse_keys(self.secrets_encryption_key):
+            raise ConfigError(
+                "SECRETS_ENCRYPTION_KEY is missing. It is required in every "
+                "environment (production and local development alike). "
+                "Generate one with: "
+                'python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
             )
         return self
 
