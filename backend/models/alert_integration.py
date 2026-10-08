@@ -16,6 +16,7 @@ from sqlalchemy.sql import func
 
 from sqlalchemy.orm import relationship
 
+from app.core.crypto import EncryptedText
 from models.base import Base
 
 
@@ -56,7 +57,9 @@ class AlertIntegration(Base):
 
     webhook_url = Column(String, nullable=True)
 
-    secret = Column(String, nullable=True)
+    # Encrypted at rest (see app/core/crypto.py). webhook_url is intentionally
+    # NOT encrypted yet -- see the Phase 1 checkpoint for the finding.
+    secret = Column(EncryptedText, nullable=True)
 
     # Jira native connector (channel == "jira"): issue creation via the
     # Jira Cloud REST API. ``webhook_url`` is unused for Jira; the API token
@@ -67,7 +70,7 @@ class AlertIntegration(Base):
 
     jira_email = Column(String, nullable=True)
 
-    jira_api_token = Column(String, nullable=True)
+    jira_api_token = Column(EncryptedText, nullable=True)
 
     jira_issue_type = Column(String, nullable=True, default="Task")
 
