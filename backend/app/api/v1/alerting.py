@@ -234,7 +234,7 @@ async def get_integration(
     ).first()
     if not integration:
         raise NotFoundError("Integration not found", code="integration_not_found")
-    return integration
+    return _with_secret_status(integration)
 
 
 @router.patch("/integrations/{integration_id}", response_model=AlertIntegrationResponse)
