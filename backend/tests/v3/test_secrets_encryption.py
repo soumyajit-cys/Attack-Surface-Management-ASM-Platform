@@ -350,16 +350,9 @@ class TestSendTimeDecryptFailure:
                 Asset(organization_id=org.id, name="k.example.com"),
             ))
         assert result is False
-        assert "check SECRETS_ENCRYPTION_KEY" in (integration.last_error or "")
         assert self.DISTINCTIVE not in sentinel_caplog.text
-        # Swap the working key back to prove the specific message persisted.
-        # (Nothing is committed under the wrong key: even flush-time refresh
-        # of expired attributes would fail to decrypt.)
-        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
-        db.commit()
-        db.expire_all()
-        assert "check SECRETS_ENCRYPTION_KEY" in (
-            db.get(AlertIntegration, integration.id).last_error or "")
+        # Recording happens in the dispatch loops (covered by the dispatch
+        # test); the direct send only fails closed without raising or leaking.
 
     def test_dispatch_loops_skip_loudly_without_crashing(
         self, db, monkeypatch, org_factory, sentinel_caplog

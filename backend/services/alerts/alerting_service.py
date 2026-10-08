@@ -285,30 +285,28 @@ def _unreadable_credential(integration: AlertIntegration) -> str | None:
 
 
 async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
-    """Dispatch finding to all matching alert integrations for the org."""
-    try:
-        integrations = db.query(AlertIntegration).filter(
-            AlertIntegration.organization_id == asset.organization_id,
-            AlertIntegration.is_active == True,
-        ).all()
-    except DecryptFailedError:
-        # Wrong/missing SECRETS_ENCRYPTION_KEY: rows cannot even be listed.
-        # Skip the round loudly instead of crashing the worker; per-row
-        # recording resumes once a working key is configured.
-        logger.error(
-            "Alert dispatch skipped: stored secrets cannot be decrypted, "
-            "check SECRETS_ENCRYPTION_KEY"
-        )
-        return
+    """Dispatch finding to all matching alert integrations for the org.
 
-    for integration in integrations:
-        if not severity_meets_threshold(finding.severity, integration.min_severity):
-            continue
+    Integration IDs are listed first (plain integers, never decrypted) so
+    one unreadable row cannot sink the round: each row loads in isolation
+    and failures are recorded without touching ORM-decrypted state.
+    """
+    id_rows = db.query(AlertIntegration.id).filter(
+        AlertIntegration.organization_id == asset.organization_id,
+        AlertIntegration.is_active == True,
+    ).all()
 
-        unreadable = _unreadable_credential(integration)
-        if unreadable is not None:
-            _record_delivery(db, integration, False, detail=unreadable)
+    skipped = 0
+    for (integration_id,) in id_rows:
+        try:
+            integration = db.get(AlertIntegration, integration_id)
+        except DecryptFailedError:
+            db.rollback()
+            _record_unreadable(db, integration_id)
             db.commit()
+            skipped += 1
+            continue
+        if not severity_meets_threshold(finding.severity, integration.min_severity):
             continue
 
         success = False
@@ -321,6 +319,47 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
 
         _record_delivery(db, integration, success)
         db.commit()
+
+    if skipped:
+        logger.error(
+            "Alert dispatch skipped %s integration(s) with unreadable "
+            "secrets; check SECRETS_ENCRYPTION_KEY",
+            skipped,
+        )
+
+
+def _record_unreadable(db: Session, integration_id: int) -> None:
+    """Persist unreadable-credential state without ORM-decrypting the row.
+
+    Reads and writes plain columns only (Core), so it works under a wrong
+    key. Alerts once per failure streak like :func:`_record_delivery`.
+    """
+    from sqlalchemy import select, update
+
+    org_id, name, previous = db.execute(
+        select(
+            AlertIntegration.organization_id,
+            AlertIntegration.name,
+            AlertIntegration.last_error,
+        ).where(AlertIntegration.id == integration_id)
+    ).one()
+    message = "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+    if previous is None:
+        db.add(Alert(
+            organization_id=org_id,
+            asset_id=None,
+            title=f"Alert delivery failing for integration {name}",
+            severity="medium",
+            message=json.dumps({
+                "type": "integration_delivery_failed",
+                "integration_id": integration_id,
+            }),
+        ))
+    db.execute(
+        update(AlertIntegration)
+        .where(AlertIntegration.id == integration_id)
+        .values(last_error=message, last_error_at=datetime.now(timezone.utc))
+    )
 
 
 def _record_delivery(
@@ -386,28 +425,24 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
     thresholds, channel routing, and retry behavior are identical to
     :func:`process_finding_alerts`.
     """
-    try:
-        integrations = db.query(AlertIntegration).filter(
-            AlertIntegration.organization_id == asset.organization_id,
-            AlertIntegration.is_active == True,
-        ).all()
-    except DecryptFailedError:
-        logger.error(
-            "Alert dispatch skipped: stored secrets cannot be decrypted, "
-            "check SECRETS_ENCRYPTION_KEY"
-        )
-        return
+    id_rows = db.query(AlertIntegration.id).filter(
+        AlertIntegration.organization_id == asset.organization_id,
+        AlertIntegration.is_active == True,
+    ).all()
 
+    skipped = 0
     for alert in alerts:
         finding_like = _change_alert_as_finding(alert)
-        for integration in integrations:
-            if not severity_meets_threshold(finding_like.severity, integration.min_severity):
-                continue
-
-            unreadable = _unreadable_credential(integration)
-            if unreadable is not None:
-                _record_delivery(db, integration, False, detail=unreadable)
+        for (integration_id,) in id_rows:
+            try:
+                integration = db.get(AlertIntegration, integration_id)
+            except DecryptFailedError:
+                db.rollback()
+                _record_unreadable(db, integration_id)
                 db.commit()
+                skipped += 1
+                continue
+            if not severity_meets_threshold(finding_like.severity, integration.min_severity):
                 continue
 
             success = False
@@ -420,6 +455,13 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
 
             _record_delivery(db, integration, success)
             db.commit()
+
+    if skipped:
+        logger.error(
+            "Alert dispatch skipped %s integration(s) with unreadable "
+            "secrets; check SECRETS_ENCRYPTION_KEY",
+            skipped,
+        )
 
 
 async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
