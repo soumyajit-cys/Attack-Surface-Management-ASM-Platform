@@ -159,9 +159,9 @@ class EncryptedText(TypeDecorator):
         if value is None:
             return None
         if isinstance(value, UndecryptableSecret):
-            # noqa: TRY004 -- the spec requires ValueError (not TypeError)
-            # so misconfigured writes surface exactly like decrypt failures.
-            raise ValueError(
+            # The spec requires ValueError (not TypeError) so misconfigured
+            # writes surface exactly like decrypt failures.
+            raise ValueError(  # noqa: TRY004
                 "Refusing to persist an undecryptable secret placeholder; "
                 "re-enter the real value instead."
             )
