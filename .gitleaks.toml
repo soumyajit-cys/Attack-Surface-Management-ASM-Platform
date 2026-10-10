@@ -1,0 +1,17 @@
+# Repository-local gitleaks configuration.
+#
+# Extends the default rule set with a narrowly scoped allowlist covering ONLY
+# the deterministic test keys committed to this repo. Each entry names where
+# the value lives and why it is safe. NEVER add production credentials here --
+# real secrets must be revoked, not allowlisted.
+
+[extend]
+useDefault = true
+
+[[allowlist]]
+description = "Deterministic Fernet key for the backend test suite only (backend/tests/conftest.py; never production, never deployed)"
+regexes = ['''dAfqTOhyFU9KD--AqgBt9G3PyQprVe-lTx7PxHvO3bc=''']
+
+[[allowlist]]
+description = "Test-only SECRETS_ENCRYPTION_KEY for CI (.github/workflows/ci.yml test-backend job; the test database holds no real secrets)"
+regexes = ['''65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8=''']

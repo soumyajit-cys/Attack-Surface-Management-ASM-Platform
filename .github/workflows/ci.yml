@@ -226,6 +226,24 @@ jobs:
         working-directory: ./frontend
         run: npm audit --omit=dev --audit-level=high
 
+  secrets-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Pinned gitleaks action (v2 line). Uses .gitleaks.toml at the repo
+      # root, which extends the default rules with a commented allowlist
+      # covering only the deterministic test keys. Fails the job (and
+      # therefore the workflow) on any other finding.
+      - name: Run gitleaks (blocking)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   docker-build:
     name: Build Docker Images
     runs-on: ubuntu-latest
