@@ -298,6 +298,14 @@ Instrumented automatically via `PrometheusMiddleware`:
 - HTTP status code distribution.
 - Celery task success/failure/retry counters.
 
+Container health: `backend`, `worker`, `frontend`, `postgres`, `redis`, and
+`nginx` all have compose healthchecks. The `beat` scheduler intentionally has
+none — there is no reliable in-container signal for it (beat answers no
+inspect pings and the slim image ships no `ps`); it is supervised by the
+`unless-stopped` restart policy, and a stalled beat is visible as missing
+periodic runs plus its container logs. Worker healthcheck behavior is
+unchanged.
+
 ---
 
 ## Testing
