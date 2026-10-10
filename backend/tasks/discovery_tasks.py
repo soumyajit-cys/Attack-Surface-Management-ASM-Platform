@@ -378,6 +378,10 @@ def _scan_targets(
         "ssl_findings": [],
         "header_findings": [],
         "unpinned_skipped": [],
+        # Template scanning is unwired until Phase 4 (see
+        # services/findings/finding_engine.run_nuclei_scan): always skipped.
+        # Flip this when the VULN phase lands in app/scanning/scope.py.
+        "nuclei_skipped": True,
     }
     org_label = str(scan.organization_id)
 
