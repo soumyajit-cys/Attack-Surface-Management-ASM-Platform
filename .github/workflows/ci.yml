@@ -132,10 +132,20 @@ jobs:
           done
 
       - name: Set up test database
+        # Idempotent repair, not provisioning: the postgres service entrypoint
+        # already creates the sentinel superuser role and the sentinelasm_test
+        # database (see services.postgres env above), so plain CREATE statements
+        # would fail here with "already exists". Each statement below checks
+        # first and only acts when something is missing. NOTE: the superuser
+        # password is POSTGRES_PASSWORD (sentinelpass), not "postgres".
         run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE sentinelasm_test;"
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE USER sentinel WITH PASSWORD 'sentinelpass';"
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE sentinelasm_test TO sentinel;"
+          export PGPASSWORD=sentinelpass
+          psql -h localhost -U sentinel -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'sentinel'" | grep -q 1 \
+            || psql -h localhost -U postgres -d postgres -c "CREATE USER sentinel WITH PASSWORD 'sentinelpass' SUPERUSER;"
+          psql -h localhost -U sentinel -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'sentinelasm_test'" | grep -q 1 \
+            || psql -h localhost -U sentinel -d postgres -c "CREATE DATABASE sentinelasm_test OWNER sentinel;"
+          psql -h localhost -U sentinel -d sentinelasm_test -c "GRANT ALL PRIVILEGES ON DATABASE sentinelasm_test TO sentinel;"
+          psql -h localhost -U sentinel -d sentinelasm_test -tAc "SELECT 1;"
 
       - name: Run Alembic migrations
         env:
