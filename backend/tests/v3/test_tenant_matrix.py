@@ -337,7 +337,7 @@ def test_export_endpoints_exclude_other_org(client, matrix):
         "/api/v1/reports/export/domains/csv",
         "/api/v1/reports/export/all/csv",
     ):
-        response = client.post(url, headers=headers_a)
+        response = client.post(url, json={}, headers=headers_a)
         assert response.status_code == 200, f"{url}: {response.text[:200]}"
         assert MARK_B not in response.text, f"{url} leaks B markers"
     summary = client.get("/api/v1/reports/pdf/executive-summary",
@@ -391,9 +391,9 @@ def test_child_table_reads_go_through_scoped_parents(client, matrix):
     """Ports/SSL/subdomains/risk rows surface only under the owning org."""
     headers_a, _ids_a = matrix["a"]
     headers_b, _ids_b = matrix["b"]
-    assets_b = client.get("/api/v1/assets", headers=headers_b).json()
+    assets_b = client.get("/api/v1/assets", headers=headers_b).json()["items"]
     assert any(MARK_B in a.get("name", "") for a in assets_b)
-    assets_a = client.get("/api/v1/assets", headers=headers_a).json()
+    assets_a = client.get("/api/v1/assets", headers=headers_a).json()["items"]
     assert all(MARK_B not in a.get("name", "") for a in assets_a)
     graph = client.get(f"/api/v1/assets/{_ids_a['asset']}", headers=headers_a)
     assert graph.status_code == 200, graph.text[:200]
