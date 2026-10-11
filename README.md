@@ -310,6 +310,15 @@ unchanged.
 
 ## Testing
 
+Run `make check` before every push. It mirrors the CI gates in order (ruff,
+mypy, pytest on a fresh `scratch_check` database that is created and dropped
+automatically, `tsc`, eslint, `prettier --check`, vitest, vite build):
+
+```bash
+make check   # needs local Postgres + Redis running; PG_SU_USER/PG_SU_PASSWORD
+             # override the superuser credentials if yours differ from postgres/postgres
+```
+
 ```bash
 # Backend — 422 tests, ~60 s
 cd backend && source venv/bin/activate
