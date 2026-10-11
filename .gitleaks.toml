@@ -1,17 +1,19 @@
 # Repository-local gitleaks configuration.
 #
 # Extends the default rule set with a narrowly scoped allowlist covering ONLY
-# the deterministic test keys committed to this repo. Each entry names where
-# the value lives and why it is safe. NEVER add production credentials here --
-# real secrets must be revoked, not allowlisted.
+# committed test fixtures. Each entry names where the value lives and why it
+# is safe. NEVER add production credentials here -- real secrets must be
+# revoked, not allowlisted.
+#
+# NOTE (gitleaks v8 schema): the global allowlist is a SINGLE [allowlist]
+# table, not a [[allowlist]] array -- the array form fails config load with
+# "'AllowList' expected a map, got 'slice'". Per-regex path scoping is not
+# expressible in this schema; instead each literal below is verified by grep
+# to occur only in the file named in its comment.
 
 [extend]
 useDefault = true
 
-[[allowlist]]
-description = "Deterministic Fernet key for the backend test suite only (backend/tests/conftest.py; never production, never deployed)"
-regexes = ['''dAfqTOhyFU9KD--AqgBt9G3PyQprVe-lTx7PxHvO3bc=''']
-
-[[allowlist]]
-description = "Test-only SECRETS_ENCRYPTION_KEY for CI (.github/workflows/ci.yml test-backend job; the test database holds no real secrets)"
-regexes = ['''65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8=''']
+[allowlist]
+description = "Committed test fixtures only: distinctive marker token for webhook-secrecy tests (backend/tests/v3/test_secrets_encryption.py:369, asserted ABSENT from all outputs; never a real credential); deterministic Fernet key for the backend test suite (backend/tests/conftest.py, never production); test-only SECRETS_ENCRYPTION_KEY for CI (.github/workflows/ci.yml test-backend job; the test database holds no real secrets)"
+regexes = ['''tok-UNIQUE-7f3a9c2e1b''', '''dAfqTOhyFU9KD--AqgBt9G3PyQprVe-lTx7PxHvO3bc=''', '''65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8=''']
