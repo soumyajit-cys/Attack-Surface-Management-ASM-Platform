@@ -31,8 +31,6 @@ describe('verificationBadgeClass', () => {
   })
 
   it('never styles grandfathered as verified', () => {
-    expect(verificationBadgeClass('grandfathered')).not.toBe(
-      verificationBadgeClass('verified')
-    )
+    expect(verificationBadgeClass('grandfathered')).not.toBe(verificationBadgeClass('verified'))
   })
 })

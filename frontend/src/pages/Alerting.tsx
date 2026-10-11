@@ -543,9 +543,7 @@ export function Alerting() {
                     type="password"
                     className="input"
                     value={credForm.jira_api_token}
-                    onChange={(e) =>
-                      setCredForm({ ...credForm, jira_api_token: e.target.value })
-                    }
+                    onChange={(e) => setCredForm({ ...credForm, jira_api_token: e.target.value })}
                     placeholder="New Atlassian API token"
                   />
                 </div>
@@ -557,9 +555,7 @@ export function Alerting() {
                       type="url"
                       className="input"
                       value={credForm.webhook_url}
-                      onChange={(e) =>
-                        setCredForm({ ...credForm, webhook_url: e.target.value })
-                      }
+                      onChange={(e) => setCredForm({ ...credForm, webhook_url: e.target.value })}
                       placeholder="New webhook URL (blank to keep)"
                     />
                   </div>

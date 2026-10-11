@@ -6,8 +6,7 @@
  * ("ok" | "unreadable"), `has_webhook_url`, and `webhook_url_masked`.
  */
 
-export const UNREADABLE_SECRET_MESSAGE =
-  'unreadable secret: check SECRETS_ENCRYPTION_KEY'
+export const UNREADABLE_SECRET_MESSAGE = 'unreadable secret: check SECRETS_ENCRYPTION_KEY'
 
 export interface SecretStatusRow {
   secret_status?: string | null
