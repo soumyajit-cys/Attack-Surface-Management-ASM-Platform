@@ -375,6 +375,19 @@ class ApiClient {
     return this.get<AlertIntegration[]>('/alerting/integrations')
   }
 
+  async updateAlertIntegration(
+    id: number,
+    data: {
+      webhook_url?: string
+      secret?: string
+      jira_api_token?: string
+      min_severity?: string
+      is_active?: boolean
+    },
+  ) {
+    return this.patch(`/alerting/integrations/${id}`, data)
+  }
+
   async deleteAlertIntegration(id: number) {
     return this.delete(`/alerting/integrations/${id}`)
   }

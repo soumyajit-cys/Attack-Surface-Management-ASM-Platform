@@ -205,7 +205,8 @@ class TestMigrationFunctions:
         counts = encrypt_existing_rows(db.connection())
         db.commit()
         assert counts == {"alert_integrations.secret": 0,
-                          "alert_integrations.jira_api_token": 0}
+                          "alert_integrations.jira_api_token": 0,
+                          "alert_integrations.webhook_url": 0}
         assert self._raw(db) == (secret, token)
 
         # Downgrade restores byte-for-byte.
@@ -350,48 +351,9 @@ class TestSendTimeDecryptFailure:
                 Asset(organization_id=org.id, name="k.example.com"),
             ))
         assert result is False
-        assert "check SECRETS_ENCRYPTION_KEY" in (integration.last_error or "")
         assert self.DISTINCTIVE not in sentinel_caplog.text
-        # Swap the working key back to prove the specific message persisted.
-        # (Nothing is committed under the wrong key: even flush-time refresh
-        # of expired attributes would fail to decrypt.)
-        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
-        db.commit()
-        db.expire_all()
-        assert "check SECRETS_ENCRYPTION_KEY" in (
-            db.get(AlertIntegration, integration.id).last_error or "")
-
-    def test_dispatch_loops_skip_loudly_without_crashing(
-        self, db, monkeypatch, org_factory, sentinel_caplog
-    ):
-        import logging
-
-        import app.core.config as config_mod
-        from models import AlertIntegration, AlertChannel, AlertSeverity
-        from services.alerts import alerting_service as alerts
-
-        org, _ = org_factory("Skip Org", "skipuser", "skip@example.com")
-        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
-        integration = AlertIntegration(
-            organization_id=org.id, name="Skip Hook", channel=AlertChannel.SLACK,
-            webhook_url="https://hooks.example.com/x",
-            secret="skip-secret",
-            min_severity=AlertSeverity.LOW, is_active=True,
-        )
-        db.add(integration)
-        db.commit()
-
-        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_B)
-        db.expire_all()
-        finding = Finding(organization_id=org.id, asset_id=1, title="T",
-                          severity="high")
-        asset = Asset(organization_id=org.id, name="s.example.com")
-        with sentinel_caplog.at_level(logging.ERROR):
-            result_f = _aio(alerts.process_finding_alerts(db, finding, asset))
-            result_c = _aio(alerts.process_change_alerts(db, [], asset))
-        assert result_f is None and result_c is None
-        assert "SECRETS_ENCRYPTION_KEY" in sentinel_caplog.text
-
+        # Recording happens in the dispatch loops (covered by the dispatch
+        # test); the direct send only fails closed without raising or leaking.
 
 def _aio(coro):
     import asyncio
@@ -401,6 +363,261 @@ def _aio(coro):
 def test_make_fernet_rejects_garbage():
     with pytest.raises(ValueError):
         make_fernet(["not-a-key"])
+
+
+class TestWebhookUrlSecrecy:
+    TOKEN = "tok-UNIQUE-7f3a9c2e1b"
+
+    def _url(self):
+        return f"https://hooks.example.com/services/T/B/{self.TOKEN}"
+
+    def test_api_never_returns_full_url(self, client, db, monkeypatch):
+        _public_dns(monkeypatch)
+        reg = client.post(
+            "/api/v1/auth/register",
+            json={"username": "wuser", "email": "wuser@example.com",
+                  "password": "password123", "organization": "W Org"},
+        )
+        assert reg.status_code == 201, reg.text
+        headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+        created = client.post(
+            "/api/v1/alerting/integrations",
+            json={"name": "w", "channel": "slack", "webhook_url": self._url()},
+            headers=headers,
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert self.TOKEN not in body.get("webhook_url_masked", "")
+        assert body["has_webhook_url"] is True
+
+        listed = client.get("/api/v1/alerting/integrations", headers=headers).json()
+        assert self.TOKEN not in str(listed)
+        one = client.get(
+            f"/api/v1/alerting/integrations/{body['id']}", headers=headers).json()
+        assert self.TOKEN not in str(one)
+        assert one["webhook_url_masked"].endswith(self.TOKEN[-4:])
+
+    def _dispatch_with_fetch(self, db, org_factory, monkeypatch, fetch_behavior, tag=""):
+        import socket as stdlib_socket
+
+        from models import AlertIntegration, AlertChannel, AlertSeverity, Asset, Finding
+        from services.alerts import alerting_service as alerts
+
+        real_getaddrinfo = stdlib_socket.getaddrinfo
+
+        def fake_getaddrinfo(host, *a, **k):
+            if host in ("localhost", "127.0.0.1", "::1"):
+                return real_getaddrinfo(host, *a, **k)
+            return [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))]
+
+        monkeypatch.setattr("socket.getaddrinfo", fake_getaddrinfo)
+        org, _ = org_factory(f"W Org {tag}", f"wuser{tag}", f"w{tag}@example.com")
+        asset = Asset(organization_id=org.id, name=f"w{tag}.example.com")
+        db.add(asset)
+        db.flush()
+        db.add(AlertIntegration(
+            organization_id=org.id, name="w", channel=AlertChannel.SLACK,
+            webhook_url=self._url(), min_severity=AlertSeverity.LOW,
+            is_active=True))
+        db.commit()
+        monkeypatch.setattr(alerts, "fetch_url_validated", fetch_behavior)
+        finding = Finding(organization_id=org.id, asset_id=asset.id,
+                          title="T", severity="high")
+        return org, asset, finding
+
+    def _assert_clean(self, db, org, caplog_text):
+        from models import AlertIntegration
+
+        assert self.TOKEN not in caplog_text
+        db.expire_all()
+        for row in db.query(AlertIntegration).filter(
+                AlertIntegration.organization_id == org.id).all():
+            assert self.TOKEN not in (row.last_error or "")
+
+    def test_conn_error_leaks_nothing(self, db, monkeypatch, org_factory,
+                                      sentinel_caplog):
+        import logging
+
+        import httpx
+
+        from services.alerts import alerting_service as alerts
+
+        org, asset, finding = self._dispatch_with_fetch(
+            db, org_factory, monkeypatch, None)
+
+        async def _boom(*a, **k):
+            raise httpx.ConnectError(f"dial {self._url()} refused")
+
+        monkeypatch.setattr(alerts, "fetch_url_validated", _boom)
+        with sentinel_caplog.at_level(logging.DEBUG):
+            import asyncio
+            asyncio.run(alerts.process_finding_alerts(db, finding, asset))
+        self._assert_clean(db, org, sentinel_caplog.text)
+
+    def test_http_error_statuses_leak_nothing(
+        self, db, monkeypatch, org_factory, sentinel_caplog
+    ):
+        import logging
+
+        from services.alerts import alerting_service as alerts
+        from utils.egress import FetchResult
+
+        for status in (400, 500):
+            org, asset, finding = self._dispatch_with_fetch(
+                db, org_factory, monkeypatch, None, tag=str(status))
+
+            async def fake_fetch(url, status_code=status, **kw):
+                return FetchResult(status_code=status_code, headers={}, body=b"e")
+
+            monkeypatch.setattr(alerts, "fetch_url_validated", fake_fetch)
+            with sentinel_caplog.at_level(logging.DEBUG):
+                import asyncio
+                asyncio.run(alerts.process_finding_alerts(db, finding, asset))
+            self._assert_clean(db, org, sentinel_caplog.text)
+
+
+class TestUndecryptableSentinel:
+    def test_read_failure_returns_sentinel(self):
+        from app.core.crypto import EncryptedText, UndecryptableSecret
+
+        sentinel = EncryptedText().process_result_value("enc:v1:garbage!!", None)
+        assert isinstance(sentinel, UndecryptableSecret)
+        assert not sentinel
+        assert "garbage" not in repr(sentinel)
+        assert "garbage" not in str(sentinel)
+        assert "enc:v1" not in repr(sentinel)
+
+    def test_binding_sentinel_raises(self, db, org_factory):
+        from sqlalchemy.exc import StatementError
+
+        from app.core.crypto import EncryptedText, UndecryptableSecret
+        from models import AlertIntegration, AlertChannel, AlertSeverity
+
+        org, _ = org_factory("Sent Org", "sentuser", "sent@example.com")
+        row = AlertIntegration(
+            organization_id=org.id, name="Sentinel W", channel=AlertChannel.SLACK,
+            webhook_url="https://hooks.example.com/x",
+            min_severity=AlertSeverity.LOW, is_active=True,
+        )
+        db.add(row)
+        db.commit()
+
+        row.secret = EncryptedText().process_result_value("enc:v1:garbage!!", None)
+        # SQLAlchemy wraps bind-time failures; the original error stays a
+        # ValueError and nothing reaches the database.
+        with pytest.raises(StatementError) as excinfo:
+            db.flush()
+        assert isinstance(excinfo.value.orig, ValueError)
+        db.rollback()
+        db.expire_all()
+        assert db.get(AlertIntegration, row.id).secret is None
+
+    def test_list_reports_unreadable_status(self, client, db, monkeypatch):
+        from models import AlertIntegration
+
+        _public_dns(monkeypatch)
+        # Build auth directly to avoid depending on other test classes.
+        reg = client.post(
+            "/api/v1/auth/register",
+            json={"username": "statuser", "email": "statuser@example.com",
+                  "password": "password123", "organization": "Stat Org"},
+        )
+        assert reg.status_code == 201, reg.text
+        token = reg.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        good_id = client.post(
+            "/api/v1/alerting/integrations",
+            json={"name": "stat-good", "channel": "slack",
+                  "webhook_url": "https://hooks.example.com/x"},
+            headers=headers,
+        ).json()["id"]
+        bad_id = client.post(
+            "/api/v1/alerting/integrations",
+            json={"name": "stat-bad", "channel": "slack",
+                  "webhook_url": "https://hooks.example.com/x"},
+            headers=headers,
+        ).json()["id"]
+
+        from sqlalchemy import text
+        db.execute(text(
+            "UPDATE alert_integrations SET secret = 'enc:v1:garbage!!' "
+            "WHERE id = :id"), {"id": bad_id})
+        db.commit()
+
+        body = client.get("/api/v1/alerting/integrations", headers=headers)
+        assert body.status_code == 200, body.text
+        rows = {i["name"]: i for i in body.json()}
+        assert rows["stat-good"]["secret_status"] == "ok"
+        assert rows["stat-bad"]["secret_status"] == "unreadable"
+        assert "secret" not in rows["stat-bad"] and "jira_api_token" not in rows["stat-bad"]
+
+        for name, expected in (("stat-good", "ok"), ("stat-bad", "unreadable")):
+            row_id = good_id if name == "stat-good" else bad_id
+            one = client.get(
+                f"/api/v1/alerting/integrations/{row_id}", headers=headers)
+            assert one.status_code == 200, one.text
+            assert one.json()["secret_status"] == expected
+
+        # The bad row still allows delete and re-entering the secret.
+        reenter = client.patch(
+            f"/api/v1/alerting/integrations/{bad_id}",
+            json={"secret": "fresh-secret"}, headers=headers)
+        assert reenter.status_code == 200, reenter.text
+        assert reenter.json()["secret_status"] == "ok"
+        deleted = client.delete(
+            f"/api/v1/alerting/integrations/{bad_id}", headers=headers)
+        assert deleted.status_code in (200, 204), deleted.text
+
+    def test_dispatch_skips_unreadable_and_delivers_good(
+        self, db, monkeypatch, org_factory
+    ):
+        import socket as stdlib_socket
+
+        from models import AlertIntegration, AlertChannel, AlertSeverity, Asset, Finding
+        from services.alerts import alerting_service as alerts
+        from sqlalchemy import text
+        from utils.egress import FetchResult
+
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda *a, **k: [(stdlib_socket.AF_INET, 1, 6, "", ("93.184.216.34", 443))],
+        )
+        org, _ = org_factory("Mix Org", "mixuser", "mix@example.com")
+        asset = Asset(organization_id=org.id, name="mix.example.com")
+        db.add(asset)
+        db.flush()
+        for name, base in (("good-jira", "https://good-jira.example"),
+                           ("bad-jira", "https://bad-jira.example")):
+            db.add(AlertIntegration(
+                organization_id=org.id, name=name, channel=AlertChannel.JIRA,
+                min_severity=AlertSeverity.LOW, is_active=True,
+                jira_base_url=base, jira_project_key="SEC",
+                jira_email="e@example.com", jira_api_token="real-token"))
+        db.commit()
+        bad_id = db.query(AlertIntegration).filter(
+            AlertIntegration.name == "bad-jira").one().id
+        db.execute(text(
+            "UPDATE alert_integrations SET jira_api_token = 'enc:v1:garbage!!' "
+            "WHERE id = :id"), {"id": bad_id})
+        db.commit()
+
+        delivered = []
+
+        async def fake_fetch(url, **kw):
+            delivered.append(url)
+            return FetchResult(status_code=201, headers={}, body=b'{"id":"1"}')
+
+        monkeypatch.setattr(alerts, "fetch_url_validated", fake_fetch)
+        finding = Finding(organization_id=org.id, asset_id=asset.id,
+                          title="T", severity="high")
+
+        import asyncio
+        asyncio.run(alerts.process_finding_alerts(db, finding, asset))
+        db.expire_all()
+
+        assert delivered == ["https://good-jira.example/rest/api/3/issue"]
+        bad = db.get(AlertIntegration, bad_id)
+        assert "check SECRETS_ENCRYPTION_KEY" in (bad.last_error or "")
 
 
 def test_model_repr_never_includes_secrets():

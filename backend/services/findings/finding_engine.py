@@ -62,7 +62,10 @@ async def run_nuclei_scan(target: str) -> list[dict]:
     # validation (DNS rebinding). Until then this stays unwired.
     nuclei_path = shutil.which("nuclei")
     if not nuclei_path:
-        logger.debug("nuclei not found, skipping template-based scanning")
+        # Loud on purpose: operators must know template scanning did not run.
+        # The pipeline summary records nuclei_skipped=True (see
+        # tasks/discovery_tasks._scan_targets) until Phase 4 wires this in.
+        logger.warning("nuclei not installed, skipping template-based scanning")
         return []
 
     try:

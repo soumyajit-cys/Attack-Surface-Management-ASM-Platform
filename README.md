@@ -76,7 +76,7 @@ flowchart TD
 │   ├── tasks/                  # Celery tasks (discovery, scheduler)
 │   ├── workers/                # Celery app + DLQ wiring
 │   ├── migrations/             # Alembic
-│   └── tests/                  # Pytest (416 passing)
+│   └── tests/                  # Pytest (422 passing)
 ├── frontend/
 │   └── src/
 │       ├── pages/              # Dashboard, Assets, Scans, Findings, …
@@ -161,6 +161,18 @@ documented there). `make setup` creates both without overwriting existing files.
 | `DEBUG` | `True` (local example; `False` in compose) | No | `True` also enables Celery eager mode |
 
 Frontend: set `VITE_API_BASE` (e.g. `https://api.example.com/api/v1`) to point at a remote API instead of the local Vite proxy.
+
+### Secrets at rest and key rotation
+
+Alert credentials (`secret`, `jira_api_token`, `webhook_url`) are Fernet-encrypted
+in the database. **Back up `SECRETS_ENCRYPTION_KEY` in a password manager —
+losing it makes stored secrets unrecoverable** (sends fail closed with a
+"check SECRETS_ENCRYPTION_KEY" error until a working key is restored).
+
+To rotate: prepend the new key (`NEW,OLD`), run
+`scripts/encrypt_secrets.py --rotate` (use `--dry-run` first to preview
+counts), verify, then drop the old key. Back up the database before any
+rotation or downgrade.
 
 ---
 
@@ -286,12 +298,20 @@ Instrumented automatically via `PrometheusMiddleware`:
 - HTTP status code distribution.
 - Celery task success/failure/retry counters.
 
+Container health: `backend`, `worker`, `frontend`, `postgres`, `redis`, and
+`nginx` all have compose healthchecks. The `beat` scheduler intentionally has
+none — there is no reliable in-container signal for it (beat answers no
+inspect pings and the slim image ships no `ps`); it is supervised by the
+`unless-stopped` restart policy, and a stalled beat is visible as missing
+periodic runs plus its container logs. Worker healthcheck behavior is
+unchanged.
+
 ---
 
 ## Testing
 
 ```bash
-# Backend — 416 tests, ~60 s
+# Backend — 422 tests, ~60 s
 cd backend && source venv/bin/activate
 python -m pytest tests/ -q -p no:warnings
 

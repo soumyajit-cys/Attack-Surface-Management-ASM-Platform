@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
+import { unreadableSecretBadge } from '../lib/alerting'
 import type { AlertIntegration, DigestConfig } from '../lib/types'
 import {
   MessageSquare,
@@ -11,6 +12,7 @@ import {
   Zap,
   TestTube2,
   KanbanSquare,
+  KeyRound,
 } from 'lucide-react'
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -23,6 +25,12 @@ export function Alerting() {
   const [digestExists, setDigestExists] = useState(false)
   const [showIntegrationModal, setShowIntegrationModal] = useState(false)
   const [showDigestModal, setShowDigestModal] = useState(false)
+  const [editing, setEditing] = useState<AlertIntegration | null>(null)
+  const [credForm, setCredForm] = useState({
+    webhook_url: '',
+    secret: '',
+    jira_api_token: '',
+  })
   const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState({
     name: '',
@@ -117,6 +125,26 @@ export function Alerting() {
       addToast({ type: 'success', title: 'Integration deleted' })
     } catch (error) {
       addToast({ type: 'error', title: 'Failed to delete', message: getApiErrorMessage(error) })
+    }
+  }
+
+  const handleReplaceCredentials = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editing) return
+    // Blank means "unchanged" (the API ignores omitted/blank credentials,
+    // so re-entering one secret never clears the others).
+    const payload: { webhook_url?: string; secret?: string; jira_api_token?: string } = {}
+    if (credForm.webhook_url.trim()) payload.webhook_url = credForm.webhook_url.trim()
+    if (credForm.secret.trim()) payload.secret = credForm.secret.trim()
+    if (credForm.jira_api_token.trim()) payload.jira_api_token = credForm.jira_api_token.trim()
+    try {
+      await api.updateAlertIntegration(editing.id, payload)
+      setEditing(null)
+      setCredForm({ webhook_url: '', secret: '', jira_api_token: '' })
+      addToast({ type: 'success', title: 'Credentials updated' })
+      fetchData()
+    } catch (error) {
+      addToast({ type: 'error', title: 'Failed to update', message: getApiErrorMessage(error) })
     }
   }
 
@@ -219,6 +247,16 @@ export function Alerting() {
                       {' · '}
                       {integration.min_severity} severity
                     </p>
+                    {integration.has_webhook_url && integration.webhook_url_masked && (
+                      <p className="text-sm text-gray-500">
+                        Webhook: {integration.webhook_url_masked}
+                      </p>
+                    )}
+                    {unreadableSecretBadge(integration) ? (
+                      <p className="text-sm text-danger-600" role="alert">
+                        {unreadableSecretBadge(integration)}
+                      </p>
+                    ) : null}
                     {integration.last_error && (
                       <p className="text-sm text-danger-600" role="alert">
                         Delivery failing
@@ -248,6 +286,17 @@ export function Alerting() {
                     title="Test"
                   >
                     <TestTube2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+                    onClick={() => {
+                      setEditing(integration)
+                      setCredForm({ webhook_url: '', secret: '', jira_api_token: '' })
+                    }}
+                    aria-label={`Replace credentials for ${integration.name}`}
+                    title="Replace credentials"
+                  >
+                    <KeyRound className="w-4 h-4" />
                   </button>
                   <button
                     className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700"
@@ -465,6 +514,73 @@ export function Alerting() {
                   onClick={() => {
                     setShowIntegrationModal(false)
                     resetIntegrationForm()
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary">
+                  Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">Replace credentials for {editing.name}</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Leave a field blank to keep its current value.
+            </p>
+            <form onSubmit={handleReplaceCredentials} className="space-y-4">
+              {editing.channel === 'jira' ? (
+                <div>
+                  <label className="label">API Token</label>
+                  <input
+                    type="password"
+                    className="input"
+                    value={credForm.jira_api_token}
+                    onChange={(e) =>
+                      setCredForm({ ...credForm, jira_api_token: e.target.value })
+                    }
+                    placeholder="New Atlassian API token"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="label">Webhook URL</label>
+                    <input
+                      type="url"
+                      className="input"
+                      value={credForm.webhook_url}
+                      onChange={(e) =>
+                        setCredForm({ ...credForm, webhook_url: e.target.value })
+                      }
+                      placeholder="New webhook URL (blank to keep)"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Secret (optional)</label>
+                    <input
+                      type="text"
+                      className="input"
+                      value={credForm.secret}
+                      onChange={(e) => setCredForm({ ...credForm, secret: e.target.value })}
+                      placeholder="New webhook secret (blank to keep)"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(null)
+                    setCredForm({ webhook_url: '', secret: '', jira_api_token: '' })
                   }}
                   className="btn-secondary"
                 >

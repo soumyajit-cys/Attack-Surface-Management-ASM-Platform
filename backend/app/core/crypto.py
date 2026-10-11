@@ -5,12 +5,14 @@ encrypts, ALL keys decrypt (rotation: prepend the new key, re-encrypt,
 drop the old). Encrypted values carry the ``enc:v1:`` prefix so encryption
 is idempotent and legacy plaintext stays readable until migrated.
 
-Key resolution reads Django-style app settings on every call (no caching),
+Key resolution reads app settings on every call (no caching),
 so tests can swap keys with ``monkeypatch`` and rotation takes effect
 without a restart.
 """
 
 from __future__ import annotations
+
+from typing import Self
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from sqlalchemy.types import TypeDecorator, String
@@ -21,6 +23,7 @@ PREFIX = "enc:v1:"
 ENCRYPTED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("alert_integrations", "secret"),
     ("alert_integrations", "jira_api_token"),
+    ("alert_integrations", "webhook_url"),
 )
 
 #: Values that are never valid secrets keys (fail fast with a clear message).
@@ -40,6 +43,29 @@ class DecryptFailedError(ValueError):
 
     Never carries secret material: only key counts and row identifiers.
     """
+
+
+class UndecryptableSecret(str):
+    """Stand-in for a stored secret that cannot be decrypted.
+
+    Falsy with a redacted repr/str and no secret material, so template code
+    and truthiness checks degrade safely. It must never be written back:
+    binding it raises ``ValueError`` (see :class:`EncryptedText`).
+    """
+
+    _MARK = "<undecryptable secret>"
+
+    def __new__(cls) -> Self:
+        return super().__new__(cls, cls._MARK)
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:  # pragma: no cover - trivial
+        return "UndecryptableSecret()"
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return self._MARK
 
 
 def parse_keys(raw: str | None) -> list[str]:
@@ -117,7 +143,14 @@ def decrypt_value(stored: str | None, keys: list[str] | None = None) -> str | No
 
 
 class EncryptedText(TypeDecorator):
-    """Transparent column encryption (prefix-tagged, idempotent)."""
+    """Transparent column encryption (prefix-tagged, idempotent).
+
+    Reads that fail to decrypt yield :class:`UndecryptableSecret` (falsy,
+    redacted) instead of raising, so listings keep working under a wrong
+    key; callers check for it where the plaintext is actually needed.
+    Writing a sentinel back raises ``ValueError`` so it can never
+    overwrite the real value.
+    """
 
     impl = String
     cache_ok = True
@@ -125,12 +158,22 @@ class EncryptedText(TypeDecorator):
     def process_bind_param(self, value, dialect):
         if value is None:
             return None
+        if isinstance(value, UndecryptableSecret):
+            # The spec requires ValueError (not TypeError) so misconfigured
+            # writes surface exactly like decrypt failures.
+            raise ValueError(  # noqa: TRY004
+                "Refusing to persist an undecryptable secret placeholder; "
+                "re-enter the real value instead."
+            )
         return encrypt_value(value)
 
     def process_result_value(self, value, dialect):
         if value is None:
             return None
-        return decrypt_value(value)
+        try:
+            return decrypt_value(value)
+        except DecryptFailedError:
+            return UndecryptableSecret()
 
 
 def _rows_needing(conn, table: str, column: str, encrypted: bool):

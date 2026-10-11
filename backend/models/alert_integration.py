@@ -55,10 +55,10 @@ class AlertIntegration(Base):
         nullable=False,
     )
 
-    webhook_url = Column(String, nullable=True)
+    webhook_url = Column(EncryptedText, nullable=True)
 
-    # Encrypted at rest (see app/core/crypto.py). webhook_url is intentionally
-    # NOT encrypted yet -- see the Phase 1 checkpoint for the finding.
+    # Encrypted at rest (see app/core/crypto.py). webhook_url is a bearer
+    # credential for Slack/Discord and is protected like the other secrets.
     secret = Column(EncryptedText, nullable=True)
 
     # Jira native connector (channel == "jira"): issue creation via the

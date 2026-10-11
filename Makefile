@@ -3,7 +3,7 @@
 # Backend venv lives at backend/venv (see README quickstart); lint also needs
 # `pip install ruff mypy`, frontend needs `npm install` under frontend/.
 
-.PHONY: setup migrate dev test lint up down
+.PHONY: setup migrate dev test lint up down secrets-scan
 
 setup: ## first-time env bootstrap (idempotent, never overwrites .env)
 	bash scripts/bootstrap.sh
@@ -30,3 +30,10 @@ up: setup ## full stack via compose on http://localhost (needs Docker)
 
 down: ## stop the compose stack
 	docker compose down
+
+secrets-scan: ## gitleaks secret scan (blocking; needs a gitleaks binary or Docker)
+	if command -v gitleaks >/dev/null 2>&1; then \
+		gitleaks detect --source . --config .gitleaks.toml; \
+	else \
+		docker run --rm -v "$$(pwd):/repo" ghcr.io/gitleaks/gitleaks:v8.29.1 detect --source /repo --config /repo/.gitleaks.toml; \
+	fi

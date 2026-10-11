@@ -13,7 +13,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import Alert, AlertIntegration, AlertChannel, EmailDigestConfig, AlertSeverity, Finding, Asset
-from app.core.crypto import DecryptFailedError
+from app.core.crypto import UndecryptableSecret
 from services.alerts.email_service import send_email
 from utils.egress import EgressBlocked, fetch_url_validated, validate_webhook_url
 from utils.logger import logger
@@ -50,15 +50,19 @@ async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None
     all-resolved-IPs routable) before every attempt, delivery goes through
     the shared egress helper with redirects refused, and the response is
     size-capped. Validation failures fail closed immediately (no retry).
+    Logs carry the destination host only, never the URL path/query (webhook
+    URLs are bearer credentials), and exception text is reduced to the
+    error type for the same reason.
     """
     try:
         validate_webhook_url(url)
     except EgressBlocked as exc:
-        logger.warning("Webhook %s blocked: %s", url, exc)
+        logger.warning("Webhook %s blocked: %s", _log_host(url), exc)
         return False
 
     import asyncio
 
+    host = _log_host(url)
     body = json.dumps(payload).encode("utf-8")
     last_error = None
     for attempt in range(_WEBHOOK_MAX_RETRIES + 1):
@@ -73,28 +77,38 @@ async def _post_with_retry(url: str, payload: dict, auth: tuple[str, str] | None
                 wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
                 logger.debug(
                     "Webhook %s returned %s, retrying in %.1fs (attempt %s/%s)",
-                    url, result.status_code, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
+                    host, result.status_code, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
                 )
                 await asyncio.sleep(wait)
             elif result.status_code >= 400:
-                logger.warning("Webhook %s returned client error %s", url, result.status_code)
+                logger.warning("Webhook %s returned client error %s", host, result.status_code)
                 return False
             else:
                 return True
         except EgressBlocked as exc:
-            logger.warning("Webhook %s blocked: %s", url, exc)
+            logger.warning("Webhook %s blocked: %s", host, exc)
             return False
         except Exception as exc:
-            last_error = exc
+            last_error = type(exc).__name__
             wait = _WEBHOOK_BACKOFF_BASE * (2 ** attempt)
             logger.debug(
                 "Webhook %s failed (%s), retrying in %.1fs (attempt %s/%s)",
-                url, exc, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
+                host, type(exc).__name__, wait, attempt + 1, _WEBHOOK_MAX_RETRIES,
             )
             await asyncio.sleep(wait)
 
-    logger.warning("Webhook %s delivery failed after %s attempts: %s", url, _WEBHOOK_MAX_RETRIES + 1, last_error)
+    logger.warning("Webhook %s delivery failed after %s attempts: %s", host, _WEBHOOK_MAX_RETRIES + 1, last_error)
     return False
+
+
+def _log_host(url: str) -> str:
+    """Hostname for logs; never the path/query (bearer material)."""
+    from urllib.parse import urlparse
+
+    try:
+        return urlparse(url or "").hostname or "unknown-host"
+    except Exception:
+        return "unknown-host"
 
 
 async def send_slack_alert(webhook_url: str, finding: Finding, asset: Asset) -> bool:
@@ -191,14 +205,12 @@ async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset
     (base URL, project key, email + API token); the token is only ever used
     as HTTP Basic auth and never logged. Returns True on issue creation.
     """
-    try:
-        base_url = (integration.jira_base_url or "").rstrip("/")
-        project_key = (integration.jira_project_key or "").strip().upper()
-        email = (integration.jira_email or "").strip()
-        api_token = integration.jira_api_token or ""
-    except DecryptFailedError:
-        # Wrong/missing SECRETS_ENCRYPTION_KEY: attribute access itself
-        # refreshes (and decrypts) the row. Record specifically and fail
+    base_url = (integration.jira_base_url or "").rstrip("/")
+    project_key = (integration.jira_project_key or "").strip().upper()
+    email = (integration.jira_email or "").strip()
+    raw_token = integration.jira_api_token
+    if isinstance(raw_token, UndecryptableSecret):
+        # Stored token cannot be decrypted: record specifically and fail
         # without raising (the dispatch loop commits and keeps this message
         # over the generic one) or leaking details.
         integration.last_error = (
@@ -206,6 +218,7 @@ async def send_jira_alert(integration: AlertIntegration, finding: Finding, asset
         )
         integration.last_error_at = datetime.now(timezone.utc)
         return False
+    api_token = raw_token or ""
     issue_type = (integration.jira_issue_type or "Task").strip() or "Task"
 
     if not (base_url and project_key and email and api_token):
@@ -274,25 +287,44 @@ async def send_discord_alert(webhook_url: str, finding: Finding, asset: Asset) -
     return await _post_with_retry(webhook_url, payload)
 
 
-async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
-    """Dispatch finding to all matching alert integrations for the org."""
-    try:
-        integrations = db.query(AlertIntegration).filter(
-            AlertIntegration.organization_id == asset.organization_id,
-            AlertIntegration.is_active == True,
-        ).all()
-    except DecryptFailedError:
-        # Wrong/missing SECRETS_ENCRYPTION_KEY: rows cannot even be listed.
-        # Skip the round loudly instead of crashing the worker; per-row
-        # recording resumes once a working key is configured.
-        logger.error(
-            "Alert dispatch skipped: stored secrets cannot be decrypted, "
-            "check SECRETS_ENCRYPTION_KEY"
-        )
-        return
+def _unreadable_credential(integration: AlertIntegration) -> str | None:
+    """Specific message if a needed credential is unreadable, else None.
 
-    for integration in integrations:
+    Checked before every send so unreadable integrations fail with the
+    actionable message (and streak alerts) instead of generic failures.
+    """
+    if isinstance(integration.webhook_url, UndecryptableSecret):
+        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+    if integration.channel == AlertChannel.JIRA and isinstance(
+        integration.jira_api_token, UndecryptableSecret
+    ):
+        return "secret cannot be decrypted: check SECRETS_ENCRYPTION_KEY"
+    return None
+
+
+async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
+    """Dispatch finding to all matching alert integrations for the org.
+
+    Integration IDs are listed first (plain integers, never decrypted) so
+    one unreadable row cannot sink the round: each row loads in isolation
+    and failures are recorded without touching ORM-decrypted state.
+    """
+    id_rows = db.query(AlertIntegration.id).filter(
+        AlertIntegration.organization_id == asset.organization_id,
+        AlertIntegration.is_active == True,
+    ).all()
+
+    skipped = 0
+    for (integration_id,) in id_rows:
+        integration = db.get(AlertIntegration, integration_id)
         if not severity_meets_threshold(finding.severity, integration.min_severity):
+            continue
+
+        unreadable = _unreadable_credential(integration)
+        if unreadable is not None:
+            _record_delivery(db, integration, False, detail=unreadable)
+            db.commit()
+            skipped += 1
             continue
 
         success = False
@@ -305,6 +337,13 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
 
         _record_delivery(db, integration, success)
         db.commit()
+
+    if skipped:
+        logger.error(
+            "Alert dispatch skipped %s integration(s) with unreadable "
+            "secrets; check SECRETS_ENCRYPTION_KEY",
+            skipped,
+        )
 
 
 def _record_delivery(
@@ -370,22 +409,24 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
     thresholds, channel routing, and retry behavior are identical to
     :func:`process_finding_alerts`.
     """
-    try:
-        integrations = db.query(AlertIntegration).filter(
-            AlertIntegration.organization_id == asset.organization_id,
-            AlertIntegration.is_active == True,
-        ).all()
-    except DecryptFailedError:
-        logger.error(
-            "Alert dispatch skipped: stored secrets cannot be decrypted, "
-            "check SECRETS_ENCRYPTION_KEY"
-        )
-        return
+    id_rows = db.query(AlertIntegration.id).filter(
+        AlertIntegration.organization_id == asset.organization_id,
+        AlertIntegration.is_active == True,
+    ).all()
 
+    skipped = 0
     for alert in alerts:
         finding_like = _change_alert_as_finding(alert)
-        for integration in integrations:
+        for (integration_id,) in id_rows:
+            integration = db.get(AlertIntegration, integration_id)
             if not severity_meets_threshold(finding_like.severity, integration.min_severity):
+                continue
+
+            unreadable = _unreadable_credential(integration)
+            if unreadable is not None:
+                _record_delivery(db, integration, False, detail=unreadable)
+                db.commit()
+                skipped += 1
                 continue
 
             success = False
@@ -398,6 +439,13 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
 
             _record_delivery(db, integration, success)
             db.commit()
+
+    if skipped:
+        logger.error(
+            "Alert dispatch skipped %s integration(s) with unreadable "
+            "secrets; check SECRETS_ENCRYPTION_KEY",
+            skipped,
+        )
 
 
 async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:

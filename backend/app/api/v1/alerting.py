@@ -78,12 +78,17 @@ class AlertIntegrationResponse(BaseModel):
     organization_id: int
     name: str
     channel: AlertChannel
-    webhook_url: str | None
+    # The full webhook URL is a bearer credential and is never returned;
+    # use webhook_url_masked for display and POST a new value to replace.
+    has_webhook_url: bool = False
+    webhook_url_masked: str | None = None
     min_severity: AlertSeverity
     is_active: bool
     last_triggered_at: datetime | None
     last_error: str | None = None
     last_error_at: datetime | None = None
+    # "ok" when every stored credential decrypts, "unreadable" otherwise.
+    secret_status: str = "ok"
     created_by: int | None
     created_at: datetime | None
     updated_at: datetime | None
@@ -156,6 +161,44 @@ def _validate_create(data: AlertIntegrationCreate) -> None:
         _check_webhook(str(data.webhook_url))
 
 
+def _mask_webhook_url(value) -> str | None:
+    """Masked webhook URL for API responses (never the full bearer URL)."""
+    from app.core.crypto import UndecryptableSecret
+
+    if isinstance(value, UndecryptableSecret):
+        return None
+    if not isinstance(value, str) or not value:
+        return None
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return None
+    if not parsed.scheme or not parsed.hostname:
+        return None
+    return f"{parsed.scheme}://{parsed.hostname}/…{(parsed.path or '')[-4:]}"
+
+
+def _with_secret_status(integration):
+    """Attach ``secret_status`` for API responses (never raises)."""
+    from app.core.crypto import UndecryptableSecret
+
+    unreadable = isinstance(
+        integration.secret, UndecryptableSecret
+    ) or isinstance(integration.jira_api_token, UndecryptableSecret)
+    raw_url = integration.webhook_url
+    if isinstance(raw_url, UndecryptableSecret):
+        unreadable = True
+        integration.has_webhook_url = True
+        integration.webhook_url_masked = None
+    else:
+        integration.has_webhook_url = bool(raw_url)
+        integration.webhook_url_masked = _mask_webhook_url(raw_url)
+    integration.secret_status = "unreadable" if unreadable else "ok"
+    return integration
+
+
 @router.post("/integrations", response_model=AlertIntegrationResponse, status_code=status.HTTP_201_CREATED)
 async def create_integration(
     request: Request,
@@ -193,7 +236,7 @@ async def create_integration(
     )
     db.commit()
 
-    return integration
+    return _with_secret_status(integration)
 
 
 @router.get("/integrations", response_model=list[AlertIntegrationResponse])
@@ -201,12 +244,15 @@ async def list_integrations(
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ALERT_ADMIN_DEP),
 ):
-    return (
-        db.query(AlertIntegration)
-        .filter(AlertIntegration.organization_id == principal.organization_id)
-        .order_by(AlertIntegration.created_at.desc())
-        .all()
-    )
+    return [
+        _with_secret_status(integration)
+        for integration in (
+            db.query(AlertIntegration)
+            .filter(AlertIntegration.organization_id == principal.organization_id)
+            .order_by(AlertIntegration.created_at.desc())
+            .all()
+        )
+    ]
 
 
 @router.get("/integrations/{integration_id}", response_model=AlertIntegrationResponse)
@@ -221,7 +267,7 @@ async def get_integration(
     ).first()
     if not integration:
         raise NotFoundError("Integration not found", code="integration_not_found")
-    return integration
+    return _with_secret_status(integration)
 
 
 @router.patch("/integrations/{integration_id}", response_model=AlertIntegrationResponse)
@@ -241,10 +287,16 @@ async def update_integration(
 
     if data.name is not None:
         integration.name = data.name
-    if data.webhook_url is not None:
+    # Omitted or blank values mean "unchanged": replacing a stored URL or
+    # secret requires explicitly sending a new non-blank value (this also
+    # lets owners re-enter secrets on rows marked unreadable).
+    if data.webhook_url:
         _check_webhook(str(data.webhook_url))
         integration.webhook_url = str(data.webhook_url)
-    if data.secret is not None:
+    # Omitted or blank credentials mean "unchanged": replacing a stored
+    # secret requires explicitly sending a new non-blank value (this also
+    # lets owners re-enter secrets on rows marked unreadable).
+    if data.secret:
         integration.secret = data.secret
     if data.jira_base_url is not None:
         _check_webhook(str(data.jira_base_url))
@@ -253,7 +305,7 @@ async def update_integration(
         integration.jira_project_key = data.jira_project_key.upper()
     if data.jira_email is not None:
         integration.jira_email = data.jira_email
-    if data.jira_api_token is not None:
+    if data.jira_api_token:
         integration.jira_api_token = data.jira_api_token
     if data.jira_issue_type is not None:
         integration.jira_issue_type = data.jira_issue_type
@@ -264,7 +316,6 @@ async def update_integration(
 
     integration.updated_at = datetime.now(timezone.utc)
     db.commit()
-    db.refresh(integration)
 
     record_audit(
         db,
@@ -276,7 +327,10 @@ async def update_integration(
     )
     db.commit()
 
-    return integration
+    # NOTE: no db.refresh() here on purpose -- refreshing would re-decrypt
+    # stored secrets and fail the whole request on unreadable rows. Response
+    # serialization degrades those to the "unreadable" status instead.
+    return _with_secret_status(integration)
 
 
 @router.delete("/integrations/{integration_id}")

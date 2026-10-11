@@ -85,6 +85,29 @@ def test_env_example_documents_required_vars():
         assert var in text, f".env.example missing {var}"
 
 
+def test_env_example_covers_every_settings_field():
+    """Every Settings field must be documented in root .env.example.
+
+    Catches newly added settings drifting out of the documented operator
+    surface (e.g. RATE_LIMIT_*, KEV_CACHE_DIR, LOG_*). Commented-out
+    examples count as documented; absence does not.
+    """
+    from app.core.config import Settings
+
+    documented = set()
+    for line in ENV_EXAMPLE.read_text().splitlines():
+        stripped = line.strip().lstrip("#").strip()
+        name, _, _value = stripped.partition("=")
+        if _value or stripped.endswith("=") or "=" in line:
+            documented.add(name.strip())
+    missing = [
+        field.upper()
+        for field in Settings.model_fields
+        if field.upper() not in documented
+    ]
+    assert not missing, f".env.example missing Settings fields: {missing}"
+
+
 def test_dockerfiles_exist_with_healthchecks():
     for path in [BACKEND_DOCKERFILE, FRONTEND_DOCKERFILE]:
         assert path.exists(), f"{path} is missing"
