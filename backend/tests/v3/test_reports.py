@@ -126,21 +126,18 @@ def test_csv_filters(client, reports):
     assert "rptA" not in empty
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-PDF-002: reports.py PDF handlers echo raw exception text "
-    "(file paths/internals) into the API error message",
-)
 def test_pdf_failure_hides_internals(client, reports, monkeypatch):
-    """Forced generator failure must not leak paths or exception text."""
+    """Forced generator failure: static message, stable code, no echo."""
     import app.api.v1.reports as reports_api
 
     def boom(*a, **k):
-        raise RuntimeError("Simulated failure at /tmp/secret-path/x.pdf")
+        raise ValueError("Simulated failure at /tmp/secret-path/x.pdf")
 
     monkeypatch.setattr(reports_api, "generate_executive_summary", boom)
     response = client.get("/api/v1/reports/pdf/executive-summary",
                           headers=reports["a"])
-    assert response.status_code in (500, 502)
+    assert response.status_code == 500
+    body = response.json()["error"]
+    assert body["code"] == "report_generation_failed"
     assert "/tmp/secret-path" not in response.text
     assert "Simulated failure" not in response.text

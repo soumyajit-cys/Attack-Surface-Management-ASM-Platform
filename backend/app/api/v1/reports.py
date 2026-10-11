@@ -147,9 +147,15 @@ async def executive_summary_pdf(
     except RuntimeError as exc:
         raise AppError(str(exc), code="pdf_unavailable")
     except Exception as exc:
+        from utils.logger import get_correlation_id, logger
+
+        logger.warning(
+            "PDF executive-summary generation failed (correlation_id=%s): %s: %s",
+            get_correlation_id(), type(exc).__name__, exc,
+        )
         raise AppError(
-            f"Failed to generate PDF: {exc}",
-            code="pdf_generation_failed",
+            "Failed to generate PDF report",
+            code="report_generation_failed",
         )
 
     return Response(
@@ -179,9 +185,15 @@ async def finding_detail_pdf(
     except RuntimeError as exc:
         raise AppError(str(exc), code="pdf_unavailable")
     except Exception as exc:
+        from utils.logger import get_correlation_id, logger
+
+        logger.warning(
+            "PDF finding-detail generation failed (correlation_id=%s): %s: %s",
+            get_correlation_id(), type(exc).__name__, exc,
+        )
         raise AppError(
-            f"Failed to generate PDF: {exc}",
-            code="pdf_generation_failed",
+            "Failed to generate PDF report",
+            code="report_generation_failed",
         )
 
     return Response(
