@@ -1,8 +1,12 @@
 import os
 
 os.environ["JWT_SECRET"] = "test-secret-please-change"
-os.environ["DATABASE_URL"] = (
-    "postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm_test"
+# Honor a pre-set DATABASE_URL (e.g. make check points the suite at a fresh
+# scratch_* database); otherwise use the dedicated local test database.
+# Never point this at a development or production database.
+os.environ.setdefault(
+    "DATABASE_URL",
+    "postgresql://sentinel:sentinelpass@localhost:5432/sentinelasm_test",
 )
 os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 # Test-only Fernet key (never production).

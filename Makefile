@@ -3,7 +3,16 @@
 # Backend venv lives at backend/venv (see README quickstart); lint also needs
 # `pip install ruff mypy`, frontend needs `npm install` under frontend/.
 
-.PHONY: setup migrate dev test lint up down secrets-scan
+.PHONY: setup migrate dev test lint up down secrets-scan check
+
+# Local Postgres superuser credentials (only used by `check` to
+# create/drop its scratch database; override with `make check
+# PG_SU_USER=... PG_SU_PASSWORD=...` if yours differ).
+PG_SU_USER ?= postgres
+PG_SU_PASSWORD ?= postgres
+# Fresh scratch database for `make check`'s pytest run (created and dropped
+# every run; never a development or production database).
+CHECK_DB_URL = postgresql://sentinel:sentinelpass@localhost:5432/scratch_check
 
 setup: ## first-time env bootstrap (idempotent, never overwrites .env)
 	bash scripts/bootstrap.sh
@@ -30,6 +39,20 @@ up: setup ## full stack via compose on http://localhost (needs Docker)
 
 down: ## stop the compose stack
 	docker compose down
+
+check: ## CI gate mirror, in order (run before every push): ruff, mypy, pytest on a fresh scratch DB, tsc, eslint, prettier, vitest, vite build
+	cd backend && ruff check .
+	cd backend && venv/bin/mypy . --ignore-missing-imports
+	DATABASE_URL=$(CHECK_DB_URL) bash scripts/db_guard.sh
+	PGPASSWORD=$(PG_SU_PASSWORD) psql -h localhost -U $(PG_SU_USER) -c "DROP DATABASE IF EXISTS scratch_check;" -c "CREATE DATABASE scratch_check;"
+	PGPASSWORD=$(PG_SU_PASSWORD) psql -h localhost -U $(PG_SU_USER) -d scratch_check -c "GRANT ALL ON SCHEMA public TO sentinel;"
+	cd backend && DATABASE_URL=$(CHECK_DB_URL) REDIS_URL=redis://localhost:6379/15 JWT_SECRET=test-secret-key-for-ci SECRETS_ENCRYPTION_KEY=65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8= venv/bin/python -m pytest tests/ -q -p no:warnings
+	PGPASSWORD=$(PG_SU_PASSWORD) psql -h localhost -U $(PG_SU_USER) -c "DROP DATABASE IF EXISTS scratch_check;"
+	cd frontend && npx tsc --noEmit
+	cd frontend && npx eslint src --ext .ts,.tsx
+	cd frontend && npx prettier --check src
+	cd frontend && npm test
+	cd frontend && npm run build
 
 secrets-scan: ## gitleaks secret scan (blocking; needs a gitleaks binary or Docker)
 	if command -v gitleaks >/dev/null 2>&1; then \
