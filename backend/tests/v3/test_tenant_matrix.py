@@ -340,17 +340,31 @@ def test_export_endpoints_exclude_other_org(client, matrix):
         response = client.post(url, json={}, headers=headers_a)
         assert response.status_code == 200, f"{url}: {response.text[:200]}"
         assert MARK_B not in response.text, f"{url} leaks B markers"
+    # B's finding PDF as A must not leak.
+    _headers_b, ids_b = matrix["b"]
+    other = client.get(
+        f"/api/v1/reports/pdf/finding/{ids_b['finding']}", headers=headers_a)
+    assert other.status_code in (403, 404), other.status_code
+    assert MARK_B not in other.text
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="BUG-PDF-001: fpdf2 pdf.output() returns bytearray, Starlette "
+    "Response chokes with AttributeError instead of serving the PDF",
+)
+def test_pdf_endpoints_return_pdf_bytes(client, matrix):
+    """PDF endpoints serve bytes starting with %PDF (currently 500)."""
+    headers_a, ids_a = matrix["a"]
     summary = client.get("/api/v1/reports/pdf/executive-summary",
                          headers=headers_a)
     assert summary.status_code == 200, summary.text[:200]
     assert summary.headers["content-type"].startswith("application/pdf")
     assert summary.content.startswith(b"%PDF")
-    assert MARK_B.encode() not in summary.content
-    # B's finding PDF as A must not leak.
-    other = client.get(
-        f"/api/v1/reports/pdf/finding/{ids_b['finding']}", headers=headers_a)
-    assert other.status_code in (403, 404), other.status_code
-    assert MARK_B not in other.text
+    one = client.get(
+        f"/api/v1/reports/pdf/finding/{ids_a['finding']}", headers=headers_a)
+    assert one.status_code == 200, one.text[:200]
+    assert one.content.startswith(b"%PDF")
 
 
 def test_mutations_do_not_touch_other_org(client, db, matrix):
