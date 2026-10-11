@@ -1,4 +1,5 @@
 from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request, FastAPI
@@ -40,4 +41,8 @@ limiter = Limiter(
 def setup_rate_limiting(app: FastAPI) -> None:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    # Enforces default_limits (60/min) on routes WITHOUT their own decorator.
+    # Decorated routes are skipped here (slowapi._should_exempt defers to the
+    # decorator), so their exact limits are unchanged -- no double counting.
+    app.add_middleware(SlowAPIMiddleware)
     logger.info("Rate limiting configured with storage: %s", redact_redis_url(settings.redis_url))

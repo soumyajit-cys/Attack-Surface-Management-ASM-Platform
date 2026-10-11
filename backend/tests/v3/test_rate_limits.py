@@ -156,12 +156,8 @@ def test_verify_ownership_limits(sterile):
     assert blocked.status_code == 429
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-RL-001: SlowAPIMiddleware is not installed, so the global "
-    "60/min default_limits are never evaluated on undecorated routes",
-)
 def test_global_default_limit(sterile):
+    """Undecorated routes share the 60/min default (SlowAPIMiddleware)."""
     client = sterile
     reg = client.post(
         "/api/v1/auth/register",
@@ -176,6 +172,20 @@ def test_global_default_limit(sterile):
     blocked = client.get("/api/v1/assets", headers=headers)
     assert blocked.status_code == 429
     assert "error" in blocked.json()
+
+
+def test_health_exempt_from_limiter(sterile):
+    """Container health checks must never 429."""
+    for _ in range(65):
+        response = sterile.get("/health")
+        assert response.status_code == 200, response.status_code
+
+
+def test_metrics_stays_limited(sterile):
+    """Deliberate: /metrics keeps the 60/min default (scrapes are ~4/min)."""
+    for _ in range(60):
+        assert sterile.get("/metrics").status_code == 200
+    assert sterile.get("/metrics").status_code == 429
 
 
 def test_limiter_storage_resets_between_tests(client):

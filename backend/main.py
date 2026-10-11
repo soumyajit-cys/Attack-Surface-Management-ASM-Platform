@@ -8,7 +8,7 @@ from app.api.v1.router import api_v1_router
 from app.core.config import settings, validate_runtime_config
 from app.core.errors import register_error_handlers
 from utils.logger import logger
-from utils.rate_limiter import setup_rate_limiting
+from utils.rate_limiter import limiter, setup_rate_limiting
 from metrics.middleware import PrometheusMiddleware
 
 # Fail fast on invalid configuration (weak/missing JWT secret, prod misuse).
@@ -54,6 +54,7 @@ register_error_handlers(app)
 app.include_router(api_v1_router, prefix="/api")
 
 
+@limiter.exempt
 @app.get("/health")
 async def health():
     return {"status": "ok"}
