@@ -12,7 +12,7 @@ redis
 
 pydantic[email]
 pydantic-settings
-python-jose
+PyJWT==2.15.1
 bcrypt
 # Fernet encryption for secrets at rest (alert integration credentials).
 cryptography

@@ -117,7 +117,7 @@ def test_g6_reset_token_expiry(client, db):
     user = db.query(User).filter(User.username == "g6resetexp").one()
     stale = tokens._encode(
         user.id, tokens.PASSWORD_RESET,
-        datetime.now(timezone.utc) - timedelta(seconds=1))
+        datetime.now(timezone.utc) - timedelta(seconds=60))
     response = client.post(
         "/api/v1/auth/reset-password",
         json={"token": stale, "new_password": "password123"})
@@ -243,10 +243,6 @@ def test_15_algorithm_confusion_rejected(client, db):
     assert response.status_code == 401
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-JWT-001: python-jose does not require exp/iat/jti claims",
-)
 @pytest.mark.parametrize("drop", ["exp", "iat", "jti"])
 def test_15_missing_claims_rejected(client, db, drop):
     """1.5.3: exp, iat and jti are all required claims."""
@@ -263,10 +259,6 @@ def test_15_missing_claims_rejected(client, db, drop):
     assert response.status_code == 401
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-JWT-001: python-jose does not reject future-iat tokens",
-)
 def test_15_future_iat_rejected(client, db):
     """1.5.4: tokens issued in the future are rejected (clock-skew cap)."""
     import time

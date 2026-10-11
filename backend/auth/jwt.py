@@ -1,12 +1,21 @@
 from datetime import datetime, timedelta, timezone
 
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError
 
 from config import settings
 
 ACCESS = "access"
 REFRESH = "refresh"
 PASSWORD_RESET = "password_reset"
+
+#: Clock-skew allowance for exp/iat validation (seconds). Small on purpose:
+#: a larger window would keep demonstrably expired tokens alive.
+CLOCK_SKEW_LEEWAY = timedelta(seconds=5)
+
+#: Claims every token must carry. Missing claims fail closed in
+#: :func:`decode_token` (BUG-JWT-001 class: python-jose accepted them).
+REQUIRED_CLAIMS = ["exp", "iat", "jti", "sub"]
 
 
 def _now() -> datetime:
@@ -57,9 +66,11 @@ def decode_token(token: str) -> dict:
         payload = jwt.decode(
             token,
             settings.jwt_secret_for_use,
-            algorithms=[settings.jwt_algorithm],
+            algorithms=["HS256"],
+            leeway=CLOCK_SKEW_LEEWAY,
+            options={"require": REQUIRED_CLAIMS},
         )
-    except JWTError:
+    except InvalidTokenError:
         return {}
     if "sub" not in payload:
         return {}
