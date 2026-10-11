@@ -8,6 +8,8 @@ unauthenticated rejection. Hermetic: no network.
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 
 def _register(client, username, org="G6 Org"):
     reg = client.post(
@@ -170,3 +172,112 @@ def test_g6_unknown_user_vs_wrong_password(client):
     assert unknown.status_code == wrong.status_code == 401
     # Bodies must not distinguish the two cases (user enumeration).
     assert unknown.json() == wrong.json()
+
+
+def _b64url(data: bytes) -> str:
+    import base64
+
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def _craft_token(header: dict, payload: dict, key: str) -> str:
+    """Hand-rolled HS256 token for algorithm-attack probes."""
+    import hashlib
+    import hmac
+    import json
+
+    signing_input = (
+        _b64url(json.dumps(header, separators=(",", ":")).encode())
+        + "." + _b64url(json.dumps(payload, separators=(",", ":")).encode())
+    )
+    sig = hmac.new(key.encode(), signing_input.encode(), hashlib.sha256).digest()
+    return signing_input + "." + _b64url(sig)
+
+
+def _valid_claims(user_id, minutes=15):
+    import time
+
+    now = int(time.time())
+    return {
+        "sub": str(user_id),
+        "type": "access",
+        "exp": now + minutes * 60,
+        "iat": now,
+        "jti": "test-jti-1.5",
+    }
+
+
+def _secret():
+    from auth import jwt as tokens
+
+    return tokens.settings.jwt_secret_for_use
+
+
+def test_15_alg_none_rejected(client, db):
+    """1.5.1: alg=none tokens are rejected even with a valid-looking body."""
+    from models.user import User
+
+    _register(client, "g15none")
+    user = db.query(User).filter(User.username == "g15none").one()
+    header = {"alg": "none", "typ": "JWT"}
+    forged = (
+        _b64url(__import__("json").dumps(header).encode()) + "."
+        + _b64url(__import__("json").dumps(_valid_claims(user.id)).encode())
+        + "."
+    )
+    response = client.get("/api/v1/auth/me",
+                          headers={"Authorization": f"Bearer {forged}"})
+    assert response.status_code == 401
+
+
+def test_15_algorithm_confusion_rejected(client, db):
+    """1.5.2: a header claiming RS256 (body HS256-signed) is rejected."""
+    from models.user import User
+
+    _register(client, "g15confuse")
+    user = db.query(User).filter(User.username == "g15confuse").one()
+    confused = _craft_token({"alg": "RS256", "typ": "JWT"},
+                            _valid_claims(user.id), _secret())
+    response = client.get("/api/v1/auth/me",
+                          headers={"Authorization": f"Bearer {confused}"})
+    assert response.status_code == 401
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="BUG-JWT-001: python-jose does not require exp/iat/jti claims",
+)
+@pytest.mark.parametrize("drop", ["exp", "iat", "jti"])
+def test_15_missing_claims_rejected(client, db, drop):
+    """1.5.3: exp, iat and jti are all required claims."""
+    from models.user import User
+
+    _register(client, f"g15noclaim{drop}")
+    user = db.query(User).filter(
+        User.username == f"g15noclaim{drop}").one()
+    claims = _valid_claims(user.id)
+    del claims[drop]
+    token = _craft_token({"alg": "HS256", "typ": "JWT"}, claims, _secret())
+    response = client.get("/api/v1/auth/me",
+                          headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 401
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="BUG-JWT-001: python-jose does not reject future-iat tokens",
+)
+def test_15_future_iat_rejected(client, db):
+    """1.5.4: tokens issued in the future are rejected (clock-skew cap)."""
+    import time
+
+    from models.user import User
+
+    _register(client, "g15futureiat")
+    user = db.query(User).filter(User.username == "g15futureiat").one()
+    claims = _valid_claims(user.id)
+    claims["iat"] = int(time.time()) + 30 * 60
+    token = _craft_token({"alg": "HS256", "typ": "JWT"}, claims, _secret())
+    response = client.get("/api/v1/auth/me",
+                          headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 401
