@@ -348,13 +348,8 @@ def test_export_endpoints_exclude_other_org(client, matrix):
     assert MARK_B not in other.text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-PDF-001: fpdf2 pdf.output() returns bytearray, Starlette "
-    "Response chokes with AttributeError instead of serving the PDF",
-)
 def test_pdf_endpoints_return_pdf_bytes(client, matrix):
-    """PDF endpoints serve bytes starting with %PDF (currently 500)."""
+    """PDF endpoints serve bytes starting with %PDF (was BUG-PDF-001)."""
     headers_a, ids_a = matrix["a"]
     summary = client.get("/api/v1/reports/pdf/executive-summary",
                          headers=headers_a)
