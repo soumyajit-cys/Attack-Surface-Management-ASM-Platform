@@ -1,9 +1,8 @@
-"""1.5.6 session hygiene (tests only, red first).
+"""1.5.6 session hygiene tests.
 
 Refresh reuse revokes the whole token family (+audit); password reset
 revokes every session of the user; deactivated users lose refresh too.
-Imports are function-level; behavior cases are strict-xfailed until
-implementation lands. No real network.
+No real network.
 """
 
 import pytest
