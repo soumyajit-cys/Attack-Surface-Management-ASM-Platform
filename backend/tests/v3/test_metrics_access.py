@@ -1,8 +1,7 @@
-"""1.5.5 /metrics deny-by-default (tests only, red first).
+"""1.5.5 /metrics deny-by-default tests.
 
 Unauthenticated/bad-token/spoofed-XFF requests are denied; a valid bearer
-or an allowed peer CIDR is admitted. Imports are function-level; behavior
-cases are strict-xfailed until implementation lands. No real network.
+or an allowed peer CIDR is admitted. No real network.
 """
 
 import pytest
@@ -19,20 +18,17 @@ def _request(peer, headers=None):
     return Request(scope)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-METRICS-001: /metrics is public")
 def test_metrics_unauthenticated_denied(client):
     response = client.get("/metrics")
     assert response.status_code == 401
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-METRICS-001: /metrics is public")
 def test_metrics_bad_token_denied(client):
     response = client.get("/metrics",
                           headers={"Authorization": "Bearer wrong-token"})
     assert response.status_code == 401
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-METRICS-001: /metrics is public")
 def test_metrics_good_token_allowed(client, monkeypatch):
     import app.core.config as config_mod
 
@@ -44,7 +40,6 @@ def test_metrics_good_token_allowed(client, monkeypatch):
     assert b"sentinelasm_" in response.content
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-METRICS-001: /metrics is public")
 def test_metrics_spoofed_xff_grants_nothing(client, monkeypatch):
     import app.core.config as config_mod
 
@@ -57,7 +52,6 @@ def test_metrics_spoofed_xff_grants_nothing(client, monkeypatch):
     assert response.status_code == 401
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-METRICS-001: helper missing")
 def test_metrics_cidr_helper():
     """Unit: peer-CIDR admission never consults X-Forwarded-For."""
     from main import metrics_allowed
