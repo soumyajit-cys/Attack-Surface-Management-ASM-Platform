@@ -8,6 +8,7 @@ from config import settings
 from utils.redis_client import get_redis
 
 REFRESH_KEY = "refresh:{jti}"
+ACCESS_KEY = "access:{jti}"
 REVOKED_KEY = "revoked:{jti}"
 RESET_USED_KEY = "reset_used:{jti}"
 SESSIONS_KEY = "sessions:{user_id}"
@@ -72,14 +73,18 @@ class TokenStore:
         return True
 
     def store_access(self, token: str, user_id: int) -> None:
-        """Track an access jti so family revocation reaches it too."""
+        """Track an access jti so family revocation reaches it too.
+
+        Lives under its own access:* namespace so refresh:* keeps meaning
+        exactly "live refresh tokens" (see test_refresh_single_pair).
+        """
         payload = token_service.decode_token(token)
         jti = payload.get("jti")
         if not jti:
             return
         ttl = _ttl_seconds(payload)
         self.client.set(
-            REFRESH_KEY.format(jti=jti),
+            ACCESS_KEY.format(jti=jti),
             json.dumps({"user_id": user_id, "parent": None}),
             ex=ttl,
         )
@@ -100,6 +105,7 @@ class TokenStore:
             # read as reuse rather than plain expiry. Tiny values; bounded.
             self.client.set(REVOKED_KEY.format(jti=jti), 1, ex=90 * 86400)
             self.client.delete(REFRESH_KEY.format(jti=jti))
+            self.client.delete(ACCESS_KEY.format(jti=jti))
             count += 1
         self.client.delete(key)
         return count

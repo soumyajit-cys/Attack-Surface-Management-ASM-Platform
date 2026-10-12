@@ -117,6 +117,7 @@ EXPECTED = {
     ("PATCH", "/api/v1/scan-policies/{policy_id}"): frozenset({Permission.POLICY_MANAGE}),
     ("DELETE", "/api/v1/scan-policies/{policy_id}"): frozenset({Permission.POLICY_MANAGE}),
     ("POST", "/api/v1/scan-policies/{policy_id}/run-now"): frozenset({Permission.POLICY_MANAGE}),
+    ("POST", "/api/v1/auth/admin/unlock-account"): frozenset({Permission.ORG_MANAGE}),
 }
 
 

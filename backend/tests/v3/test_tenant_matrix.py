@@ -31,6 +31,11 @@ NO_TENANT_DATA = {
 }
 
 # Routes whose tenant behavior is asserted by dedicated cases below.
+# The unlock endpoint is covered in test_login_lockout.py (same-org unlock,
+# cross-org/unknown identical 404s, audit) rather than duplicated here.
+COVERED_ELSEWHERE = {
+    ("POST", "/api/v1/auth/admin/unlock-account"),
+}
 COVERED_ID_ROUTES = {
     ("GET", "/api/v1/scans/{scan_id}"),
     ("GET", "/api/v1/findings/{finding_id}"),
