@@ -154,7 +154,7 @@ documented there). `make setup` creates both without overwriting existing files.
 | `FRONTEND_URL` | `http://localhost:5173` | No | Used in password-reset links |
 | `OSV_API_URL` / `_TIMEOUT_SECONDS` / `_ENABLED` | `https://api.osv.dev/v1/query` / `10.0` / `True` | No | CVE enrichment feed |
 | `WEBHOOK_ALLOWED_PORTS` | `443,8443` | No | Ports Slack/Discord/Jira deliveries may target (save + send enforced) |
-| `TRUSTED_PROXIES` | (empty) | No | CIDRs allowed to set X-Forwarded-For; compose sets `172.16.0.0/12` for bundled nginx |
+| `TRUSTED_PROXIES` | (empty) | No | CIDRs allowed to set X-Forwarded-For; compose sets `172.28.0.0/16` (fixed `sentinelnet` subnet for bundled nginx) |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
