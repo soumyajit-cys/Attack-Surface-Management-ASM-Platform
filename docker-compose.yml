@@ -4,6 +4,8 @@ services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    networks:
+      - sentinelnet
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-sentinelasm}
       POSTGRES_USER: ${POSTGRES_USER:-sentinel}
@@ -20,6 +22,8 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
+    networks:
+      - sentinelnet
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
@@ -33,6 +37,8 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    networks:
+      - sentinelnet
     env_file:
       - .env
     environment:
@@ -54,6 +60,8 @@ services:
   worker:
     build: ./backend
     restart: unless-stopped
+    networks:
+      - sentinelnet
     env_file:
       - .env
     environment:
@@ -77,6 +85,8 @@ services:
   beat:
     build: ./backend
     restart: unless-stopped
+    networks:
+      - sentinelnet
     env_file:
       - .env
     environment:
@@ -92,6 +102,8 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
+    networks:
+      - sentinelnet
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80/"]
       interval: 30s
@@ -102,6 +114,8 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
+    networks:
+      - sentinelnet
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
@@ -125,3 +139,12 @@ services:
 volumes:
   pgdata:
   redisdata:
+
+networks:
+  sentinelnet:
+    name: sentinelasm_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
