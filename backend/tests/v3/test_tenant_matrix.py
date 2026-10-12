@@ -251,7 +251,8 @@ def test_route_table_complete():
     """Every /api/v1 route is either covered below or explicitly exempt."""
     routes = _route_table()
     assert routes, "no API routes introspected"
-    missing = routes - COVERED_ID_ROUTES - COVERED_LIST_ROUTES - NO_TENANT_DATA
+    missing = (routes - COVERED_ID_ROUTES - COVERED_LIST_ROUTES
+               - COVERED_ELSEWHERE - NO_TENANT_DATA)
     assert not missing, f"routes without tenant-matrix coverage: {sorted(missing)}"
 
 

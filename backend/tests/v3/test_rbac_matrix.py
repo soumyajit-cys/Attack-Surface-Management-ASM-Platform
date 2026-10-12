@@ -272,6 +272,8 @@ def test_role_matrix_writes(client, db, rbac, monkeypatch):
     denied = [
         ("POST", "/api/v1/organizations/invitations",
          {"email": "x@example.com", "role": "viewer"}),
+        ("POST", "/api/v1/auth/admin/unlock-account",
+         {"username": "x"}),
         ("POST", "/api/v1/organizations/api-keys", {"name": "k"}),
         ("POST", "/api/v1/alerting/integrations",
          {"name": "h", "channel": "slack",
