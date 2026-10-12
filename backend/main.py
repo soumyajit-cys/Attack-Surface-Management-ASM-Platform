@@ -1,8 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from contextlib import asynccontextmanager
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+
+import hmac
+import ipaddress
 
 from app.api.v1.router import api_v1_router
 from app.core.config import settings, validate_runtime_config
@@ -60,6 +63,37 @@ async def health():
     return {"status": "ok"}
 
 
+def metrics_allowed(request: Request) -> bool:
+    """Deny-by-default gate for /metrics (Phase 1.5.5).
+
+    Admits requests whose direct peer IP is inside METRICS_ALLOWED_CIDRS or
+    whose Authorization bearer constant-time-matches METRICS_BEARER_TOKEN.
+    The peer check uses the connection IP on purpose: honoring
+    X-Forwarded-For here would let anyone mint access with a header.
+    """
+    peer = request.client.host if request.client else None
+    if peer:
+        for part in settings.metrics_allowed_cidrs.split(","):
+            text = part.strip()
+            if not text:
+                continue
+            try:
+                if ipaddress.ip_address(peer) in ipaddress.ip_network(
+                        text, strict=False):
+                    return True
+            except ValueError:
+                continue
+    expected = settings.metrics_bearer_token
+    auth = request.headers.get("authorization", "")
+    if expected and auth.startswith("Bearer "):
+        return hmac.compare_digest(auth[len("Bearer "):], expected)
+    return False
+
+
 @app.get("/metrics")
-async def metrics():
+async def metrics(request: Request):
+    from app.core.errors import UnauthenticatedError
+
+    if not metrics_allowed(request):
+        raise UnauthenticatedError("Metrics unavailable")
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

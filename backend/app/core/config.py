@@ -122,6 +122,13 @@ class Settings(BaseSettings):
     login_lockout_base_seconds: int = 60
     login_lockout_max_seconds: int = 900
 
+    # /metrics access (Phase 1.5): deny by default. Admit a request carrying
+    # a bearer token equal to METRICS_BEARER_TOKEN (constant-time compare)
+    # or arriving from a peer inside METRICS_ALLOWED_CIDRS. The peer check
+    # deliberately uses the direct connection IP, never X-Forwarded-For.
+    metrics_bearer_token: str = ""
+    metrics_allowed_cidrs: str = "127.0.0.1/32"
+
     # Comma-separated Fernet keys for secrets at rest. The FIRST key
     # encrypts; ALL keys decrypt (rotation: prepend the new key, re-encrypt,
     # drop the old). See app/core/crypto.py.
