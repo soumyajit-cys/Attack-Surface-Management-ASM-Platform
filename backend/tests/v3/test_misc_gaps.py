@@ -28,12 +28,10 @@ def test_health_open(client):
     assert response.json() == {"status": "ok"}
 
 
-def test_metrics_currently_public(client):
-    """1.5-FLIP: /metrics answers without auth today; auth hardening must
-    gate it (expect this test to fail then and be updated to assert 401)."""
+def test_metrics_is_gated_by_default(client):
+    """1.5.5: /metrics denies anonymous requests (was public pre-1.5)."""
     response = client.get("/metrics")
-    assert response.status_code == 200
-    assert b"sentinelasm_" in response.content
+    assert response.status_code == 401
 
 
 def test_registry_import_failure_logged_and_skipped(monkeypatch, caplog):
