@@ -85,6 +85,13 @@ class RateLimitedError(AppError):
     code = "rate_limited"
 
 
+class ServiceUnavailableError(AppError):
+    """Dependency outage: uniform 503, generic message, no internals."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "service_unavailable"
+
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error_handler(_: Request, exc: AppError) -> JSONResponse:
