@@ -155,6 +155,16 @@ documented there). `make setup` creates both without overwriting existing files.
 | `OSV_API_URL` / `_TIMEOUT_SECONDS` / `_ENABLED` | `https://api.osv.dev/v1/query` / `10.0` / `True` | No | CVE enrichment feed |
 | `WEBHOOK_ALLOWED_PORTS` | `443,8443` | No | Ports Slack/Discord/Jira deliveries may target (save + send enforced) |
 | `TRUSTED_PROXIES` | (empty) | No | CIDRs allowed to set X-Forwarded-For; compose sets `172.28.0.0/16` (fixed `sentinelnet` subnet for bundled nginx) |
+| `LOGIN_MAX_ATTEMPTS` | `5` | No | Failed logins before lockout engages |
+| `LOGIN_ATTEMPT_WINDOW_SECONDS` | `300` | No | Sliding window for counting failures |
+| `LOGIN_LOCKOUT_BASE_SECONDS` | `60` | No | First lock duration; doubles per engagement |
+| `LOGIN_LOCKOUT_MAX_SECONDS` | `900` | No | Cap on lock duration |
+
+Rate limiting and login lockout are separate layers: the limiter caps request
+volume per client IP (slowapi, Redis-backed; see `TRUSTED_PROXIES`), while
+lockout stops credential guessing per account and per IP with exponential
+backoff (`auth/lockout.py`). Either one alone returns the same generic
+401 envelope, so clients cannot tell which fired.
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |

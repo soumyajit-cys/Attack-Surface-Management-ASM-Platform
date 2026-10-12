@@ -33,6 +33,7 @@ from app.core.permissions import permissions_for_role
 from app.db.session import get_db
 from app.api.deps import current_principal, Principal
 from app.schemas.auth import MessageOut, TokenBundle, UserOut
+from utils.logger import logger
 from utils.rate_limiter import limiter
 from services.alerts.email_service import send_email
 
@@ -125,11 +126,72 @@ async def login(
     data: LoginRequest,
     db: Session = Depends(get_db),
 ) -> TokenBundle:
+    from auth import lockout as lockout_mod
+    from auth.security import DUMMY_PASSWORD_HASH, DUMMY_PASSWORD_PREIMAGE
+    from utils.logger import logger
+
+    identifier = data.username.strip().lower()
+    ip = client_ip(request) or "unknown"
+    acct, ipc = lockout_mod.account_counter(), lockout_mod.ip_counter()
+
+    # Lock state first: Redis loss fails closed with the generic response
+    # (identical to unknown-user/wrong-password; see test_redis_down_*).
+    try:
+        acct_locked = acct.is_locked(identifier)
+        ip_locked = ipc.is_locked(ip)
+    except lockout_mod.LockoutUnavailable:
+        logger.warning("lockout store unreachable, failing login closed")
+        raise UnauthenticatedError("Invalid credentials")
+
     user: User | None = (
         db.query(User).filter(User.username == data.username).first()
     )
+    # Always burn exactly one bcrypt so unknown, wrong, and locked attempts
+    # share a timing shape (dummy constant for unknown users).
+    if user is None:
+        password_ok = verify_password(
+            DUMMY_PASSWORD_PREIMAGE, DUMMY_PASSWORD_HASH)
+    else:
+        password_ok = verify_password(data.password, user.password_hash)
 
-    if user is None or not verify_password(data.password, user.password_hash):
+    if acct_locked or ip_locked:
+        # Locked accounts reject even correct passwords until expiry.
+        # No remaining-time or lock-status leaks to the client.
+        raise UnauthenticatedError("Invalid credentials")
+
+    if user is None or not password_ok:
+        try:
+            engaged, seconds, scope = False, 0, ""
+            if user is not None:
+                engaged, seconds = acct.register_failure(identifier)
+                scope = "account"
+            ip_engaged, ip_seconds = ipc.register_failure(ip)
+            if ip_engaged and not engaged:
+                engaged, seconds, scope = True, ip_seconds, "ip"
+            if engaged:
+                key = (acct._key(identifier) if scope == "account"
+                       else ipc._key(ip))
+                if user is not None:
+                    # AuditLog.organization_id is FK non-nullable, so only
+                    # known-user lockouts are audited; unknown-user IP
+                    # lockouts are logged server-side instead.
+                    record_audit(
+                        db,
+                        organization_id=user.organization_id,
+                        actor=data.username,
+                        action="auth.account_locked",
+                        details={"key": key, "scope": scope,
+                                 "lock_seconds": seconds},
+                        request=request,
+                    )
+                    db.commit()
+                else:
+                    logger.warning(
+                        "IP lockout engaged (unknown-user flood): key=%s "
+                        "lock_seconds=%s", key, seconds)
+        except lockout_mod.LockoutUnavailable:
+            logger.warning("lockout store unreachable during failure "
+                           "recording; failing login closed")
         if user is not None:
             record_audit(
                 db,
@@ -144,6 +206,12 @@ async def login(
 
     if not user.is_active:
         raise BadRequestError("Account is disabled", code="account_disabled")
+
+    try:
+        acct.register_success(identifier)
+    except lockout_mod.LockoutUnavailable:
+        # Counter keeps its (decaying) state; erring toward locked is safe.
+        logger.warning("lockout store unreachable during success reset")
 
     bundle = _issue_tokens(db, user)
     record_audit(

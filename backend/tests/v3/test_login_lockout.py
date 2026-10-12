@@ -30,7 +30,6 @@ def _lockout():
     return lockout
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-LOCK-001: lockout not implemented")
 def test_account_locks_after_threshold(client, db):
     _register(client, "lockme")
     for _ in range(5):
@@ -45,7 +44,6 @@ def test_account_locks_after_threshold(client, db):
     assert event is not None
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-LOCK-001: lockout not implemented")
 def test_locked_rejects_correct_password(client):
     _register(client, "lockcorrect")
     for _ in range(5):
@@ -54,7 +52,6 @@ def test_locked_rejects_correct_password(client):
     assert response.status_code == 401
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-LOCK-001: lockout not implemented")
 def test_locked_unknown_wrong_identical(client):
     _register(client, "lockshape")
     for _ in range(5):
@@ -69,7 +66,6 @@ def test_locked_unknown_wrong_identical(client):
         "content-type") == wrong.headers.get("content-type")
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-LOCK-001: lockout not implemented")
 def test_dummy_bcrypt_timing_shape(client, monkeypatch):
     from auth import security
     import app.api.v1.auth as auth_api
@@ -84,7 +80,10 @@ def test_dummy_bcrypt_timing_shape(client, monkeypatch):
     monkeypatch.setattr(auth_api, "verify_password", counting)
     _register(client, "lockcount")
     _login(client, "nosuchuser", "wrong")
-    assert calls == ["wrong"]
+    # Unknown users burn the dummy constant, never the submitted password.
+    from auth.security import DUMMY_PASSWORD_PREIMAGE
+
+    assert calls == [DUMMY_PASSWORD_PREIMAGE]
     for _ in range(5):
         _login(client, "lockcount", "wrong")
     before = len(calls)
@@ -93,7 +92,14 @@ def test_dummy_bcrypt_timing_shape(client, monkeypatch):
 
 
 def test_success_resets_account_counter(client, db):
-    """A success clears consecutive failures: 4+success+4 never locks."""
+    """A success clears consecutive account failures.
+
+    4 fails + success + 4 fails: the account counter restarts, so no
+    ACCOUNT-scoped lockout fires. The shared test-client IP still trips the
+    independent IP counter (proving the two scopes are separate).
+    """
+    import json
+
     _register(client, "lockreset")
     for _ in range(4):
         _login(client, "lockreset", "wrong")
@@ -102,11 +108,13 @@ def test_success_resets_account_counter(client, db):
 
     for _ in range(4):
         assert _login(client, "lockreset", "wrong").status_code == 401
-    assert db.query(AuditLog).filter(
-        AuditLog.action == "auth.account_locked").count() == 0
+    events = db.query(AuditLog).filter(
+        AuditLog.action == "auth.account_locked").all()
+    assert events, "expected the IP scope to engage independently"
+    for event in events:
+        assert json.loads(event.details)["scope"] == "ip"
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-LOCK-001: lockout not implemented")
 def test_exponential_backoff_capped():
     counter = _lockout().AttemptCounter(
         "test", max_attempts=2, window_s=60, base_s=10, cap_s=25,
@@ -117,7 +125,6 @@ def test_exponential_backoff_capped():
     assert counter._backoff_seconds(10) == 25
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-LOCK-001: lockout not implemented")
 def test_keys_hashed_and_normalized():
     counter = _lockout().AttemptCounter(
         "test", max_attempts=5, window_s=60, base_s=60, cap_s=900,
@@ -127,7 +134,6 @@ def test_keys_hashed_and_normalized():
     assert counter._key("alice@example.com") == key
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-LOCK-001: lockout not implemented")
 def test_redis_down_fails_closed(client, db, monkeypatch):
     from utils import redis_client
 

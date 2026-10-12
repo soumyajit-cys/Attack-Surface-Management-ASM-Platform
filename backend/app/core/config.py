@@ -113,6 +113,15 @@ class Settings(BaseSettings):
     # audit log, and lockout see real client IPs (see utils/client_ip.py).
     trusted_proxies: str = ""
 
+    # Login lockout (Phase 1.5): per-account and per-IP failed-attempt
+    # counters with a sliding window and exponential backoff (see
+    # auth/lockout.py). Separate from rate limiting: the limiter caps
+    # request volume, lockout stops credential guessing per identity.
+    login_max_attempts: int = 5
+    login_attempt_window_seconds: int = 300
+    login_lockout_base_seconds: int = 60
+    login_lockout_max_seconds: int = 900
+
     # Comma-separated Fernet keys for secrets at rest. The FIRST key
     # encrypts; ALL keys decrypt (rotation: prepend the new key, re-encrypt,
     # drop the old). See app/core/crypto.py.
