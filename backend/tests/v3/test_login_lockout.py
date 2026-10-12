@@ -134,7 +134,7 @@ def test_keys_hashed_and_normalized():
     assert counter._key("alice@example.com") == key
 
 
-def test_redis_down_fails_closed(client, db, monkeypatch):
+def test_redis_down_returns_uniform_503(client, db, monkeypatch):
     from utils import redis_client
 
     _register(client, "lockdown")
@@ -145,5 +145,6 @@ def test_redis_down_fails_closed(client, db, monkeypatch):
     monkeypatch.setattr(redis_client, "get_redis", dead)
     first = _login(client, "lockdown", "password123")
     second = _login(client, "nosuchuser", "wrong")
-    assert first.status_code == 401
+    assert first.status_code == 503
     assert first.json() == second.json()
+    assert first.json()["error"]["code"] == "auth_unavailable"

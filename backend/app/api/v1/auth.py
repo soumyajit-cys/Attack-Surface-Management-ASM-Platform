@@ -139,9 +139,15 @@ async def login(
     try:
         acct_locked = acct.is_locked(identifier)
         ip_locked = ipc.is_locked(ip)
-    except lockout_mod.LockoutUnavailable:
-        logger.warning("lockout store unreachable, failing login closed")
-        raise UnauthenticatedError("Invalid credentials")
+    except lockout_mod.LockoutUnavailable as exc:
+        from app.core.errors import ServiceUnavailableError
+
+        logger.error("lockout store unreachable during login: %s",
+                     type(exc).__name__)
+        raise ServiceUnavailableError(
+            "Authentication temporarily unavailable",
+            code="auth_unavailable",
+        )
 
     user: User | None = (
         db.query(User).filter(User.username == data.username).first()

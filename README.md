@@ -164,7 +164,9 @@ Rate limiting and login lockout are separate layers: the limiter caps request
 volume per client IP (slowapi, Redis-backed; see `TRUSTED_PROXIES`), while
 lockout stops credential guessing per account and per IP with exponential
 backoff (`auth/lockout.py`). Either one alone returns the same generic
-401 envelope, so clients cannot tell which fired.
+401 envelope, so clients cannot tell which fired. If the Redis backing the
+counters is unreachable, login returns a uniform 503 (`auth_unavailable`)
+for every user and password instead.
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
