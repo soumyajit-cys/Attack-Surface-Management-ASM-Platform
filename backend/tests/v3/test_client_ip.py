@@ -29,8 +29,6 @@ def _helper():
     return get_client_ip
 
 
-@pytest.mark.xfail(
-    strict=True, reason="BUG-IP-001: get_client_ip helper does not exist yet")
 def test_spoofed_header_ignored_from_untrusted_peer(monkeypatch):
     import app.core.config as config_mod
 
@@ -39,8 +37,6 @@ def test_spoofed_header_ignored_from_untrusted_peer(monkeypatch):
     assert _helper()(request) == "203.0.113.9"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="BUG-IP-001: get_client_ip helper does not exist yet")
 def test_header_honored_from_trusted_peer(monkeypatch):
     import app.core.config as config_mod
 
@@ -50,8 +46,6 @@ def test_header_honored_from_trusted_peer(monkeypatch):
     assert _helper()(request) == "203.0.113.9"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="BUG-IP-001: get_client_ip helper does not exist yet")
 def test_rightmost_untrusted_hop(monkeypatch):
     import app.core.config as config_mod
 
@@ -63,8 +57,6 @@ def test_rightmost_untrusted_hop(monkeypatch):
     assert _helper()(request) == "198.51.100.99"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="BUG-IP-001: get_client_ip helper does not exist yet")
 def test_ipv6_and_malformed(monkeypatch):
     import app.core.config as config_mod
 
@@ -78,8 +70,6 @@ def test_ipv6_and_malformed(monkeypatch):
     assert _helper()(all_junk) == "2001:db8::1"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="BUG-IP-001: get_client_ip helper does not exist yet")
 def test_all_trusted_chain_uses_leftmost(monkeypatch):
     import app.core.config as config_mod
 
@@ -89,9 +79,6 @@ def test_all_trusted_chain_uses_leftmost(monkeypatch):
     assert _helper()(request) == "10.1.1.1"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="BUG-IP-002: limiter keys on X-Forwarded-For first, "
-    "so rotating the header resets the bucket")
 def test_limiter_key_ignores_spoofed_header(client):
     """Rotating X-Forwarded-For must not reset the login limit (default:
     TRUSTED_PROXIES empty, TestClient peer untrusted)."""

@@ -107,6 +107,12 @@ class Settings(BaseSettings):
     # target. Anything else is rejected at save time and send time.
     webhook_allowed_ports: str = "443,8443"
 
+    # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
+    # X-Forwarded-For. Default empty trusts nothing: the header is ignored
+    # and the direct peer is used. Set behind nginx/traefik so the limiter,
+    # audit log, and lockout see real client IPs (see utils/client_ip.py).
+    trusted_proxies: str = ""
+
     # Comma-separated Fernet keys for secrets at rest. The FIRST key
     # encrypts; ALL keys decrypt (rotation: prepend the new key, re-encrypt,
     # drop the old). See app/core/crypto.py.

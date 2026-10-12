@@ -18,15 +18,14 @@ logger = logging.getLogger("sentinelasm.audit")
 
 
 def client_ip(request: Request | None) -> str | None:
-    """Best-effort client IP. Only trusts X-Forwarded-For when a single hop."""
+    """Best-effort client IP. Delegates to the single source of truth
+    (:func:`utils.client_ip.get_client_ip`) so audit, rate limiting, and
+    lockout agree. Only trusts X-Forwarded-For behind TRUSTED_PROXIES."""
     if request is None:
         return None
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        first_hop = forwarded.split(",")[0].strip()
-        if first_hop:
-            return first_hop
-    return request.client.host if request.client else None
+    from utils.client_ip import get_client_ip
+
+    return get_client_ip(request)
 
 
 def record_audit(

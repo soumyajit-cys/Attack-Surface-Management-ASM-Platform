@@ -1,6 +1,5 @@
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request, FastAPI
 from fastapi.responses import JSONResponse
@@ -26,9 +25,12 @@ def redact_redis_url(url: str) -> str:
 
 
 def get_client_identifier(request: Request) -> str:
-    if request.headers.get("X-Forwarded-For"):
-        return request.headers.get("X-Forwarded-For").split(",")[0].strip()
-    return get_remote_address(request)
+    # Single source (utils.client_ip): X-Forwarded-For is honored only behind
+    # TRUSTED_PROXIES, so spoofing the header cannot rotate the limiter key.
+    # Falls back to the direct peer; "unknown" only if even that is missing.
+    from utils.client_ip import get_client_ip
+
+    return get_client_ip(request) or "unknown"
 
 
 limiter = Limiter(
