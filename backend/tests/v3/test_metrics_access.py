@@ -57,13 +57,11 @@ def test_metrics_spoofed_xff_grants_nothing(client, monkeypatch):
     assert response.status_code == 401
 
 
+@pytest.mark.xfail(strict=True, reason="BUG-METRICS-001: helper missing")
 def test_metrics_cidr_helper():
     """Unit: peer-CIDR admission never consults X-Forwarded-For."""
-    try:
-        from main import metrics_allowed
-    except ImportError:
-        pytest.xfail("BUG-METRICS-001: metrics_allowed helper missing",
-                     strict=True)
+    from main import metrics_allowed
+
     import app.core.config as config_mod
 
     config_mod.settings.metrics_allowed_cidrs = "127.0.0.1/32"
