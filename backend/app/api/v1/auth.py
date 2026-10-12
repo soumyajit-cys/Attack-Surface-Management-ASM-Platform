@@ -58,6 +58,7 @@ def _issue_tokens(db: Session, user: User) -> TokenBundle:
     org = db.get(Organization, user.organization_id)
     access = token_service.create_access_token(user.id)
     refresh = token_service.create_refresh_token(user.id)
+    token_store.store_access(access, user.id)
     token_store.store_refresh(refresh, user.id)
     return TokenBundle(
         access_token=access,
@@ -253,6 +254,31 @@ async def refresh(
 
     user_id = int(payload["sub"])
     if not token_store.refresh_valid(data.refresh_token, user_id):
+        # Reuse signal: a revoked-but-decodable refresh token means the
+        # bearer holds a rotated-out credential (theft indicator). Burn the
+        # whole family so the thief's copy and the victim's current tokens
+        # all die, audit it, and answer with the generic 401.
+        if token_store.is_revoked(data.refresh_token):
+            revoked = token_store.revoke_family(user_id)
+            user = db.get(User, user_id)
+            if user is not None:
+                # AuditLog.organization_id is FK non-nullable: users that
+                # vanished since issuance get a server log line instead.
+                record_audit(
+                    db,
+                    organization_id=user.organization_id,
+                    actor=user.username,
+                    action="auth.refresh_reuse",
+                    details={"revoked_tokens": revoked},
+                    request=request,
+                )
+                db.commit()
+            else:
+                from utils.logger import logger
+
+                logger.warning(
+                    "refresh reuse for unknown user id=%s revoked=%s",
+                    user_id, revoked)
         raise UnauthenticatedError("Refresh token expired or revoked")
 
     user = db.get(User, user_id)
@@ -400,11 +426,20 @@ async def reset_password(
 
     user.password_hash = hash_password(data.new_password)
     token_store.mark_reset_used(data.token)
+    revoked = token_store.revoke_family(user.id)
     record_audit(
         db,
         organization_id=user.organization_id,
         actor=user.username,
         action="auth.reset_password",
+        request=request,
+    )
+    record_audit(
+        db,
+        organization_id=user.organization_id,
+        actor=user.username,
+        action="auth.sessions_revoked",
+        details={"revoked_tokens": revoked, "reason": "password_reset"},
         request=request,
     )
     db.commit()
