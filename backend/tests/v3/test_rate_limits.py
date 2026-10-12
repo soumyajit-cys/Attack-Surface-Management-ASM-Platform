@@ -182,9 +182,11 @@ def test_health_exempt_from_limiter(sterile):
 
 
 def test_metrics_stays_limited(sterile):
-    """Deliberate: /metrics keeps the 60/min default (scrapes are ~4/min)."""
+    """Deliberate: /metrics keeps the 60/min default (scrapes are ~4/min).
+
+    Denied requests still consume limit budget: 60×401, then 429."""
     for _ in range(60):
-        assert sterile.get("/metrics").status_code == 200
+        assert sterile.get("/metrics").status_code == 401
     assert sterile.get("/metrics").status_code == 429
 
 
