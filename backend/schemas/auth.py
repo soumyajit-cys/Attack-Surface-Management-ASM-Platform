@@ -28,6 +28,10 @@ class LogoutRequest(BaseModel):
     access_token: str | None = None
 
 
+class UnlockAccountRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=128)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

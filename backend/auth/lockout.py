@@ -120,6 +120,17 @@ class AttemptCounter:
         except Exception as exc:
             raise LockoutUnavailable(str(exc)) from exc
 
+    def clear(self, ref: str) -> int:
+        """Remove ALL lockout state (admin early-unlock). Returns keys cleared."""
+        try:
+            return self._redis().delete(
+                self._key(ref) + ":hits",
+                self._key(ref) + ":until",
+                self._key(ref) + ":locks",
+            )
+        except Exception as exc:
+            raise LockoutUnavailable(str(exc)) from exc
+
 
 def _counter(prefix: str, client=None) -> AttemptCounter:
     from app.core.config import settings

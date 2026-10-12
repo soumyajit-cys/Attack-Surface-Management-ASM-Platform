@@ -24,6 +24,7 @@ from schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    UnlockAccountRequest,
 )
 
 from app.core.audit import client_ip, record_audit
@@ -31,7 +32,8 @@ from app.core.config import settings
 from app.core.errors import BadRequestError, ConflictError, UnauthenticatedError
 from app.core.permissions import permissions_for_role
 from app.db.session import get_db
-from app.api.deps import current_principal, Principal
+from app.api.deps import current_principal, Principal, require_permissions_dep
+from app.core.permissions import Permission
 from app.schemas.auth import MessageOut, TokenBundle, UserOut
 from utils.logger import logger
 from utils.rate_limiter import limiter
@@ -167,13 +169,19 @@ async def login(
 
     if user is None or not password_ok:
         try:
+            # Account takes precedence: when it engages, the identity is
+            # contained and the IP is NOT also charged for this attempt.
+            # This keeps admin unlock coherent (releasing the account
+            # releases the login) while the IP counter still catches
+            # multi-account floods from one source.
             engaged, seconds, scope = False, 0, ""
             if user is not None:
                 engaged, seconds = acct.register_failure(identifier)
                 scope = "account"
-            ip_engaged, ip_seconds = ipc.register_failure(ip)
-            if ip_engaged and not engaged:
-                engaged, seconds, scope = True, ip_seconds, "ip"
+            if not engaged:
+                ip_engaged, ip_seconds = ipc.register_failure(ip)
+                if ip_engaged:
+                    engaged, seconds, scope = True, ip_seconds, "ip"
             if engaged:
                 key = (acct._key(identifier) if scope == "account"
                        else ipc._key(ip))
@@ -299,6 +307,43 @@ async def logout(
             token_store.revoke(data.access_token)
 
     return MessageOut(message="logged out")
+
+
+@router.post("/admin/unlock-account", response_model=MessageOut)
+async def admin_unlock_account(
+    request: Request,
+    data: UnlockAccountRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(
+        require_permissions_dep(Permission.ORG_MANAGE)),
+) -> MessageOut:
+    """Clear a user's login-lockout counters (admin early-unlock).
+
+    Scoped to the caller's organization: other tenants' users (and unknown
+    usernames) get the identical 404. Writes an audit event on success.
+    """
+    from app.core.errors import NotFoundError
+    from auth import lockout as lockout_mod
+
+    target: User | None = (
+        db.query(User)
+        .filter(User.username == data.username,
+                User.organization_id == principal.organization_id)
+        .first()
+    )
+    if target is None:
+        raise NotFoundError("User not found", code="user_not_found")
+    cleared = lockout_mod.account_counter().clear(data.username)
+    record_audit(
+        db,
+        organization_id=principal.organization_id,
+        actor=principal.user.username,
+        action="auth.account_unlocked",
+        details={"username": data.username, "cleared_keys": cleared},
+        request=request,
+    )
+    db.commit()
+    return MessageOut(message="Account unlocked")
 
 
 @router.post("/forgot-password", response_model=MessageOut)

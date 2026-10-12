@@ -148,3 +148,63 @@ def test_redis_down_returns_uniform_503(client, db, monkeypatch):
     assert first.status_code == 503
     assert first.json() == second.json()
     assert first.json()["error"]["code"] == "auth_unavailable"
+
+
+def _unlock(client, headers, username):
+    return client.post("/api/v1/auth/admin/unlock-account",
+                       json={"username": username}, headers=headers)
+
+
+def test_admin_unlock_releases_lock(client, db):
+    from models.audit_log import AuditLog
+
+    admin_h = _register(client, "lockadmin", org="Lock Admin Org")
+    admin_headers = {"Authorization": f"Bearer {admin_h['access_token']}"}
+    _register(client, "lockvictim", org="Lock Victim Tmp Org")
+    # Same tenant: move the victim into the admin's org.
+    from models.user import User
+
+    admin_org = db.query(User).filter(
+        User.username == "lockadmin").one().organization_id
+    db.query(User).filter(
+        User.username == "lockvictim").one().organization_id = admin_org
+    db.commit()
+    for _ in range(5):
+        _login(client, "lockvictim", "wrong")
+    assert _login(client, "lockvictim", "password123").status_code == 401
+    unlocked = _unlock(client, admin_headers, "lockvictim")
+    assert unlocked.status_code == 200, unlocked.text
+    assert _login(client, "lockvictim", "password123").status_code == 200
+    event = db.query(AuditLog).filter(
+        AuditLog.action == "auth.account_unlocked").order_by(
+            AuditLog.id.desc()).first()
+    assert event is not None
+    assert "lockvictim" in (event.details or "")
+
+
+def test_unlock_forbidden_for_non_admins(client, db):
+    from models.user import User
+
+    _register(client, "lockadmin2")
+    for username, role in (("lockanalyst", "analyst"),
+                           ("lockviewer", "viewer")):
+        _register(client, username, org=f"Lock {username} Org")
+        db.query(User).filter(User.username == username).one().role = role
+        db.commit()
+    for username in ("lockanalyst", "lockviewer"):
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "password123"})
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        # They lack ORG_MANAGE anywhere, so any target 403s.
+        assert _unlock(client, headers, "lockadmin2").status_code == 403
+
+
+def test_unlock_cross_org_matches_unknown(client, db):
+    admin_h = _register(client, "lockadmin3", org="Lock Admin3 Org")
+    admin_headers = {"Authorization": f"Bearer {admin_h['access_token']}"}
+    _register(client, "lockother", org="Lock Other Org")
+    cross = _unlock(client, admin_headers, "lockother")
+    missing = _unlock(client, admin_headers, "nosuchuser")
+    assert cross.status_code == missing.status_code == 404
+    assert cross.json() == missing.json()
