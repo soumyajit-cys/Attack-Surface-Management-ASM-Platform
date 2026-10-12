@@ -14,7 +14,7 @@ PASSWORD_RESET = "password_reset"
 CLOCK_SKEW_LEEWAY = timedelta(seconds=5)
 
 #: Claims every token must carry. Missing claims fail closed in
-#: :func:`decode_token` (BUG-JWT-001 class: python-jose accepted them).
+#: :func:`decode_token` (the previous library accepted them).
 REQUIRED_CLAIMS = ["exp", "iat", "jti", "sub"]
 
 

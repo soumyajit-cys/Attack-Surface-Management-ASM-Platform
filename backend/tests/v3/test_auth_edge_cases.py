@@ -131,7 +131,7 @@ def test_g6_missing_and_invalid_claims(client, db):
 
     _register(client, "g6claims")
     secret = tokens.settings.jwt_secret_for_use
-    from jose import jwt as pyjwt
+    import jwt as pyjwt
 
     now = datetime.now(timezone.utc)
     no_sub = pyjwt.encode(
