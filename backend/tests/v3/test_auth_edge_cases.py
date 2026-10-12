@@ -91,7 +91,9 @@ def test_g6_access_dead_after_logout(client):
 
 
 def test_g6_refresh_reuse_after_rotation_rejected(client):
-    """G6.6: rotated-out refresh token is single-use (maps test_auth rotation)."""
+    """G6.6 (1.5.6 behavior): replaying a rotated-out refresh burns the
+    whole family -- the rotated-in token dies too (see
+    test_session_hygiene.py::test_refresh_reuse_revokes_family)."""
     bundle = _register(client, "g6reuse")
     first = client.post(
         "/api/v1/auth/refresh",
@@ -101,11 +103,11 @@ def test_g6_refresh_reuse_after_rotation_rejected(client):
         "/api/v1/auth/refresh",
         json={"refresh_token": bundle["refresh_token"]})
     assert replay.status_code == 401
-    # The rotated-in token still works.
+    # Family-wide revocation: the rotated-in token no longer works either.
     second = client.post(
         "/api/v1/auth/refresh",
         json={"refresh_token": first.json()["refresh_token"]})
-    assert second.status_code == 200
+    assert second.status_code == 401
 
 
 def test_g6_reset_token_expiry(client, db):

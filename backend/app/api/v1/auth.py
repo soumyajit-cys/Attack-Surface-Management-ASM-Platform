@@ -287,6 +287,7 @@ async def refresh(
 
     access = token_service.create_access_token(user.id)
     new_refresh = token_service.create_refresh_token(user.id)
+    token_store.store_access(access, user.id)
     token_store.rotate(data.refresh_token, new_refresh, user.id)
 
     record_audit(

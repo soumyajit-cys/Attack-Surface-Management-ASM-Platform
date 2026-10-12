@@ -114,7 +114,17 @@ class TokenStore:
                 ex=_ttl_seconds(old_payload),
             )
             self.client.delete(REFRESH_KEY.format(jti=old_jti))
-        self.store_refresh(new_token, user_id)
+        new_payload = token_service.decode_token(new_token)
+        new_jti = new_payload.get("jti")
+        if new_jti:
+            ttl = _ttl_seconds(new_payload)
+            self.client.set(
+                REFRESH_KEY.format(jti=new_jti),
+                json.dumps({"user_id": user_id, "parent": old_jti}),
+                ex=ttl,
+            )
+            self.client.sadd(SESSIONS_KEY.format(user_id=user_id), new_jti)
+            self.client.expire(SESSIONS_KEY.format(user_id=user_id), ttl)
 
     def revoke(self, token: str) -> None:
         payload = token_service.decode_token(token)

@@ -26,7 +26,6 @@ def _login(client, username, password="password123"):
     return response.json()
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-SESS-001: no reuse detection")
 def test_refresh_reuse_revokes_family(client, db):
     _register(client, "sessreuse")
     first = _login(client, "sessreuse")
@@ -53,7 +52,6 @@ def test_refresh_reuse_revokes_family(client, db):
     assert event is not None
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-SESS-002: reset keeps sessions")
 def test_password_reset_revokes_all_sessions(client, db):
     from auth import jwt as tokens
     from models.user import User
