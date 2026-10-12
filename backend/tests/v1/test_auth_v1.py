@@ -75,13 +75,15 @@ def test_refresh_rotation_and_replay_rejected(client):
     assert first.status_code == 200
     new_refresh = first.json()["refresh_token"]
 
-    # Replaying the OLD refresh token must fail.
+    # Replaying the OLD refresh token must fail -- and per 1.5.6 session
+    # hygiene the replay burns the whole family, so the rotated token dies
+    # too (theft indicator). See test_session_hygiene.py for the audit proof.
     replay = client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert replay.status_code == 401
 
-    # The rotated token still works.
+    # The rotated token no longer works after the replay above.
     second = client.post("/api/v1/auth/refresh", json={"refresh_token": new_refresh})
-    assert second.status_code == 200
+    assert second.status_code == 401
 
 
 def test_logout_revokes_refresh_token(client):
