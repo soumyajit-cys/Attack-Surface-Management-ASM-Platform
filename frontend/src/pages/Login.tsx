@@ -142,6 +142,7 @@ export function Login() {
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign in'}
             </button>
           </form>
+          )}
 
           <div className="mt-6 text-center">
             <p className="text-gray-600">
