@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Check, Copy, Download } from 'lucide-react'
 
 interface RecoveryCodesDisplayProps {
