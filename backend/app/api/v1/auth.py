@@ -10,6 +10,7 @@ Parity with the legacy ``/auth`` routes plus:
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, exc as orm_exc
+from datetime import datetime, timezone
 
 from auth import jwt as token_service
 from auth.roles import ROLE_ADMIN
@@ -18,11 +19,17 @@ from auth.token_store import token_store
 from models.user import User
 from models.organization import Organization
 from schemas.auth import (
+    ConfirmRequest,
+    EnrollRequest,
     ForgotPasswordRequest,
+    Login2FARequest,
     LoginRequest,
     LogoutRequest,
+    ReauthRequest,
     RefreshRequest,
     RegisterRequest,
+    Requirement2FARequest,
+    Reset2FARequest,
     ResetPasswordRequest,
     UnlockAccountRequest,
 )
