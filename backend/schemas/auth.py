@@ -51,10 +51,6 @@ class Login2FARequest(BaseModel):
     code: str = Field(min_length=1, max_length=32)
 
 
-class Requirement2FARequest(BaseModel):
-    enabled: bool
-
-
 class Reset2FARequest(BaseModel):
     username: str = Field(min_length=1, max_length=128)
 
