@@ -54,6 +54,15 @@ def _totp_code(secret):
     return pyotp.TOTP(secret).now()
 
 
+def _next_code(secret):
+    """Code for the next 30 s step: survives same-step replay protection."""
+    import time
+
+    import pyotp
+
+    return pyotp.TOTP(secret).at(int(time.time()) + 30)
+
+
 def _enable_2fa(client, headers, password="password123"):
     enrolled = client.post("/api/v1/auth/2fa/enroll",
                            json={"password": password}, headers=headers)
@@ -172,7 +181,7 @@ def test_2fa_exchange_totp_replay_and_recovery(client, tfa, db):
         "/api/v1/auth/login",
         json={"username": "tfaexchange", "password": "password123"})
     challenge = login.json()["challenge"]
-    code = _totp_code(secret)
+    code = _next_code(secret)
     exchanged = client.post("/api/v1/auth/login/2fa",
                             json={"challenge": challenge, "code": code})
     assert exchanged.status_code == 200, exchanged.text
