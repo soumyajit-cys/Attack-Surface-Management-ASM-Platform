@@ -26,8 +26,7 @@ export function Login() {
         return
       }
       if ('scope' in result && result.scope === 'enroll_2fa') {
-        api.accessToken = result.token
-        localStorage.setItem('access_token', result.token)
+        api.useRestrictedToken(result.token)
         navigate('/setup-2fa')
         return
       }

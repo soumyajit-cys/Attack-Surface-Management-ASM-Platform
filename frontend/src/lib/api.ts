@@ -149,10 +149,19 @@ class ApiClient {
     )
   }
 
-  setTokens(access: string, refresh: string) {    this.accessToken = access
+  setTokens(access: string, refresh: string) {
+    this.accessToken = access
     this.refreshToken = refresh
     localStorage.setItem('access_token', access)
     localStorage.setItem('refresh_token', refresh)
+  }
+
+  /** Store a restricted (e.g. enroll_2fa) token for setup flows. */
+  useRestrictedToken(token: string) {
+    this.accessToken = token
+    this.refreshToken = null
+    localStorage.setItem('access_token', token)
+    localStorage.removeItem('refresh_token')
   }
 
   clearTokens() {
