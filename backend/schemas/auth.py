@@ -32,6 +32,33 @@ class UnlockAccountRequest(BaseModel):
     username: str = Field(min_length=1, max_length=128)
 
 
+class EnrollRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+    code: str | None = Field(default=None, min_length=6, max_length=32)
+
+
+class ConfirmRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=32)
+
+
+class ReauthRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+    code: str = Field(min_length=1, max_length=32)
+
+
+class Login2FARequest(BaseModel):
+    challenge: str = Field(min_length=1)
+    code: str = Field(min_length=1, max_length=32)
+
+
+class Requirement2FARequest(BaseModel):
+    enabled: bool
+
+
+class Reset2FARequest(BaseModel):
+    username: str = Field(min_length=1, max_length=128)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
