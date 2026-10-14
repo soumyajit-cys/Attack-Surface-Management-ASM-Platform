@@ -51,6 +51,27 @@ export interface TokenBundle {
   user?: AuthUser
 }
 
+export interface MfaChallenge {
+  mfa_required: true
+  challenge: string
+}
+
+export interface EnrollRequired {
+  scope: 'enroll_2fa'
+  token: string
+}
+
+export type LoginResult = TokenBundle | MfaChallenge | EnrollRequired
+
+export interface TotpEnroll {
+  secret: string
+  otpauth_uri: string
+}
+
+export interface RecoveryCodeList {
+  recovery_codes: string[]
+}
+
 class ApiClient {
   private client: AxiosInstance
   private accessToken: string | null = null
@@ -181,11 +202,47 @@ class ApiClient {
   }
 
   // ── auth ───────────────────────────────────────────────────────────────────
-  async login(username: string, password: string): Promise<TokenBundle> {
-    return this.post<TokenBundle>('/auth/login', { username, password }).then((data) => {
+  async login(username: string, password: string): Promise<LoginResult> {
+    return this.post<LoginResult>('/auth/login', { username, password }).then((data) => {
+      if ('access_token' in data && 'refresh_token' in data) {
+        this.setTokens(
+          (data as TokenBundle).access_token,
+          (data as TokenBundle).refresh_token,
+        )
+      }
+      return data
+    })
+  }
+
+  async login2fa(challenge: string, code: string): Promise<TokenBundle> {
+    return this.post<TokenBundle>('/auth/login/2fa', { challenge, code }).then((data) => {
       this.setTokens(data.access_token, data.refresh_token)
       return data
     })
+  }
+
+  async enroll2fa(password: string, code?: string): Promise<TotpEnroll> {
+    return this.post<TotpEnroll>('/auth/2fa/enroll', { password, code })
+  }
+
+  async confirm2fa(code: string): Promise<RecoveryCodeList> {
+    return this.post<RecoveryCodeList>('/auth/2fa/confirm', { code })
+  }
+
+  async disable2fa(password: string, code: string) {
+    return this.post('/auth/2fa/disable', { password, code })
+  }
+
+  async regenerate2faCodes(password: string, code: string): Promise<RecoveryCodeList> {
+    return this.post<RecoveryCodeList>('/auth/2fa/regenerate-codes', { password, code })
+  }
+
+  async setRequire2fa(enabled: boolean): Promise<{ require_2fa: boolean }> {
+    return this.post('/organizations/2fa-requirement', { enabled })
+  }
+
+  async adminReset2fa(username: string) {
+    return this.post('/auth/admin/reset-2fa', { username })
   }
 
   async register(data: {

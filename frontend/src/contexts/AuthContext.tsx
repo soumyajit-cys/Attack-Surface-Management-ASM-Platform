@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { api, AuthUser } from '../lib/api'
+import { api, AuthUser, LoginResult } from '../lib/api'
 
 interface Organization {
   id: number
@@ -10,7 +10,8 @@ interface AuthContextType {
   user: AuthUser | null
   organization: Organization | null
   loading: boolean
-  login: (username: string, password: string) => Promise<void>
+  login: (username: string, password: string) => Promise<LoginResult>
+  completeMfa: (challenge: string, code: string) => Promise<void>
   register: (data: {
     username: string
     email: string
@@ -53,7 +54,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser])
 
   const login = async (username: string, password: string) => {
-    const bundle = await api.login(username, password)
+    const result = await api.login(username, password)
+    if ('access_token' in result) {
+      const bundle = result as TokenBundle
+      if (bundle.user) applyUser(bundle.user)
+      else await refreshUser()
+    }
+    return result
+  }
+
+  const completeMfa = async (challenge: string, code: string) => {
+    const bundle = await api.login2fa(challenge, code)
     if (bundle.user) applyUser(bundle.user)
     else await refreshUser()
   }
