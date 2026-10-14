@@ -33,8 +33,20 @@ NO_TENANT_DATA = {
 # Routes whose tenant behavior is asserted by dedicated cases below.
 # The unlock endpoint is covered in test_login_lockout.py (same-org unlock,
 # cross-org/unknown identical 404s, audit) rather than duplicated here.
+# The 2FA endpoints are covered in test_totp.py: enroll/confirm/disable/
+# regenerate act strictly on the caller's own row (no id parameter, so no
+# cross-tenant access is expressible); login/2fa is challenge-bound;
+# 2fa-requirement touches only the caller's org; admin/reset-2fa has an
+# explicit cross-org identical-404 case.
 COVERED_ELSEWHERE = {
     ("POST", "/api/v1/auth/admin/unlock-account"),
+    ("POST", "/api/v1/auth/2fa/enroll"),
+    ("POST", "/api/v1/auth/2fa/confirm"),
+    ("POST", "/api/v1/auth/2fa/disable"),
+    ("POST", "/api/v1/auth/2fa/regenerate-codes"),
+    ("POST", "/api/v1/auth/login/2fa"),
+    ("POST", "/api/v1/organizations/2fa-requirement"),
+    ("POST", "/api/v1/auth/admin/reset-2fa"),
 }
 COVERED_ID_ROUTES = {
     ("GET", "/api/v1/scans/{scan_id}"),

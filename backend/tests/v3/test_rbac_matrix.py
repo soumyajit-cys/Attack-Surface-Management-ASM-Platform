@@ -118,6 +118,13 @@ EXPECTED = {
     ("DELETE", "/api/v1/scan-policies/{policy_id}"): frozenset({Permission.POLICY_MANAGE}),
     ("POST", "/api/v1/scan-policies/{policy_id}/run-now"): frozenset({Permission.POLICY_MANAGE}),
     ("POST", "/api/v1/auth/admin/unlock-account"): frozenset({Permission.ORG_MANAGE}),
+    ("POST", "/api/v1/auth/2fa/enroll"): frozenset(),
+    ("POST", "/api/v1/auth/2fa/confirm"): frozenset(),
+    ("POST", "/api/v1/auth/2fa/disable"): frozenset(),
+    ("POST", "/api/v1/auth/2fa/regenerate-codes"): frozenset(),
+    ("POST", "/api/v1/auth/login/2fa"): frozenset(),
+    ("POST", "/api/v1/organizations/2fa-requirement"): frozenset({Permission.ORG_MANAGE}),
+    ("POST", "/api/v1/auth/admin/reset-2fa"): frozenset({Permission.ORG_MANAGE}),
 }
 
 
