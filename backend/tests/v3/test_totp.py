@@ -379,10 +379,11 @@ def test_admin_reset_2fa_and_script(client, db, tfa):
               'password': 'password123'}).json()['access_token']}"}
     assert client.get(
         "/api/v1/auth/me", headers=victim_h).status_code == 401
-    # Cross-org and unknown look identical.
+    # Cross-org and unknown look identical: a foreign admin sees 404.
+    foreign_h, _ = tfa("tfaforeignadmin", org="TFA Foreign Org")
     cross = client.post("/api/v1/auth/admin/reset-2fa",
                         json={"username": "tfaresetvictim"},
-                        headers=fresh_victim_h)
+                        headers=foreign_h)
     missing = client.post("/api/v1/auth/admin/reset-2fa",
                           json={"username": "nosuchuser"},
                           headers=admin_h)
