@@ -254,7 +254,7 @@ def test_disable_and_regenerate_require_reauth(client, tfa, db):
     assert denied.status_code in (400, 401)
     disabled = client.post(
         "/api/v1/auth/2fa/disable",
-        json={"password": "password123", "code": _totp_code(secret)},
+        json={"password": "password123", "code": _next_code(secret)},
         headers=headers)
     assert disabled.status_code == 200, disabled.text
     db.expire_all()
@@ -264,7 +264,7 @@ def test_disable_and_regenerate_require_reauth(client, tfa, db):
     secret2, codes2 = _enable_2fa(client, headers)
     regenerated = client.post(
         "/api/v1/auth/2fa/regenerate-codes",
-        json={"password": "password123", "code": _totp_code(secret2)},
+        json={"password": "password123", "code": _next_code(secret2)},
         headers=headers)
     assert regenerated.status_code == 200, regenerated.text
     fresh = regenerated.json()["recovery_codes"]
@@ -371,14 +371,23 @@ def test_admin_reset_2fa_and_script(client, db, tfa):
     assert victim.totp_enabled is False
     assert db.query(RecoveryCode).filter(
         RecoveryCode.user_id == victim.id).count() == 0
-    # Sessions revoked: old token dead.
+    # Sessions revoked: old token dead. Re-login for the cross-org probe
+    # (2FA is gone, so plain login works again).
+    fresh_victim_h = {"Authorization": f"Bearer {client.post(
+        '/api/v1/auth/login',
+        json={'username': 'tfaresetvictim',
+              'password': 'password123'}).json()['access_token']}"}
     assert client.get(
         "/api/v1/auth/me", headers=victim_h).status_code == 401
     # Cross-org and unknown look identical.
     cross = client.post("/api/v1/auth/admin/reset-2fa",
                         json={"username": "tfaresetvictim"},
-                        headers=victim_h)
-    assert cross.status_code in (403, 404)
+                        headers=fresh_victim_h)
+    missing = client.post("/api/v1/auth/admin/reset-2fa",
+                          json={"username": "nosuchuser"},
+                          headers=admin_h)
+    assert cross.status_code == missing.status_code == 404
+    assert cross.json() == missing.json()
 
 
 def test_secrets_never_logged(client, tfa, caplog):
