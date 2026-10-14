@@ -396,6 +396,308 @@ async def admin_unlock_account(
     return MessageOut(message="Account unlocked")
 
 
+def _totp_counters():
+    """TOTP-step lockout counters (separate scopes from password login)."""
+    from auth import lockout as lockout_mod
+    from app.core.config import settings
+
+    return (
+        lockout_mod.AttemptCounter(
+            "totp-acct", settings.login_max_attempts,
+            settings.login_attempt_window_seconds,
+            settings.login_lockout_base_seconds,
+            settings.login_lockout_max_seconds),
+        lockout_mod.AttemptCounter(
+            "totp-ip", settings.login_max_attempts,
+            settings.login_attempt_window_seconds,
+            settings.login_lockout_base_seconds,
+            settings.login_lockout_max_seconds),
+    )
+
+
+def _replace_recovery_codes(db: Session, user: User) -> list[str]:
+    """Delete all codes and issue a fresh batch of 10 (returns plaintext)."""
+    from auth import totp as totp_mod
+    from models.recovery_code import RecoveryCode
+
+    db.query(RecoveryCode).filter(
+        RecoveryCode.user_id == user.id).delete()
+    codes = totp_mod.new_recovery_codes()
+    for code in codes:
+        db.add(RecoveryCode(user_id=user.id,
+                            code_hash=totp_mod.hash_recovery_code(code)))
+    db.flush()
+    return codes
+
+
+@router.post("/2fa/enroll")
+async def enroll_2fa(
+    request: Request,
+    data: EnrollRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(principal_or_enroll),
+):
+    """Issue a pending TOTP secret (+otpauth URI). Never logged/returned
+    again except here. Re-enrolling while enabled additionally requires a
+    current code (decision 1.5.4.2)."""
+    from auth import totp as totp_mod
+
+    user = principal.user
+    if not verify_password(data.password, user.password_hash):
+        raise UnauthenticatedError("Invalid credentials")
+    if user.totp_enabled:
+        if not data.code or totp_mod.verify_code(
+                user.totp_secret or "", data.code,
+                user.totp_last_step) is None:
+            raise BadRequestError(
+                "Current code required to re-enroll", code="reauth_required")
+    secret = totp_mod.new_secret()
+    user.totp_secret = secret
+    record_audit(
+        db, organization_id=user.organization_id, actor=user.username,
+        action="auth.2fa_enroll", request=request,
+    )
+    db.commit()
+    return {"secret": secret,
+            "otpauth_uri": totp_mod.otpauth_uri(secret, user.username)}
+
+
+@router.post("/2fa/confirm")
+async def confirm_2fa(
+    request: Request,
+    data: ConfirmRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(principal_or_enroll),
+):
+    """Activate 2FA with a first valid code; returns 10 recovery codes ONCE."""
+    from auth import totp as totp_mod
+    from app.core.errors import BadRequestError as BadRequest
+
+    user = principal.user
+    if not user.totp_secret:
+        raise BadRequest("Nothing to confirm -- enroll first",
+                         code="nothing_to_confirm")
+    step = totp_mod.verify_code(user.totp_secret, data.code,
+                                user.totp_last_step)
+    if step is None:
+        raise BadRequest("Invalid code", code="invalid_code")
+    user.totp_enabled = True
+    user.totp_last_step = step
+    codes = _replace_recovery_codes(db, user)
+    record_audit(
+        db, organization_id=user.organization_id, actor=user.username,
+        action="auth.2fa_enabled", request=request,
+    )
+    db.commit()
+    return {"recovery_codes": codes}
+
+
+@router.post("/2fa/disable")
+async def disable_2fa(
+    request: Request,
+    data: ReauthRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(current_principal),
+):
+    """Fully switch 2FA off (password + current code or recovery code)."""
+    from auth import totp as totp_mod
+    from models.recovery_code import RecoveryCode
+
+    user = principal.user
+    if not verify_password(data.password, user.password_hash):
+        raise UnauthenticatedError("Invalid credentials")
+    ok = (user.totp_secret and totp_mod.verify_code(
+        user.totp_secret, data.code, user.totp_last_step) is not None)
+    if not ok:
+        row = db.query(RecoveryCode).filter(
+            RecoveryCode.user_id == user.id,
+            RecoveryCode.used_at.is_(None)).all()
+        match = next(
+            (r for r in row
+             if totp_mod.verify_recovery_code(data.code, r.code_hash)),
+            None)
+        if match is None:
+            raise BadRequestError("Invalid code", code="invalid_code")
+        match.used_at = datetime.now(timezone.utc)
+    user.totp_enabled = False
+    user.totp_secret = None
+    user.totp_last_step = None
+    db.query(RecoveryCode).filter(
+        RecoveryCode.user_id == user.id).delete()
+    record_audit(
+        db, organization_id=user.organization_id, actor=user.username,
+        action="auth.2fa_disabled", request=request,
+    )
+    db.commit()
+    return MessageOut(message="2FA disabled")
+
+
+@router.post("/2fa/regenerate-codes")
+async def regenerate_2fa_codes(
+    request: Request,
+    data: ReauthRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(current_principal),
+):
+    """Replace all recovery codes (old batch dies). Requires 2FA enabled."""
+    from auth import totp as totp_mod
+
+    user = principal.user
+    if not user.totp_enabled or not user.totp_secret:
+        raise BadRequestError("2FA is not enabled", code="2fa_not_enabled")
+    if not verify_password(data.password, user.password_hash):
+        raise UnauthenticatedError("Invalid credentials")
+    if totp_mod.verify_code(user.totp_secret, data.code,
+                            user.totp_last_step) is None:
+        raise BadRequestError("Invalid code", code="invalid_code")
+    codes = _replace_recovery_codes(db, user)
+    record_audit(
+        db, organization_id=user.organization_id, actor=user.username,
+        action="auth.2fa_codes_regenerated", request=request,
+    )
+    db.commit()
+    return {"recovery_codes": codes}
+
+
+@router.post("/login/2fa")
+@limiter.limit(f"{settings.rate_limit_auth_requests_per_minute}/minute")
+async def login_2fa(
+    request: Request,
+    data: Login2FARequest,
+    db: Session = Depends(get_db),
+):
+    """Exchange a single-use challenge + TOTP/recovery code for tokens."""
+    from auth import lockout as lockout_mod
+    from auth import totp as totp_mod
+    from models.recovery_code import RecoveryCode
+
+    ip = client_ip(request) or "unknown"
+    tacct, tipc = _totp_counters()
+    try:
+        locked = any(c.is_locked(k) for c, k in
+                     ((tacct, ""), (tipc, ip)))
+    except lockout_mod.LockoutUnavailable as exc:
+        from app.core.errors import ServiceUnavailableError
+
+        logger.error("lockout store unreachable during 2FA: %s",
+                     type(exc).__name__)
+        raise ServiceUnavailableError(
+            "Authentication temporarily unavailable",
+            code="auth_unavailable",
+        )
+
+    user_id = token_store.consume_mfa_challenge(data.challenge)
+    user = db.get(User, user_id) if user_id else None
+    if user is None or not user.is_active:
+        try:
+            tipc.register_failure(ip)
+        except lockout_mod.LockoutUnavailable:
+            pass
+        raise UnauthenticatedError("Invalid credentials")
+
+    try:
+        acct_locked = tacct.is_locked(user.username)
+        ip_locked = tipc.is_locked(ip)
+    except lockout_mod.LockoutUnavailable as exc:
+        from app.core.errors import ServiceUnavailableError
+
+        logger.error("lockout store unreachable during 2FA: %s",
+                     type(exc).__name__)
+        raise ServiceUnavailableError(
+            "Authentication temporarily unavailable",
+            code="auth_unavailable",
+        )
+    if acct_locked or ip_locked:
+        raise UnauthenticatedError("Invalid credentials")
+
+    authenticated = False
+    if (user.totp_enabled and user.totp_secret and len(data.code) == 6
+            and (step := totp_mod.verify_code(
+                user.totp_secret, data.code,
+                user.totp_last_step)) is not None):
+        user.totp_last_step = step
+        authenticated = True
+    else:
+        for row in db.query(RecoveryCode).filter(
+                RecoveryCode.user_id == user.id,
+                RecoveryCode.used_at.is_(None)).all():
+            if totp_mod.verify_recovery_code(data.code, row.code_hash):
+                row.used_at = datetime.now(timezone.utc)
+                authenticated = True
+                break
+    if not authenticated:
+        try:
+            engaged, seconds, scope = False, 0, ""
+            engaged, seconds = tacct.register_failure(user.username)
+            scope = "account"
+            if not engaged:
+                ip_engaged, ip_seconds = tipc.register_failure(ip)
+                if ip_engaged:
+                    engaged, seconds, scope = True, ip_seconds, "ip"
+            if engaged:
+                record_audit(
+                    db, organization_id=user.organization_id,
+                    actor=user.username, action="auth.totp_locked",
+                    details={"scope": scope, "lock_seconds": seconds},
+                    request=request,
+                )
+                db.commit()
+        except lockout_mod.LockoutUnavailable:
+            logger.warning("lockout store unreachable during 2FA failure")
+        raise UnauthenticatedError("Invalid credentials")
+
+    # Full 2FA success resets ONLY the TOTP counter (never password's).
+    try:
+        tacct.register_success(user.username)
+    except lockout_mod.LockoutUnavailable:
+        logger.warning("lockout store unreachable during 2FA success reset")
+    bundle = _issue_tokens(db, user)
+    record_audit(
+        db, organization_id=user.organization_id, actor=user.username,
+        action="auth.login_2fa", details={"ip": client_ip(request)},
+        request=request,
+    )
+    db.commit()
+    return bundle
+
+
+@router.post("/admin/reset-2fa", response_model=MessageOut)
+async def admin_reset_2fa(
+    request: Request,
+    data: Reset2FARequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(
+        require_permissions_dep(Permission.ORG_MANAGE)),
+) -> MessageOut:
+    """Clear a user's 2FA state (lost device). Same-org only; unknown and
+    cross-org usernames share one 404. Revokes the user's sessions."""
+    from app.core.errors import NotFoundError
+    from models.recovery_code import RecoveryCode
+
+    target: User | None = (
+        db.query(User)
+        .filter(User.username == data.username,
+                User.organization_id == principal.organization_id)
+        .first()
+    )
+    if target is None:
+        raise NotFoundError("User not found", code="user_not_found")
+    target.totp_enabled = False
+    target.totp_secret = None
+    target.totp_last_step = None
+    db.query(RecoveryCode).filter(
+        RecoveryCode.user_id == target.id).delete()
+    revoked = token_store.revoke_family(target.id)
+    record_audit(
+        db, organization_id=principal.organization_id,
+        actor=principal.user.username, action="auth.2fa_reset",
+        details={"username": data.username, "revoked_tokens": revoked},
+        request=request,
+    )
+    db.commit()
+    return MessageOut(message="2FA reset")
+
+
 @router.post("/forgot-password", response_model=MessageOut)
 @limiter.limit("3/minute")
 async def forgot_password(
