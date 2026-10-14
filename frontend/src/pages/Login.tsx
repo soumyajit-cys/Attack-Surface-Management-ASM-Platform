@@ -2,23 +2,35 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
-import { getApiErrorMessage } from '../lib/api'
+import { api, getApiErrorMessage } from '../lib/api'
 import { Shield, Mail, Lock, Building2, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { MfaStep } from '../components/MfaStep'
 
 export function Login() {
-  const { login } = useAuth()
+  const { login, completeMfa } = useAuth()
   const navigate = useNavigate()
   const { addToast } = useToast()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [challenge, setChallenge] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
-      await login(username, password)
+      const result = await login(username, password)
+      if ('mfa_required' in result) {
+        setChallenge(result.challenge)
+        return
+      }
+      if ('scope' in result && result.scope === 'enroll_2fa') {
+        api.accessToken = result.token
+        localStorage.setItem('access_token', result.token)
+        navigate('/setup-2fa')
+        return
+      }
       addToast({ type: 'success', title: 'Welcome back!', message: `Logged in as ${username}` })
       navigate('/')
     } catch (error) {
@@ -27,6 +39,25 @@ export function Login() {
         title: 'Login failed',
         message: getApiErrorMessage(error) || 'Invalid credentials',
       })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMfa = async (code: string) => {
+    if (!challenge) return
+    setLoading(true)
+    try {
+      await completeMfa(challenge, code)
+      addToast({ type: 'success', title: 'Welcome back!', message: `Logged in as ${username}` })
+      navigate('/')
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Verification failed',
+        message: getApiErrorMessage(error) || 'Invalid code',
+      })
+      throw error
     } finally {
       setLoading(false)
     }
