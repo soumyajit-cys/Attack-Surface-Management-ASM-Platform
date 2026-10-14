@@ -149,8 +149,7 @@ class ApiClient {
     )
   }
 
-  setTokens(access: string, refresh: string) {
-    this.accessToken = access
+  setTokens(access: string, refresh: string) {    this.accessToken = access
     this.refreshToken = refresh
     localStorage.setItem('access_token', access)
     localStorage.setItem('refresh_token', refresh)
