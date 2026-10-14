@@ -28,7 +28,6 @@ from schemas.auth import (
     ReauthRequest,
     RefreshRequest,
     RegisterRequest,
-    Requirement2FARequest,
     Reset2FARequest,
     ResetPasswordRequest,
     UnlockAccountRequest,
