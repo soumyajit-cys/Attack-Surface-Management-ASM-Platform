@@ -23,14 +23,16 @@ export function Organizations() {
   const [newKeyExpiresDays, setNewKeyExpiresDays] = useState('')
   const [newKey, setNewKey] = useState('')
   const [loading, setLoading] = useState(true)
+  const [require2fa, setRequire2fa] = useState<boolean | null>(null)
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [invitationsData, apiKeysData, digest] = await Promise.allSettled([
+      const [invitationsData, apiKeysData, digest, orgData] = await Promise.allSettled([
         api.listInvitations(),
         api.listApiKeys(),
         api.getDigestConfig(),
+        api.getOrganization(),
       ])
       if (invitationsData.status === 'fulfilled') setInvitations(invitationsData.value)
       if (apiKeysData.status === 'fulfilled') setApiKeys(apiKeysData.value)
@@ -40,6 +42,9 @@ export function Organizations() {
       } else {
         setDigestConfig(null)
         setDigestExists(false)
+      }
+      if (orgData.status === 'fulfilled') {
+        setRequire2fa(!!orgData.value.require_2fa)
       }
     } catch (error) {
       addToast({

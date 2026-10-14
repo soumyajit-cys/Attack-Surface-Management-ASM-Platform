@@ -389,7 +389,7 @@ class ApiClient {
   }
 
   // ── organizations ──────────────────────────────────────────────────────────
-  async getOrganization() {
+  async getOrganization(): Promise<{ id: number; name: string; require_2fa?: boolean }> {
     return this.get('/organizations/me')
   }
 
