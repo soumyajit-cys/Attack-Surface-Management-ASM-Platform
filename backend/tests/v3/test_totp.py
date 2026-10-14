@@ -66,7 +66,6 @@ def _enable_2fa(client, headers, password="password123"):
     return secret, confirmed.json()["recovery_codes"]
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_enroll_returns_pending_secret(client, tfa, db):
     from models.user import User
 
@@ -90,7 +89,6 @@ def test_enroll_returns_pending_secret(client, tfa, db):
     assert raw.startswith("enc:v1:")
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_confirm_enables_and_returns_codes_once(client, tfa, db):
     from models.recovery_code import RecoveryCode
     from models.user import User
@@ -118,7 +116,6 @@ def test_confirm_enables_and_returns_codes_once(client, tfa, db):
     assert user2.totp_enabled is False
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_reenroll_requires_password_and_code(client, tfa):
     headers, _ = tfa("tfareenroll")
     _enable_2fa(client, headers)
@@ -127,7 +124,6 @@ def test_reenroll_requires_password_and_code(client, tfa):
     assert denied.status_code in (400, 403)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_login_returns_challenge_without_tokens(client, tfa):
     headers, _ = tfa("tfalogin")
     _enable_2fa(client, headers)
@@ -141,7 +137,6 @@ def test_login_returns_challenge_without_tokens(client, tfa):
     assert "access_token" not in body and "refresh_token" not in body
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_challenge_rejected_everywhere_else(client, tfa):
     from main import app
 
@@ -170,7 +165,6 @@ def test_challenge_rejected_everywhere_else(client, tfa):
         assert response.status_code == 401, f"{path}: {response.status_code}"
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_2fa_exchange_totp_replay_and_recovery(client, tfa, db):
     headers, _ = tfa("tfaexchange")
     secret, codes = _enable_2fa(client, headers)
@@ -220,7 +214,6 @@ def test_2fa_exchange_totp_replay_and_recovery(client, tfa, db):
     assert len(used_rows) == 1
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_totp_failures_isolated_and_locked(client, tfa):
     headers, _ = tfa("tfaiso")
     _enable_2fa(client, headers)
@@ -240,7 +233,6 @@ def test_totp_failures_isolated_and_locked(client, tfa):
     assert again.json().get("mfa_required") is True
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_disable_and_regenerate_require_reauth(client, tfa, db):
     from models.recovery_code import RecoveryCode
     from models.user import User
@@ -274,7 +266,6 @@ def test_disable_and_regenerate_require_reauth(client, tfa, db):
         RecoveryCode.used_at.is_(None)).count() == 10
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_require_2fa_flow_and_guardrails(client, tfa, db):
     from models.organization import Organization
     from models.user import User
@@ -340,7 +331,6 @@ def test_require_2fa_flow_and_guardrails(client, tfa, db):
     assert client.get("/api/v1/assets", headers=key_h).status_code == 200
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_admin_reset_2fa_and_script(client, db, tfa):
     from models.recovery_code import RecoveryCode
     from models.user import User
@@ -382,7 +372,6 @@ def test_admin_reset_2fa_and_script(client, db, tfa):
     assert cross.status_code in (403, 404)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
 def test_secrets_never_logged(client, tfa, caplog):
     import logging
 
