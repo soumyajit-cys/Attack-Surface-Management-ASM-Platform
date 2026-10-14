@@ -62,6 +62,7 @@ def _user_out(user: User, organization_name: str | None = None) -> UserOut:
         organization_id=user.organization_id,
         organization_name=organization_name,
         permissions=sorted(p.value for p in permissions_for_role(user.role)),
+        totp_enabled=bool(user.totp_enabled),
     )
 
 
