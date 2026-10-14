@@ -122,13 +122,15 @@ async def register(
     return _issue_tokens(db, user)
 
 
-@router.post("/login", response_model=TokenBundle)
+@router.post("/login")
 @limiter.limit(f"{settings.rate_limit_auth_requests_per_minute}/minute")
 async def login(
     request: Request,
     data: LoginRequest,
     db: Session = Depends(get_db),
-) -> TokenBundle:
+):
+    """Password step. Returns a TokenBundle, an MFA challenge, or a
+    restricted enrollment token -- never more than one credential kind."""
     from auth import lockout as lockout_mod
     from auth.security import DUMMY_PASSWORD_HASH, DUMMY_PASSWORD_PREIMAGE
     from utils.logger import logger
@@ -221,6 +223,22 @@ async def login(
 
     if not user.is_active:
         raise BadRequestError("Account is disabled", code="account_disabled")
+
+    # Phase 1.5.4: users with 2FA enabled never receive tokens here. They
+    # get a single-use 5-minute challenge for POST /auth/login/2fa.
+    # NOTE: the password-failure counter is intentionally NOT reset here;
+    # only a completed 2FA exchange resets the TOTP counter.
+    if user.totp_enabled:
+        challenge = token_service.create_mfa_challenge_token(user.id)
+        token_store.store_mfa_challenge(challenge)
+        return {"mfa_required": True, "challenge": challenge}  # type: ignore[return-value]
+
+    org = db.get(Organization, user.organization_id)
+    if org is not None and org.require_2fa and not user.totp_enabled:
+        # No usable credential may be issued: a restricted enrollment token
+        # valid only on the 2FA enrollment endpoints and /auth/me.
+        token = token_service.create_restricted_token(user.id, "enroll_2fa")
+        return {"scope": "enroll_2fa", "token": token}  # type: ignore[return-value]
 
     try:
         acct.register_success(identifier)
