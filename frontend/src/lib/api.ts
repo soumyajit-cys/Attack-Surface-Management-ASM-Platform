@@ -214,10 +214,7 @@ class ApiClient {
   async login(username: string, password: string): Promise<LoginResult> {
     return this.post<LoginResult>('/auth/login', { username, password }).then((data) => {
       if ('access_token' in data && 'refresh_token' in data) {
-        this.setTokens(
-          (data as TokenBundle).access_token,
-          (data as TokenBundle).refresh_token,
-        )
+        this.setTokens((data as TokenBundle).access_token, (data as TokenBundle).refresh_token)
       }
       return data
     })

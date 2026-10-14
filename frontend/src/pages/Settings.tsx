@@ -188,9 +188,7 @@ export function Settings() {
             </form>
           )}
 
-          {activeTab === 'security' && (
-            <TwoFactorSection />
-          )}
+          {activeTab === 'security' && <TwoFactorSection />}
 
           {activeTab === 'notifications' && (
             <div className="space-y-6 max-w-md">

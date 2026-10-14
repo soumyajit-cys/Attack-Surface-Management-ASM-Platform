@@ -28,8 +28,7 @@ export function RecoveryCodesDisplay({ codes }: RecoveryCodesDisplayProps) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
-        Save these recovery codes now. Each works once, and they will never
-        be shown again.
+        Save these recovery codes now. Each works once, and they will never be shown again.
       </p>
       <ul aria-label="Recovery codes" className="grid grid-cols-1 gap-2">
         {codes.map((code) => (

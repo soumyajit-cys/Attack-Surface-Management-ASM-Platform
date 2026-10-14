@@ -174,8 +174,8 @@ export function Organizations() {
             <div>
               <p className="font-medium text-gray-900">Require two-factor authentication</p>
               <p className="text-sm text-gray-500">
-                Users without 2FA can only open the setup page. You must have
-                2FA enabled to turn this on.
+                Users without 2FA can only open the setup page. You must have 2FA enabled to turn
+                this on.
               </p>
             </div>
             <button
@@ -187,7 +187,11 @@ export function Organizations() {
                   setRequire2fa(result.require_2fa)
                   addToast({ type: 'success', title: 'Requirement updated' })
                 } catch (error) {
-                  addToast({ type: 'error', title: 'Update failed', message: getApiErrorMessage(error) })
+                  addToast({
+                    type: 'error',
+                    title: 'Update failed',
+                    message: getApiErrorMessage(error),
+                  })
                 }
               }}
             >

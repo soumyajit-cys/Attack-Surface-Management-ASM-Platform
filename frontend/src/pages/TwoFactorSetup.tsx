@@ -53,7 +53,9 @@ export function TwoFactorSetup() {
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-600 to-purple-600 flex items-center justify-center mx-auto">
             <Shield className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mt-4">Set up two-factor authentication</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mt-4">
+            Set up two-factor authentication
+          </h1>
         </div>
 
         <div className="card p-6">
@@ -67,8 +69,7 @@ export function TwoFactorSetup() {
           ) : secret && uri ? (
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                Scan this code with your authenticator app, then enter the
-                6-digit code below.
+                Scan this code with your authenticator app, then enter the 6-digit code below.
               </p>
               <div className="flex justify-center bg-white p-4 rounded">
                 <QRCodeSVG value={uri} size={192} />
