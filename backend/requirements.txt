@@ -13,6 +13,8 @@ redis
 pydantic[email]
 pydantic-settings
 PyJWT==2.15.1
+# TOTP 2FA (RFC 6238 verification; constant-time compare internally).
+pyotp==2.10.0
 bcrypt
 # Fernet encryption for secrets at rest (alert integration credentials).
 cryptography

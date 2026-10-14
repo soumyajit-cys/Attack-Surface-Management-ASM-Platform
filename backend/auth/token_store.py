@@ -9,6 +9,7 @@ from utils.redis_client import get_redis
 
 REFRESH_KEY = "refresh:{jti}"
 ACCESS_KEY = "access:{jti}"
+MFA_CHALLENGE_KEY = "mfa_challenge:{jti}"
 REVOKED_KEY = "revoked:{jti}"
 RESET_USED_KEY = "reset_used:{jti}"
 SESSIONS_KEY = "sessions:{user_id}"
@@ -92,7 +93,6 @@ class TokenStore:
         self.client.expire(SESSIONS_KEY.format(user_id=user_id), ttl)
 
     def revoke_family(self, user_id: int) -> int:
-        """Revoke every known access+refresh token of a user.
 
         Returns the number of tokens revoked. Used on refresh reuse and on
         password change/reset. Unknown/legacy entries are revoked by jti.

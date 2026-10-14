@@ -8,6 +8,8 @@ from config import settings
 ACCESS = "access"
 REFRESH = "refresh"
 PASSWORD_RESET = "password_reset"
+MFA_CHALLENGE = "mfa_challenge"
+RESTRICTED = "restricted"
 
 #: Clock-skew allowance for exp/iat validation (seconds). Small on purpose:
 #: a larger window would keep demonstrably expired tokens alive.
@@ -39,6 +41,31 @@ def create_refresh_token(user_id: int) -> str:
 def create_password_reset_token(user_id: int) -> str:
     expire = _now() + timedelta(minutes=30)
     return _encode(user_id, PASSWORD_RESET, expire)
+
+
+def create_mfa_challenge_token(user_id: int) -> str:
+    """Short-lived single-use 2FA challenge (5 minutes, see token_store)."""
+    expire = _now() + timedelta(minutes=5)
+    return _encode(user_id, MFA_CHALLENGE, expire)
+
+
+def create_restricted_token(user_id: int, scope: str) -> str:
+    """Limited-scope token (e.g. scope='enroll_2fa'). Accepted only by the
+    endpoints that explicitly allow it; rejected everywhere else because
+    its type is neither ACCESS nor any other operational type."""
+    payload = {
+        "sub": str(user_id),
+        "type": RESTRICTED,
+        "scope": scope,
+        "exp": _now() + timedelta(minutes=15),
+        "iat": _now(),
+        "jti": _generate_jti(),
+    }
+    return jwt.encode(
+        payload,
+        settings.jwt_secret_for_use,
+        algorithm="HS256",
+    )
 
 
 def _encode(user_id: int, token_type: str, expire: datetime) -> str:
