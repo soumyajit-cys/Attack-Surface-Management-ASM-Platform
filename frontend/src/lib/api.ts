@@ -43,6 +43,7 @@ export interface AuthUser {
   organization_id: number
   organization_name: string | null
   permissions: string[]
+  totp_enabled?: boolean
 }
 
 export interface TokenBundle {
