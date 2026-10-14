@@ -93,6 +93,7 @@ class TokenStore:
         self.client.expire(SESSIONS_KEY.format(user_id=user_id), ttl)
 
     def revoke_family(self, user_id: int) -> int:
+        """Revoke every known access+refresh token of a user.
 
         Returns the number of tokens revoked. Used on refresh reuse and on
         password change/reset. Unknown/legacy entries are revoked by jti.
@@ -131,6 +132,35 @@ class TokenStore:
             )
             self.client.sadd(SESSIONS_KEY.format(user_id=user_id), new_jti)
             self.client.expire(SESSIONS_KEY.format(user_id=user_id), ttl)
+
+    def store_mfa_challenge(self, token: str) -> None:
+        """Register a 2FA challenge jti as single-use (5-minute TTL)."""
+        payload = token_service.decode_token(token)
+        jti = payload.get("jti")
+        if not jti:
+            return
+        self.client.set(
+            MFA_CHALLENGE_KEY.format(jti=jti), 1, ex=5 * 60,
+        )
+
+    def consume_mfa_challenge(self, token: str) -> int | None:
+        """Atomically consume a challenge; returns user_id or None."""
+        payload = token_service.decode_token(token)
+        if not payload or payload.get("type") != token_service.MFA_CHALLENGE:
+            return None
+        jti = payload.get("jti")
+        if not jti:
+            return None
+        getdel = getattr(self.client, "getdel", None)
+        if callable(getdel):
+            present = getdel(MFA_CHALLENGE_KEY.format(jti=jti))
+        else:  # pragma: no cover - redis>=6.2 always has GETDEL
+            present = self.client.get(MFA_CHALLENGE_KEY.format(jti=jti))
+            if present:
+                self.client.delete(MFA_CHALLENGE_KEY.format(jti=jti))
+        if not present:
+            return None
+        return int(payload["sub"])
 
     def revoke(self, token: str) -> None:
         payload = token_service.decode_token(token)
