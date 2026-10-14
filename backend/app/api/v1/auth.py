@@ -32,7 +32,12 @@ from app.core.config import settings
 from app.core.errors import BadRequestError, ConflictError, UnauthenticatedError
 from app.core.permissions import permissions_for_role
 from app.db.session import get_db
-from app.api.deps import current_principal, Principal, require_permissions_dep
+from app.api.deps import (
+    current_principal,
+    Principal,
+    principal_or_enroll,
+    require_permissions_dep,
+)
 from app.core.permissions import Permission
 from app.schemas.auth import MessageOut, TokenBundle, UserOut
 from utils.logger import logger
@@ -467,7 +472,9 @@ async def reset_password(
 
 
 @router.get("/me", response_model=UserOut)
-async def me(principal: Principal = Depends(current_principal)) -> UserOut:
+async def me(
+    principal: Principal = Depends(principal_or_enroll),
+) -> UserOut:
     user = principal.user
     return UserOut(
         id=user.id,
