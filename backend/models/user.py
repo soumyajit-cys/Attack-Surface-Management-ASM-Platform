@@ -1,16 +1,18 @@
 from sqlalchemy import (
+    BigInteger,
+    Boolean,
     Column,
+    DateTime,
+    ForeignKey,
     Integer,
     String,
-    Boolean,
-    ForeignKey,
-    DateTime
 )
 
 from sqlalchemy.sql import func
 
 from sqlalchemy.orm import relationship
 
+from app.core.crypto import EncryptedText
 from models.base import Base
 
 

@@ -1,6 +1,7 @@
 from models.base import Base
 from models.organization import Organization, Invitation, InvitationStatus, APIKey
 from models.user import User
+from models.recovery_code import RecoveryCode
 from models.asset import Asset
 from models.domain import Domain
 from models.subdomain import Subdomain
@@ -26,6 +27,7 @@ __all__ = [
     "InvitationStatus",
     "APIKey",
     "User",
+    "RecoveryCode",
     "Asset",
     "Domain",
     "Subdomain",
