@@ -9,8 +9,7 @@ class OrganizationCreate(BaseModel):
 
 class OrganizationResponse(BaseModel):
     id: int
-    name: str
-    created_at: datetime
+    name: str    created_at: datetime
     updated_at: datetime
 
     class Config:
