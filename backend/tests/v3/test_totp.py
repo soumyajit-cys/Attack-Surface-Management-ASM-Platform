@@ -291,42 +291,53 @@ def test_require_2fa_flow_and_guardrails(client, tfa, db):
     org = db.query(Organization).filter(
         Organization.name == "TFA Req Org").one()
     assert org.require_2fa is True
-    # Plain user passes password, gets the restricted token only.
-    reg = client.post(
+    # Plain user in the enforcing org passes password, gets restricted token.
+    client.post(
         "/api/v1/auth/register",
         json={"username": "tfaplain", "email": "tfaplain@example.com",
-              "password": "password123", "organization": "TFA Plain Org"})
-    assert reg.status_code == 201
-    db.query(User).filter(User.username == "tfaplain").one()
-    # Move into the enforcing org is out of scope; instead enable on own org
-    # is impossible (not admin) -- so verify restriction via route table:
+              "password": "password123", "organization": "TFA Plain Tmp"})
+    admin_org = db.query(User).filter(
+        User.username == "tfaadmin").one().organization_id
+    db.query(User).filter(
+        User.username == "tfaplain").one().organization_id = admin_org
+    db.commit()
     login = client.post(
         "/api/v1/auth/login",
-        json={"username": "tfaadmin", "password": "password123"})
-    assert login.json().get("mfa_required") is True
-
-
-@pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
-def test_restricted_token_route_table(client, tfa):
-    """Restricted enroll tokens work on enroll/confirm/me, 401 elsewhere."""
-    from main import app
-
-    headers, _ = tfa("tfarestrict", org="TFA R Org")
-    _enable_2fa(client, headers)
-    # Craft the restricted state via API: disable then require_2fa on own org
-    # is admin-only and the admin HAS 2FA here, so this is reachable.
-    client.post("/api/v1/auth/2fa/disable",
-                json={"password": "password123",
-                      "code": _totp_code(
-                          client.post("/api/v1/auth/2fa/enroll",
-                                      json={"password": "password123"},
-                                      headers=headers).json()["secret"])},
-                headers=headers)
-    login = client.post(
-        "/api/v1/auth/login",
-        json={"username": "tfarestrict", "password": "password123"})
+        json={"username": "tfaplain", "password": "password123"})
+    assert login.status_code == 200, login.text
     body = login.json()
-    assert body.get("mfa_required") is True or body.get("scope") == "enroll_2fa"
+    assert body.get("scope") == "enroll_2fa"
+    assert "access_token" not in body
+    restricted_h = {"Authorization": f"Bearer {body['token']}"}
+    # Works on enroll/confirm/me and nowhere else.
+    assert client.get("/api/v1/auth/me",
+                      headers=restricted_h).status_code == 200
+    enrolled = client.post("/api/v1/auth/2fa/enroll",
+                           json={"password": "password123"},
+                           headers=restricted_h)
+    assert enrolled.status_code == 200, enrolled.text
+    for url in ("/api/v1/assets", "/api/v1/scans", "/api/v1/findings",
+                "/api/v1/dashboard"):
+        assert client.get(url, headers=restricted_h).status_code == 401, url
+    denied = client.post("/api/v1/scans", json={"domain": "x.example.com"},
+                         headers=restricted_h)
+    assert denied.status_code == 401, denied.text[:200]
+    # After enrolling + confirming, normal MFA login works.
+    secret = enrolled.json()["secret"]
+    confirmed = client.post("/api/v1/auth/2fa/confirm",
+                            json={"code": _totp_code(secret)},
+                            headers=restricted_h)
+    assert confirmed.status_code == 200, confirmed.text
+    again = client.post(
+        "/api/v1/auth/login",
+        json={"username": "tfaplain", "password": "password123"})
+    assert again.json().get("mfa_required") is True
+    # API keys stay exempt under require_2fa.
+    created = client.post("/api/v1/organizations/api-keys",
+                          json={"name": "tfa-key"}, headers=admin_h)
+    assert created.status_code == 201, created.text
+    key_h = {"X-API-Key": created.json()["key"]}
+    assert client.get("/api/v1/assets", headers=key_h).status_code == 200
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-TOTP-001: 2FA not implemented")
