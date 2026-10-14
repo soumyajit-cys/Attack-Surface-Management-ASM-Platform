@@ -187,6 +187,10 @@ export function Settings() {
             </form>
           )}
 
+          {activeTab === 'security' && (
+            <TwoFactorSection />
+          )}
+
           {activeTab === 'notifications' && (
             <div className="space-y-6 max-w-md">
               <h3 className="text-lg font-semibold text-gray-900">Email Notifications</h3>
