@@ -168,6 +168,36 @@ export function Organizations() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Security enforcement</h2>
+          </div>
+          <div className="p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="font-medium text-gray-900">Require two-factor authentication</p>
+              <p className="text-sm text-gray-500">
+                Users without 2FA can only open the setup page. You must have
+                2FA enabled to turn this on.
+              </p>
+            </div>
+            <button
+              className="btn-secondary text-sm"
+              disabled={require2fa === null}
+              onClick={async () => {
+                try {
+                  const result = await api.setRequire2fa(!require2fa)
+                  setRequire2fa(result.require_2fa)
+                  addToast({ type: 'success', title: 'Requirement updated' })
+                } catch (error) {
+                  addToast({ type: 'error', title: 'Update failed', message: getApiErrorMessage(error) })
+                }
+              }}
+            >
+              {require2fa ? 'Disable' : 'Enable'}
+            </button>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Team Invitations</h2>
             <button className="btn-primary text-sm" onClick={() => setShowInviteModal(true)}>
               <Plus className="w-4 h-4" />
