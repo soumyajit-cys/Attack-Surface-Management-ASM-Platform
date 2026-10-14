@@ -567,18 +567,12 @@ async def login_2fa(
     db: Session = Depends(get_db),
 ):
     """Exchange a single-use challenge + TOTP/recovery code for tokens."""
+    from app.core.errors import ServiceUnavailableError
     from auth import lockout as lockout_mod
     from auth import totp as totp_mod
     from models.recovery_code import RecoveryCode
 
-    ip = client_ip(request) or "unknown"
-    tacct, tipc = _totp_counters()
-    try:
-        locked = any(c.is_locked(k) for c, k in
-                     ((tacct, ""), (tipc, ip)))
-    except lockout_mod.LockoutUnavailable as exc:
-        from app.core.errors import ServiceUnavailableError
-
+    def _unavailable(exc: Exception):
         logger.error("lockout store unreachable during 2FA: %s",
                      type(exc).__name__)
         raise ServiceUnavailableError(
@@ -586,7 +580,17 @@ async def login_2fa(
             code="auth_unavailable",
         )
 
-    user_id = token_store.consume_mfa_challenge(data.challenge)
+    ip = client_ip(request) or "unknown"
+    tacct, tipc = _totp_counters()
+    try:
+        if tipc.is_locked(ip):
+            raise UnauthenticatedError("Invalid credentials")
+    except lockout_mod.LockoutUnavailable as exc:
+        _unavailable(exc)
+    try:
+        user_id = token_store.consume_mfa_challenge(data.challenge)
+    except Exception as exc:
+        _unavailable(exc)
     user = db.get(User, user_id) if user_id else None
     if user is None or not user.is_active:
         try:
@@ -594,20 +598,11 @@ async def login_2fa(
         except lockout_mod.LockoutUnavailable:
             pass
         raise UnauthenticatedError("Invalid credentials")
-
     try:
-        acct_locked = tacct.is_locked(user.username)
-        ip_locked = tipc.is_locked(ip)
+        locked = tacct.is_locked(user.username) or tipc.is_locked(ip)
     except lockout_mod.LockoutUnavailable as exc:
-        from app.core.errors import ServiceUnavailableError
-
-        logger.error("lockout store unreachable during 2FA: %s",
-                     type(exc).__name__)
-        raise ServiceUnavailableError(
-            "Authentication temporarily unavailable",
-            code="auth_unavailable",
-        )
-    if acct_locked or ip_locked:
+        _unavailable(exc)
+    if locked:
         raise UnauthenticatedError("Invalid credentials")
 
     authenticated = False
@@ -627,6 +622,8 @@ async def login_2fa(
                 break
     if not authenticated:
         try:
+            # Account precedence (same rule as password login): the IP is
+            # charged only when the account does not engage.
             engaged, seconds, scope = False, 0, ""
             engaged, seconds = tacct.register_failure(user.username)
             scope = "account"
