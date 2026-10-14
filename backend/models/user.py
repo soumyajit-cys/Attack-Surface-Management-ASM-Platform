@@ -37,6 +37,12 @@ class User(Base):
 
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # TOTP 2FA (Phase 1.5.4). totp_secret is EncryptedText at the app layer;
+    # pending secrets (enabled=False) activate only after /confirm.
+    totp_secret = Column(EncryptedText, nullable=True)
+    totp_enabled = Column(Boolean, default=False, nullable=False)
+    totp_last_step = Column(BigInteger, nullable=True)
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
