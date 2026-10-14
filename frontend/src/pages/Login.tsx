@@ -77,6 +77,21 @@ export function Login() {
         </div>
 
         <div className="card p-6">
+          {challenge ? (
+            <div className="space-y-5">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Two-factor verification
+              </h2>
+              <MfaStep onSubmit={handleMfa} loading={loading} />
+              <button
+                type="button"
+                className="text-sm text-gray-500"
+                onClick={() => setChallenge(null)}
+              >
+                Back to sign in
+              </button>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="username" className="label">
