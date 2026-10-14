@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi, afterEach } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { RecoveryCodesDisplay } from './RecoveryCodesDisplay'
+
+afterEach(cleanup)
 
 const CODES = Array.from({ length: 10 }, (_, i) => `ABCD${String(i).padStart(12, '0')}`)
 

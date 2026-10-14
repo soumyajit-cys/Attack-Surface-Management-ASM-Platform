@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
-import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi, afterEach } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { MfaStep } from './MfaStep'
+
+afterEach(cleanup)
 
 describe('MfaStep (login 2FA step)', () => {
   it('submits the trimmed 6-digit code', async () => {
