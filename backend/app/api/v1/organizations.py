@@ -15,6 +15,7 @@ from schemas.organization import (
     InvitationResponse,
     OrganizationCreate,
     OrganizationResponse,
+    Requirement2FARequest,
 )
 
 from app.core.audit import record_audit
@@ -374,3 +375,36 @@ async def delete_api_key(
     db.commit()
 
     return {"message": "API key deleted"}
+
+
+@router.post("/2fa-requirement")
+async def set_2fa_requirement(
+    request: Request,
+    data: Requirement2FARequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_ORG_ADMIN_DEP),
+):
+    """Toggle org-wide 2FA enforcement (admin only, audited).
+
+    Enabling is refused unless the calling admin has 2FA enabled, so an
+    org can never lock out its own administrator.
+    """
+    from app.core.errors import BadRequestError as BadRequest
+
+    org = db.get(Organization, principal.organization_id)
+    if data.enabled and not principal.user.totp_enabled:
+        raise BadRequest(
+            "Enable 2FA on your own account first",
+            code="totp_required",
+        )
+    org.require_2fa = data.enabled
+    record_audit(
+        db,
+        organization_id=org.id,
+        actor=principal.user.username,
+        action="org.2fa_requirement",
+        details={"enabled": data.enabled},
+        request=request,
+    )
+    db.commit()
+    return {"require_2fa": org.require_2fa}
