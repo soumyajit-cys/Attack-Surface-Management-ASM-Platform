@@ -124,6 +124,39 @@ def current_principal(
     return get_principal(request, db)
 
 
+def principal_or_enroll(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Principal:
+    """Like :func:`current_principal`, but additionally accepts a restricted
+    ``scope="enroll_2fa"`` token (Phase 1.5.4).
+
+    Used ONLY by the 2FA enrollment endpoints and ``GET /auth/me`` so users
+    forced into enrollment by ``require_2fa`` can complete it. Every other
+    route keeps ``current_principal``, which rejects restricted tokens
+    because their type is neither access nor a valid API key.
+    """
+    try:
+        return get_principal(request, db)
+    except UnauthenticatedError:
+        pass
+    auth_header = request.headers.get("Authorization") or ""
+    if not auth_header.startswith("Bearer "):
+        raise UnauthenticatedError()
+    payload = token_service.decode_token(auth_header[7:])
+    if (not payload or payload.get("type") != token_service.RESTRICTED
+            or payload.get("scope") != "enroll_2fa"):
+        raise UnauthenticatedError()
+    user = _load_user(db, int(payload["sub"]))
+    if user is None:
+        raise UnauthenticatedError()
+    return Principal(
+        user=user,
+        via="jwt",
+        permissions=effective_permissions(user.role),
+    )
+
+
 def require_permissions_dep(*needed: Permission):
     """Dependency factory: authenticate then enforce permissions."""
 
