@@ -24,6 +24,9 @@ const Organizations = lazy(() =>
 const Alerting = lazy(() => import('./pages/Alerting').then((m) => ({ default: m.Alerting })))
 const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
+const TwoFactorSetup = lazy(() =>
+  import('./pages/TwoFactorSetup').then((m) => ({ default: m.TwoFactorSetup })),
+)
 
 function PageLoader() {
   return (
@@ -60,6 +63,14 @@ export default function Router() {
         element={
           <LazyPage>
             <Register />
+          </LazyPage>
+        }
+      />
+      <Route
+        path="/setup-2fa"
+        element={
+          <LazyPage>
+            <TwoFactorSetup />
           </LazyPage>
         }
       />
