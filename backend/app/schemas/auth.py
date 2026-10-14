@@ -14,6 +14,7 @@ class UserOut(BaseModel):
     organization_id: int
     organization_name: str | None = None
     permissions: list[str] = Field(default_factory=list)
+    totp_enabled: bool = False
 
 
 class TokenBundle(BaseModel):

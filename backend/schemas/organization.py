@@ -11,6 +11,7 @@ class OrganizationResponse(BaseModel):
     id: int
     name: str
     created_at: datetime
+    require_2fa: bool = False
 
 
 class Requirement2FARequest(BaseModel):
