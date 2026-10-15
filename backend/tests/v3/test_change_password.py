@@ -1,10 +1,9 @@
-"""Change-password characterization (tests only, red first).
+"""Change-password characterization tests.
 
 POST /auth/change-password: current password required; TOTP/recovery code
 when 2FA is on; all OTHER sessions die while the caller's access token
 survives; failures feed the shared login lockout counters; audit event.
-Imports are function-level; behavior cases are strict-xfailed until
-implementation lands. No real network.
+No real network.
 """
 
 import pytest
