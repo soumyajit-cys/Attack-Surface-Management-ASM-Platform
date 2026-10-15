@@ -40,6 +40,9 @@ NO_TENANT_DATA = {
 # explicit cross-org identical-404 case.
 COVERED_ELSEWHERE = {
     ("POST", "/api/v1/auth/admin/unlock-account"),
+    # Change-password acts strictly on the caller (no id parameter, so no
+    # cross-tenant access is expressible); covered in test_change_password.
+    ("POST", "/api/v1/auth/change-password"),
     ("POST", "/api/v1/auth/2fa/enroll"),
     ("POST", "/api/v1/auth/2fa/confirm"),
     ("POST", "/api/v1/auth/2fa/disable"),
