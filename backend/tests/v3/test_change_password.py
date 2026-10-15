@@ -53,7 +53,6 @@ def _enable_2fa(client, headers, password="password123"):
     return secret
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-PW-001: no change-password route")
 def test_change_password_revolves_others_keeps_self(client, db):
     _register(client, "pwchange")
     mine = _login(client, "pwchange")
@@ -87,7 +86,6 @@ def test_change_password_revolves_others_keeps_self(client, db):
         AuditLog.action == "auth.password_changed").count() == 1
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-PW-001: no change-password route")
 def test_change_password_wrong_current_fails_shut(client, db):
     """Wrong current password: identical 401, nothing revoked, no audit."""
     from models.audit_log import AuditLog
@@ -109,7 +107,6 @@ def test_change_password_wrong_current_fails_shut(client, db):
         AuditLog.action == "auth.password_changed").count() == 0
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-PW-001: no change-password route")
 def test_change_password_feeds_lockout(client):
     _register(client, "pwlock")
     bundle = _login(client, "pwlock")
@@ -129,7 +126,6 @@ def test_change_password_feeds_lockout(client):
     assert locked.status_code == 401
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-PW-001: no change-password route")
 def test_change_password_requires_2fa_code(client, db):
     _register(client, "pw2fa")
     bundle = _login(client, "pw2fa")
