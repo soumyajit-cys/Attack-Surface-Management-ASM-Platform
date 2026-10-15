@@ -484,12 +484,10 @@ async def confirm_2fa(
     if not user.totp_secret:
         raise BadRequest("Nothing to confirm -- enroll first",
                          code="nothing_to_confirm")
-    step = totp_mod.verify_code(user.totp_secret, data.code,
-                                user.totp_last_step)
-    if step is None:
+    step = totp_mod.verify_code(user.totp_secret, data.code, None)
+    if step is None or not totp_mod.claim_totp_step(db, user.id, step):
         raise BadRequest("Invalid code", code="invalid_code")
     user.totp_enabled = True
-    user.totp_last_step = step
     codes = _replace_recovery_codes(db, user)
     record_audit(
         db, organization_id=user.organization_id, actor=user.username,
