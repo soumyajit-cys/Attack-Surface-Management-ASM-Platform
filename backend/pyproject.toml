@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "SentinelASM FastAPI backend (moved from requirements.txt; see uv.lock)"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi",
+    "fastapi==0.136.3",
+    # Pinned: >=0.143 nests included routers (_IncludedRouter) instead of
+    # flattening app.routes, which silently disables slowapi's per-route
+    # handler lookup (all API routes become limiter-exempt) and breaks our
+    # route-table introspection tests. Re-evaluate on 0.144+.
     "uvicorn",
     "sqlalchemy",
     "alembic",
