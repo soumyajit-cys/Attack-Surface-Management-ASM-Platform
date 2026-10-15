@@ -415,6 +415,30 @@ def test_secrets_never_logged(client, tfa, caplog):
         assert code not in caplog.text
 
 
+def test_login_response_shapes_and_openapi(client, tfa):
+    """Union response model: normal bundle byte-identical, challenge and
+    restricted shapes documented in OpenAPI."""
+    headers, _ = tfa("tfashape")
+    normal = client.post(
+        "/api/v1/auth/login",
+        json={"username": "tfashape", "password": "password123"})
+    assert normal.status_code == 200, normal.text
+    assert set(normal.json()) == {"access_token", "refresh_token",
+                                  "token_type", "user"}
+    _enable_2fa(client, headers)
+    challenged = client.post(
+        "/api/v1/auth/login",
+        json={"username": "tfashape", "password": "password123"})
+    assert set(challenged.json()) == {"mfa_required", "challenge"}
+    spec = client.get("/openapi.json").json()
+    schema = spec["paths"]["/api/v1/auth/login"]["post"]["responses"][
+        "200"]["content"]["application/json"]["schema"]
+    refs = str(schema)
+    assert "TokenBundle" in refs
+    assert "MfaChallenge" in refs
+    assert "RestrictedToken" in refs
+
+
 def test_totp_step_race_single_winner(client, tfa):
     """Two concurrent exchanges of the same code: exactly one succeeds."""
     import threading
