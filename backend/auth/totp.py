@@ -72,3 +72,24 @@ def hash_recovery_code(code: str) -> str:
 
 def verify_recovery_code(code: str, code_hash: str) -> bool:
     return hmac.compare_digest(hash_recovery_code(code), code_hash)
+
+
+def claim_totp_step(db, user_id: int, step: int) -> bool:
+    """Atomically adopt a TOTP counter step; True iff this caller won.
+
+    A single UPDATE ... WHERE last_step IS NULL OR last_step < step, so two
+    concurrent verifications of the same code cannot both succeed: the
+    loser's UPDATE matches zero rows. Callers must treat False as a replay.
+    """
+    from sqlalchemy import or_
+
+    from models.user import User
+
+    updated = (
+        db.query(User)
+        .filter(User.id == user_id,
+                or_(User.totp_last_step.is_(None),
+                    User.totp_last_step < step))
+        .update({"totp_last_step": step}, synchronize_session="fetch")
+    )
+    return updated == 1
