@@ -615,11 +615,10 @@ async def login_2fa(
     authenticated = False
     if (user.totp_enabled and user.totp_secret and len(data.code) == 6
             and (step := totp_mod.verify_code(
-                user.totp_secret, data.code,
-                user.totp_last_step)) is not None):
-        user.totp_last_step = step
+                user.totp_secret, data.code, None)) is not None
+            and totp_mod.claim_totp_step(db, user.id, step)):
         authenticated = True
-    else:
+    elif not authenticated:
         for row in db.query(RecoveryCode).filter(
                 RecoveryCode.user_id == user.id,
                 RecoveryCode.used_at.is_(None)).all():
