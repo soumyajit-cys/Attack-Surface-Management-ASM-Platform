@@ -788,6 +788,122 @@ async def reset_password(
     return MessageOut(message="Password updated")
 
 
+@router.post("/change-password", response_model=MessageOut)
+@limiter.limit(f"{settings.rate_limit_auth_requests_per_minute}/minute")
+async def change_password(
+    request: Request,
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(current_principal),
+) -> MessageOut:
+    """Change the caller's own password (housekeeping, task 1.6.0).
+
+    Interactive sessions only: API keys are rejected (a stolen key must not
+    be able to take over the password). Requires the current password plus
+    a TOTP/recovery code when 2FA is on. Revokes every OTHER session while
+    the caller's access token keeps working; failures feed the shared login
+    lockout counters with the identical 401 envelope.
+    """
+    from app.core.errors import ForbiddenError
+
+    if principal.is_api_key:
+        raise ForbiddenError("Password change requires a user session",
+                             code="api_key_forbidden")
+
+    from auth import lockout as lockout_mod
+    from auth import totp as totp_mod
+    from models.recovery_code import RecoveryCode
+
+    user = principal.user
+    identifier = user.username.strip().lower()
+    ip = client_ip(request) or "unknown"
+    acct, ipc = lockout_mod.account_counter(), lockout_mod.ip_counter()
+    try:
+        if acct.is_locked(identifier) or ipc.is_locked(ip):
+            raise UnauthenticatedError("Invalid credentials")
+    except lockout_mod.LockoutUnavailable as exc:
+        from app.core.errors import ServiceUnavailableError
+
+        logger.error("lockout store unreachable during password change: %s",
+                     type(exc).__name__)
+        raise ServiceUnavailableError(
+            "Authentication temporarily unavailable",
+            code="auth_unavailable",
+        )
+
+    password_ok = verify_password(data.current_password, user.password_hash)
+    code_ok = True
+    matched_recovery = None
+    if password_ok and user.totp_enabled:
+        code_ok = False
+        if (user.totp_secret and data.code and len(data.code) == 6
+                and (step := totp_mod.verify_code(
+                    user.totp_secret, data.code,
+                    user.totp_last_step)) is not None
+                and totp_mod.claim_totp_step(db, user.id, step)):
+            code_ok = True
+        elif data.code:
+            for row in db.query(RecoveryCode).filter(
+                    RecoveryCode.user_id == user.id,
+                    RecoveryCode.used_at.is_(None)).all():
+                if totp_mod.verify_recovery_code(data.code, row.code_hash):
+                    matched_recovery = row
+                    code_ok = True
+                    break
+
+    if not password_ok or not code_ok:
+        try:
+            engaged, seconds, scope = False, 0, ""
+            engaged, seconds = acct.register_failure(identifier)
+            scope = "account"
+            if not engaged:
+                ip_engaged, ip_seconds = ipc.register_failure(ip)
+                if ip_engaged:
+                    engaged, seconds, scope = True, ip_seconds, "ip"
+            if engaged:
+                record_audit(
+                    db, organization_id=user.organization_id,
+                    actor=user.username, action="auth.account_locked",
+                    details={"scope": scope, "lock_seconds": seconds},
+                    request=request,
+                )
+                db.commit()
+        except lockout_mod.LockoutUnavailable:
+            logger.warning("lockout store unreachable during password "
+                           "change failure")
+        raise UnauthenticatedError("Invalid credentials")
+
+    if matched_recovery is not None:
+        matched_recovery.used_at = datetime.now(timezone.utc)
+    user.password_hash = hash_password(data.new_password)
+    # Keep the caller's live access token; everything else dies.
+    current_jti = None
+    current_ttl = 900
+    auth_header = request.headers.get("Authorization") or ""
+    if auth_header.startswith("Bearer "):
+        current_payload = token_service.decode_token(auth_header[7:])
+        current_jti = current_payload.get("jti")
+        try:
+            current_ttl = max(int(token_service.token_expiry(
+                current_payload).timestamp() - datetime.now(
+                    timezone.utc).timestamp()), 1)
+        except (KeyError, ValueError, OSError):
+            pass
+    revoked = token_store.revoke_family_except(
+        user.id, {current_jti} if current_jti else set())
+    if current_jti:
+        # Re-anchor the surviving access token (record was deleted above).
+        token_store.store_access(auth_header[7:], user.id)
+    record_audit(
+        db, organization_id=user.organization_id, actor=user.username,
+        action="auth.password_changed",
+        details={"revoked_tokens": revoked},
+        request=request,
+    )
+    db.commit()
+    return MessageOut(message="Password changed")
+
+
 @router.get("/me", response_model=UserOut)
 async def me(
     principal: Principal = Depends(principal_or_enroll),
