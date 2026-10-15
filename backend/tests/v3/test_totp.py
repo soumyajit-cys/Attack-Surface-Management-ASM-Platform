@@ -413,3 +413,42 @@ def test_secrets_never_logged(client, tfa, caplog):
     assert secret not in caplog.text
     for code in codes:
         assert code not in caplog.text
+
+
+def test_totp_step_race_single_winner(client, tfa):
+    """Two concurrent exchanges of the same code: exactly one succeeds."""
+    import threading
+
+    headers, _ = tfa("tfarace")
+    secret, _codes = _enable_2fa(client, headers)
+    code = _next_code(secret)
+    challenges = [
+        client.post(
+            "/api/v1/auth/login",
+            json={"username": "tfarace", "password": "password123"},
+        ).json()["challenge"]
+        for _ in range(2)
+    ]
+    barrier = threading.Barrier(3)
+    outcomes = []
+
+    def attempt(challenge):
+        # Separate client per thread: TestClient portals are not shared.
+        from fastapi.testclient import TestClient
+
+        from main import app
+
+        barrier.wait(timeout=30)
+        with TestClient(app) as thread_client:
+            outcomes.append(thread_client.post(
+                "/api/v1/auth/login/2fa",
+                json={"challenge": challenge, "code": code}).status_code)
+
+    threads = [threading.Thread(target=attempt, args=(c,))
+               for c in challenges]
+    for thread in threads:
+        thread.start()
+    barrier.wait(timeout=30)
+    for thread in threads:
+        thread.join(timeout=60)
+    assert sorted(outcomes) == [200, 401]
