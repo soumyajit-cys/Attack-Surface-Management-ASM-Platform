@@ -155,3 +155,21 @@ def test_change_password_requires_2fa_code(client, db):
               "code": _next_code(secret)},
         headers=headers)
     assert ok.status_code == 200, ok.text
+
+
+def test_change_password_rejects_api_keys(client, db):
+    """Automation keys cannot take over the password (403, JWT-only)."""
+    _register(client, "pwkey")
+    admin = _login(client, "pwkey")
+    created = client.post(
+        "/api/v1/organizations/api-keys",
+        json={"name": "pwkey"},
+        headers={"Authorization": f"Bearer {admin['access_token']}"})
+    assert created.status_code == 201, created.text
+    key_h = {"X-API-Key": created.json()["key"]}
+    denied = client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": "password123",
+              "new_password": "brandnewpass1"},
+        headers=key_h)
+    assert denied.status_code == 403
