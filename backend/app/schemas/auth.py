@@ -1,5 +1,7 @@
 """v1 API schemas."""
 
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 from app.core.permissions import Permission

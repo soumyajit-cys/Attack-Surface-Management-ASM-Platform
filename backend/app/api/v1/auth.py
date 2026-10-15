@@ -134,7 +134,10 @@ async def register(
     return _issue_tokens(db, user)
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    response_model=TokenBundle | MfaChallenge | RestrictedToken,
+)
 @limiter.limit(f"{settings.rate_limit_auth_requests_per_minute}/minute")
 async def login(
     request: Request,
