@@ -28,6 +28,12 @@ class LogoutRequest(BaseModel):
     access_token: str | None = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    code: str | None = Field(default=None, min_length=1, max_length=32)
+
+
 class UnlockAccountRequest(BaseModel):
     username: str = Field(min_length=1, max_length=128)
 
