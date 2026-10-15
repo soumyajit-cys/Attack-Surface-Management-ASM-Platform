@@ -25,6 +25,20 @@ class TokenBundle(BaseModel):
     user: UserOut
 
 
+class MfaChallenge(BaseModel):
+    """Password-OK response for 2FA users: no usable credential inside."""
+
+    mfa_required: Literal[True] = True
+    challenge: str
+
+
+class RestrictedToken(BaseModel):
+    """Limited-scope token for forced enrollment (scope='enroll_2fa')."""
+
+    scope: Literal["enroll_2fa"]
+    token: str
+
+
 class MessageOut(BaseModel):
 
     message: str
