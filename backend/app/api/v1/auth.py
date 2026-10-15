@@ -19,6 +19,7 @@ from auth.token_store import token_store
 from models.user import User
 from models.organization import Organization
 from schemas.auth import (
+    ChangePasswordRequest,
     ConfirmRequest,
     EnrollRequest,
     ForgotPasswordRequest,
