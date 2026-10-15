@@ -76,8 +76,10 @@ def _issue_tokens(db: Session, user: User) -> TokenBundle:
     org = db.get(Organization, user.organization_id)
     access = token_service.create_access_token(user.id)
     refresh = token_service.create_refresh_token(user.id)
-    token_store.store_access(access, user.id)
-    token_store.store_refresh(refresh, user.id)
+    access_jti = token_service.decode_token(access).get("jti")
+    refresh_jti = token_service.decode_token(refresh).get("jti")
+    token_store.store_access(access, user.id, sibling=refresh_jti)
+    token_store.store_refresh(refresh, user.id, sibling=access_jti)
     return TokenBundle(
         access_token=access,
         refresh_token=refresh,
@@ -326,8 +328,11 @@ async def refresh(
 
     access = token_service.create_access_token(user.id)
     new_refresh = token_service.create_refresh_token(user.id)
-    token_store.store_access(access, user.id)
-    token_store.rotate(data.refresh_token, new_refresh, user.id)
+    access_jti = token_service.decode_token(access).get("jti")
+    refresh_jti = token_service.decode_token(new_refresh).get("jti")
+    token_store.store_access(access, user.id, sibling=refresh_jti)
+    token_store.rotate(data.refresh_token, new_refresh, user.id,
+                       sibling=access_jti)
 
     record_audit(
         db,

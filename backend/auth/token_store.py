@@ -22,20 +22,22 @@ def _ttl_seconds(payload: dict) -> int:
 
 
 def _decode_stored(raw) -> dict:
-    """Refresh/access records are JSON {user_id, parent}; legacy int values
-    (user id only, pre-1.5.6) still decode."""
+    """Refresh/access records are JSON {user_id, parent[, sibling]}; legacy
+    int values (user id only, pre-1.5.6) still decode."""
     if raw is None:
         return {}
     if isinstance(raw, (int, float)):
-        return {"user_id": int(raw), "parent": None}
+        return {"user_id": int(raw), "parent": None, "sibling": None}
     try:
         data = json.loads(raw)
     except (TypeError, ValueError):
         return {}
     if isinstance(data, int):
-        return {"user_id": data, "parent": None}
+        return {"user_id": data, "parent": None, "sibling": None}
     if isinstance(data, dict):
-        return {"user_id": data.get("user_id"), "parent": data.get("parent")}
+        return {"user_id": data.get("user_id"),
+                "parent": data.get("parent"),
+                "sibling": data.get("sibling")}
     return {}
 
 
@@ -44,7 +46,8 @@ class TokenStore:
     def __init__(self, client: redis.Redis = None):
         self.client = client or get_redis()
 
-    def store_refresh(self, token: str, user_id: int) -> None:
+    def store_refresh(self, token: str, user_id: int,
+                      sibling: str | None = None) -> None:
         payload = token_service.decode_token(token)
         jti = payload.get("jti")
         if not jti:
@@ -52,7 +55,8 @@ class TokenStore:
         ttl = _ttl_seconds(payload)
         self.client.set(
             REFRESH_KEY.format(jti=jti),
-            json.dumps({"user_id": user_id, "parent": None}),
+            json.dumps({"user_id": user_id, "parent": None,
+                        "sibling": sibling}),
             ex=ttl,
         )
         self.client.sadd(SESSIONS_KEY.format(user_id=user_id), jti)
@@ -73,11 +77,13 @@ class TokenStore:
             return False
         return True
 
-    def store_access(self, token: str, user_id: int) -> None:
+    def store_access(self, token: str, user_id: int,
+                     sibling: str | None = None) -> None:
         """Track an access jti so family revocation reaches it too.
 
         Lives under its own access:* namespace so refresh:* keeps meaning
         exactly "live refresh tokens" (see test_refresh_single_pair).
+        ``sibling`` links the refresh token issued in the same bundle.
         """
         payload = token_service.decode_token(token)
         jti = payload.get("jti")
@@ -86,7 +92,8 @@ class TokenStore:
         ttl = _ttl_seconds(payload)
         self.client.set(
             ACCESS_KEY.format(jti=jti),
-            json.dumps({"user_id": user_id, "parent": None}),
+            json.dumps({"user_id": user_id, "parent": None,
+                        "sibling": sibling}),
             ex=ttl,
         )
         self.client.sadd(SESSIONS_KEY.format(user_id=user_id), jti)
@@ -111,7 +118,8 @@ class TokenStore:
         self.client.delete(key)
         return count
 
-    def rotate(self, old_token: str, new_token: str, user_id: int) -> None:
+    def rotate(self, old_token: str, new_token: str, user_id: int,
+               sibling: str | None = None) -> None:
         old_payload = token_service.decode_token(old_token)
         old_jti = old_payload.get("jti")
         if old_jti:
@@ -127,11 +135,38 @@ class TokenStore:
             ttl = _ttl_seconds(new_payload)
             self.client.set(
                 REFRESH_KEY.format(jti=new_jti),
-                json.dumps({"user_id": user_id, "parent": old_jti}),
+                json.dumps({"user_id": user_id, "parent": old_jti,
+                            "sibling": sibling}),
                 ex=ttl,
             )
             self.client.sadd(SESSIONS_KEY.format(user_id=user_id), new_jti)
             self.client.expire(SESSIONS_KEY.format(user_id=user_id), ttl)
+
+    def revoke_family_except(self, user_id: int, keep: set[str]) -> int:
+        """Like :meth:`revoke_family` but spares ``keep`` jtis and any
+        record whose sibling is kept (the caller's live session)."""
+        members = self.client.smembers(
+            SESSIONS_KEY.format(user_id=user_id)) or set()
+        if isinstance(members, (bytes, str)):
+            members = {members}
+        kept = {m.decode() if isinstance(m, bytes) else m for m in keep}
+        count = 0
+        for raw in members:
+            jti = raw.decode() if isinstance(raw, bytes) else raw
+            if jti in kept:
+                continue
+            record = _decode_stored(self.client.get(
+                REFRESH_KEY.format(jti=jti)))
+            if not record:
+                record = _decode_stored(self.client.get(
+                    ACCESS_KEY.format(jti=jti)))
+            if record.get("sibling") in kept:
+                continue
+            self.client.set(REVOKED_KEY.format(jti=jti), 1, ex=90 * 86400)
+            self.client.delete(REFRESH_KEY.format(jti=jti))
+            self.client.delete(ACCESS_KEY.format(jti=jti))
+            count += 1
+        return count
 
     def store_mfa_challenge(self, token: str) -> None:
         """Register a 2FA challenge jti as single-use (5-minute TTL)."""
