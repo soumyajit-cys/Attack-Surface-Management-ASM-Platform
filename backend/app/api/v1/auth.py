@@ -878,21 +878,15 @@ async def change_password(
     user.password_hash = hash_password(data.new_password)
     # Keep the caller's live access token; everything else dies.
     current_jti = None
-    current_ttl = 900
     auth_header = request.headers.get("Authorization") or ""
     if auth_header.startswith("Bearer "):
-        current_payload = token_service.decode_token(auth_header[7:])
-        current_jti = current_payload.get("jti")
-        try:
-            current_ttl = max(int(token_service.token_expiry(
-                current_payload).timestamp() - datetime.now(
-                    timezone.utc).timestamp()), 1)
-        except (KeyError, ValueError, OSError):
-            pass
+        current_jti = token_service.decode_token(
+            auth_header[7:]).get("jti")
     revoked = token_store.revoke_family_except(
         user.id, {current_jti} if current_jti else set())
     if current_jti:
-        # Re-anchor the surviving access token (record was deleted above).
+        # Re-anchor the surviving access token (record was deleted above;
+        # store_access derives the TTL from the token itself).
         token_store.store_access(auth_header[7:], user.id)
     record_audit(
         db, organization_id=user.organization_id, actor=user.username,
