@@ -45,7 +45,13 @@ from app.api.deps import (
     require_permissions_dep,
 )
 from app.core.permissions import Permission
-from app.schemas.auth import MessageOut, TokenBundle, UserOut
+from app.schemas.auth import (
+    MessageOut,
+    MfaChallenge,
+    RestrictedToken,
+    TokenBundle,
+    UserOut,
+)
 from utils.logger import logger
 from utils.rate_limiter import limiter
 from services.alerts.email_service import send_email
