@@ -439,6 +439,53 @@ def test_login_response_shapes_and_openapi(client, tfa):
     assert "RestrictedToken" in refs
 
 
+def test_password_reset_keeps_2fa_requirement(client, tfa, db):
+    """Resetting the password does not disable 2FA: login still challenges."""
+    from auth import jwt as tokens
+    from models.user import User
+
+    headers, _ = tfa("tfareset2fa")
+    _enable_2fa(client, headers)
+    user = db.query(User).filter(User.username == "tfareset2fa").one()
+    reset_token = tokens.create_password_reset_token(user.id)
+    reset = client.post(
+        "/api/v1/auth/reset-password",
+        json={"token": reset_token, "new_password": "brandnewpass2"})
+    assert reset.status_code == 200, reset.text
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "tfareset2fa", "password": "brandnewpass2"})
+    assert login.status_code == 200, login.text
+    assert login.json().get("mfa_required") is True
+    assert "access_token" not in login.json()
+
+
+def test_recovery_code_rejected_at_password_step(client, tfa):
+    """A recovery code is not a password: 401 at POST /login."""
+    headers, _ = tfa("tfarecjatlogin")
+    _secret, codes = _enable_2fa(client, headers)
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "tfarecjatlogin", "password": codes[0]})
+    assert response.status_code == 401
+
+
+def test_challenge_bound_to_user(client, tfa):
+    """User A's challenge + user B's code never authenticates."""
+    headers_a, _ = tfa("tfausera", org="TFA A Org")
+    _enable_2fa(client, headers_a)
+    headers_b, _ = tfa("tfauserb", org="TFA B Org")
+    secret_b, _codes_b = _enable_2fa(client, headers_b)
+    challenge_a = client.post(
+        "/api/v1/auth/login",
+        json={"username": "tfausera", "password": "password123"},
+    ).json()["challenge"]
+    cross = client.post(
+        "/api/v1/auth/login/2fa",
+        json={"challenge": challenge_a, "code": _next_code(secret_b)})
+    assert cross.status_code == 401
+
+
 def test_totp_step_race_single_winner(client, tfa):
     """Two concurrent exchanges of the same code: exactly one succeeds."""
     import threading
