@@ -88,11 +88,25 @@ def test_change_password_revolves_others_keeps_self(client, db):
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-PW-001: no change-password route")
-def test_change_password_wrong_current_fails_shut(client):
-    _register(client, "pw wrong")
-    bundle = _login(client, "pw wrong".replace(" ", ""))
-    # (usernames cannot contain spaces; register the right name instead)
-    assert bundle["access_token"]
+def test_change_password_wrong_current_fails_shut(client, db):
+    """Wrong current password: identical 401, nothing revoked, no audit."""
+    from models.audit_log import AuditLog
+
+    _register(client, "pwwrong")
+    mine = _login(client, "pwwrong")
+    other = _login(client, "pwwrong")
+    mine_h = {"Authorization": f"Bearer {mine['access_token']}"}
+    other_h = {"Authorization": f"Bearer {other['access_token']}"}
+    denied = client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": "nottheright1",
+              "new_password": "brandnewpass1"},
+        headers=mine_h)
+    assert denied.status_code == 401
+    assert client.get("/api/v1/auth/me", headers=mine_h).status_code == 200
+    assert client.get("/api/v1/auth/me", headers=other_h).status_code == 200
+    assert db.query(AuditLog).filter(
+        AuditLog.action == "auth.password_changed").count() == 0
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-PW-001: no change-password route")
