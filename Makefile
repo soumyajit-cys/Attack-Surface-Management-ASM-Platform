@@ -3,7 +3,7 @@
 # Backend venv lives at backend/venv (see README quickstart); lint also needs
 # `pip install ruff mypy`, frontend needs `npm install` under frontend/.
 
-.PHONY: setup migrate dev test lint up down secrets-scan check
+.PHONY: setup migrate dev test lint up down secrets-scan check lock audit
 
 # Local Postgres superuser credentials (only used by `check` to
 # create/drop its scratch database; override with `make check
