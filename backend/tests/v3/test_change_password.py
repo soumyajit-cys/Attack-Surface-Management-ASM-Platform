@@ -152,6 +152,25 @@ def test_change_password_requires_2fa_code(client, db):
     assert ok.status_code == 200, ok.text
 
 
+def test_change_password_must_differ_from_current(client, db):
+    """New password identical to the current one is rejected (no-op change)."""
+    _register(client, "pwdiffer")
+    bundle = _login(client, "pwdiffer")
+    headers = {"Authorization": f"Bearer {bundle['access_token']}"}
+    same = client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": "password123",
+              "new_password": "password123"},
+        headers=headers)
+    assert same.status_code == 400
+    assert same.json()["error"]["code"] == "password_reuse"
+    # Nothing revoked, old password still works.
+    assert client.post(
+        "/api/v1/auth/login",
+        json={"username": "pwdiffer",
+              "password": "password123"}).status_code == 200
+
+
 def test_change_password_rejects_api_keys(client, db):
     """Automation keys cannot take over the password (403, JWT-only)."""
     _register(client, "pwkey")
