@@ -278,6 +278,33 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  lockfiles:
+    name: Lockfile drift gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081  # v5
+
+      # Fails if pyproject.toml and uv.lock disagree (run `make lock`).
+      - name: Check uv lockfile is current
+        working-directory: ./backend
+        run: uv lock --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: "20"
+
+      # Fails if package.json and package-lock.json disagree.
+      - name: Check npm lockfile installs cleanly
+        working-directory: ./frontend
+        run: npm ci --dry-run
+
   trivy-fs:
     name: Trivy filesystem scan
     runs-on: ubuntu-latest
