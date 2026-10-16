@@ -1,0 +1,10 @@
+# Trivy ignore file: every entry needs a reason and an expiry condition.
+# Format: one CVE/check ID per line, `#` comments allowed. Entries here
+# suppress ONLY the listed finding; everything else still fails the build
+# (HIGH/CRITICAL, fixed vulnerabilities only).
+
+# DS-0002 (Dockerfiles run as root): accepted temporarily because container
+# user hardening (non-root user, read-only rootfs, dropped capabilities) is
+# tracked as task 1.6 batch-3 item 4. REMOVE this entry in that batch; the
+# filesystem gate must go red again if Dockerfiles regress to root.
+DS-0002
