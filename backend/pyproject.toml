@@ -9,6 +9,10 @@ dependencies = [
     # flattening app.routes, which silently disables slowapi's per-route
     # handler lookup (all API routes become limiter-exempt) and breaks our
     # route-table introspection tests. Re-evaluate on 0.144+.
+    # Do not bump without running tests/v3/test_rate_limits.py (proves the
+    # global limiter still applies) and test_route_table_complete in
+    # tests/v3/test_tenant_matrix.py (proves routes still flatten);
+    # 0.143.1 silently disabled slowapi and both caught it.
     "uvicorn",
     "sqlalchemy",
     "alembic",
