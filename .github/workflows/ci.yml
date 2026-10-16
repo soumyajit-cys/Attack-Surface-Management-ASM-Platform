@@ -278,6 +278,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+
+      # Pinned trivy-action (v0.36.0). Fails on HIGH/CRITICAL findings in
+      # fixed vulnerabilities only; .trivyignore documents every exception.
+      - name: Scan filesystem
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: '1'
+
   docker-build:
     name: Build Docker Images (no push)
     runs-on: ubuntu-latest
@@ -302,6 +324,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha
+            type=raw,value=ci-scan
 
       - name: Build Backend (no push)
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25  # v5
@@ -321,6 +344,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha
+            type=raw,value=ci-scan
 
       - name: Build Frontend (no push)
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25  # v5
@@ -345,6 +369,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha
+            type=raw,value=ci-scan
 
       - name: Build Worker (no push)
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25  # v5
@@ -356,6 +381,39 @@ jobs:
           labels: ${{ steps.meta-worker.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Image scans fail on HIGH/CRITICAL fixed vulnerabilities. The images
+      # above are local-only (push: false); ci-scan tags address them
+      # deterministically. Same .trivyignore as the filesystem gate.
+      - name: Scan Backend image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/backend:ci-scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: '1'
+
+      - name: Scan Frontend image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/frontend:ci-scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: '1'
+
+      - name: Scan Worker image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/worker:ci-scan
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: '1'
 
   docker-publish:
     name: Publish Docker Images (v* tags only)
@@ -440,3 +498,34 @@ jobs:
           labels: ${{ steps.meta-worker.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # CycloneDX SBOMs of exactly what was published (tag builds only).
+      - name: SBOM Backend image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/backend:${{ github.ref_name }}
+          format: cyclonedx
+          output: sbom-backend.json
+
+      - name: SBOM Frontend image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/frontend:${{ github.ref_name }}
+          format: cyclonedx
+          output: sbom-frontend.json
+
+      - name: SBOM Worker image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/worker:${{ github.ref_name }}
+          format: cyclonedx
+          output: sbom-worker.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: sbom-${{ github.ref_name }}
+          path: |
+            sbom-backend.json
+            sbom-frontend.json
+            sbom-worker.json
