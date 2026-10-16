@@ -833,6 +833,12 @@ async def change_password(
         )
 
     password_ok = verify_password(data.current_password, user.password_hash)
+    if password_ok and data.current_password == data.new_password:
+        # No-op change: reject before touching codes, sessions, or audit.
+        raise BadRequestError(
+            "New password must differ from the current password",
+            code="password_reuse",
+        )
     code_ok = True
     matched_recovery = None
     if password_ok and user.totp_enabled:
