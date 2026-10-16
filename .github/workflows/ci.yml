@@ -211,14 +211,20 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Run pip-audit (Python)
         # No baseline ignores: python-jose (and its transitive ecdsa) were
         # removed by the PyJWT migration, so the two former ignores
         # (CVE-2026-85394, PYSEC-2026-1325) are gone. Re-add with reason
         # comments if a future dependency needs one.
+        # Audits the locked set: export first so duplicates/variants resolve
+        # exactly as uv.lock pins them.
         run: |
+          cd backend && uv export --frozen --no-dev --output-file /tmp/requirements.audit.txt
           pip install pip-audit
-          pip-audit -r backend/requirements.txt
+          pip-audit -r /tmp/requirements.audit.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
