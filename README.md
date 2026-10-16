@@ -103,10 +103,10 @@ make setup
 psql -U postgres -c "CREATE USER sentinel WITH PASSWORD 'sentinelpass';"
 psql -U postgres -c "CREATE DATABASE sentinelasm OWNER sentinel;"
 
-# 3 — backend
+# 3 — backend (locked deps: versions + hashes in backend/uv.lock)
 cd backend
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+uv sync --frozen --group dev   # creates .venv; use .venv/bin/python, or
+                               # keep the classic venv: python3 -m venv venv
 cd ..
 make migrate
 make dev &   # API on http://localhost:8000
