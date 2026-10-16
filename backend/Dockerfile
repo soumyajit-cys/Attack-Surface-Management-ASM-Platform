@@ -13,8 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
   && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/uv
+COPY pyproject.toml uv.lock ./
+# Hash-enforced install: --frozen fails if pyproject.toml and uv.lock
+# disagree. Runtime deps only (--no-dev keeps pytest/ruff/mypy out).
+RUN /bin/uv sync --frozen --no-dev --no-install-project
+ENV PATH="/app/.venv/bin:$PATH"
 
 COPY . .
 
