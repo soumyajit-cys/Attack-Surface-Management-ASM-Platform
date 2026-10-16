@@ -40,6 +40,13 @@ up: setup ## full stack via compose on http://localhost (needs Docker)
 down: ## stop the compose stack
 	docker compose down
 
+lock: ## regenerate backend/uv.lock from backend/pyproject.toml
+	cd backend && uv lock
+
+audit: ## pip-audit over the locked backend set + npm audit (frontend prod)
+	cd backend && uv export --frozen --no-dev --output-file /tmp/sentinelasm-requirements.audit.txt && uvx pip-audit -r /tmp/sentinelasm-requirements.audit.txt; rm -f /tmp/sentinelasm-requirements.audit.txt
+	cd frontend && npm audit --omit=dev --audit-level=high
+
 check: ## CI gate mirror, in order (run before every push): ruff, mypy, pytest on a fresh scratch DB, tsc, eslint, prettier, vitest, vite build
 	cd backend && ruff check .
 	cd backend && venv/bin/mypy . --ignore-missing-imports
