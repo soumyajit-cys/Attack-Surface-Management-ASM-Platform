@@ -79,6 +79,32 @@ with open(".env", "w") as f:
 EOF
 }
 
+sync_compose_redis_url() {
+  # Embed the generated REDIS_PASSWORD into REDIS_URL (hex is URL-safe, so
+  # no percent-encoding needed). Like the DB password, both live in root .env.
+  python3 - <<'EOF'
+import re
+
+with open(".env") as f:
+    text = f.read()
+
+m = re.search(r"^REDIS_PASSWORD=(.+)$", text, re.M)
+if not m:
+    print("WARN: REDIS_PASSWORD not found in .env; leaving REDIS_URL as-is")
+    raise SystemExit
+pw = m.group(1).strip()
+text = re.sub(
+    r"^REDIS_URL=redis://:[^@]*@",
+    f"REDIS_URL=redis://:{pw}@",
+    text,
+    flags=re.M,
+)
+with open(".env", "w") as f:
+    f.write(text)
+EOF
+}
+
+
 if [ -e .env ]; then
   echo "setup: ./.env already exists -- leaving it untouched."
 else
@@ -94,7 +120,8 @@ open(p, 'w').write(t)
 " "$NEW_PW"
   inject_placeholders .env
   sync_compose_db_password
-  echo "setup: created ./.env (JWT_SECRET + POSTGRES_PASSWORD generated)."
+  sync_compose_redis_url
+  echo "setup: created ./.env (JWT_SECRET + POSTGRES_PASSWORD + REDIS_PASSWORD generated)."
 fi
 if [ -e backend/.env ]; then
   echo "setup: ./backend/.env already exists -- leaving it untouched."
