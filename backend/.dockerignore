@@ -1,0 +1,26 @@
+# Backend build context exclusions — keep the image lean and secret-free.
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+venv
+.venv
+**/venv
+tests
+**/tests
+docs
+**/docs
+dist
+**/dist
+.env
+.env.*
+**/.env
+**/.env.*
+*.md
+!README.md
+Dockerfile
+.dockerignore

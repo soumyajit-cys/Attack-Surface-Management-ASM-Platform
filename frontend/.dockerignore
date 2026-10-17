@@ -1,0 +1,15 @@
+# Frontend build context exclusions.
+.git
+.gitignore
+node_modules
+dist
+coverage
+.env
+.env.*
+**/*.test.ts
+**/*.test.tsx
+**/__snapshots__
+**/.DS_Store
+*.md
+Dockerfile
+.dockerignore
