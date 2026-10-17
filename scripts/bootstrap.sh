@@ -43,6 +43,7 @@ replacements = {
     "change-me-generate-a-real-64-char-hex-secret": secrets.token_hex(32),
     "change-me-generate-with-fernet": secrets_key,
     "change-me-generate-a-metrics-bearer-token": secrets.token_hex(32),
+    "change-me-generate-a-24-byte-hex-redis-password": secrets.token_hex(24),
 }
 for placeholder, value in replacements.items():
     if placeholder in text:
