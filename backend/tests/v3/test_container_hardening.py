@@ -90,21 +90,21 @@ def test_nginx_listens_on_unprivileged_ports():
 # ── compose ──────────────────────────────────────────────────────────────────
 
 
-def test_compose_images_pinned_by_digest():
+def test_compose_images_pinned_by_digest(compose):
     for name, svc in compose["services"].items():
         image = svc.get("image")
         if image:
             assert "@sha256:" in image, f"{name} image not digest-pinned: {image}"
 
 
-def test_app_services_read_only_rootfs():
+def test_app_services_read_only_rootfs(compose):
     for name in APP_SERVICES:
         assert compose["services"][name].get("read_only") is True, (
             f"{name} missing read_only: true"
         )
 
 
-def test_app_services_tmpfs_tmp():
+def test_app_services_tmpfs_tmp(compose):
     for name in APP_SERVICES:
         tmpfs = compose["services"][name].get("tmpfs", [])
         assert any(str(t).split(":")[0] == "/tmp" for t in tmpfs), (
@@ -112,27 +112,27 @@ def test_app_services_tmpfs_tmp():
         )
 
 
-def test_app_services_drop_all_capabilities():
+def test_app_services_drop_all_capabilities(compose):
     for name in APP_SERVICES:
         assert compose["services"][name].get("cap_drop") == ["ALL"], (
             f"{name} does not cap_drop ALL"
         )
 
 
-def test_app_services_no_new_privileges():
+def test_app_services_no_new_privileges(compose):
     for name in APP_SERVICES:
         opts = compose["services"][name].get("security_opt", [])
         assert "no-new-privileges:true" in opts, f"{name} missing no-new-privileges"
 
 
-def test_app_services_resource_limits():
+def test_app_services_resource_limits(compose):
     for name in APP_SERVICES:
         svc = compose["services"][name]
         for key in ["mem_limit", "cpus", "pids_limit"]:
             assert key in svc, f"{name} missing {key}"
 
 
-def test_only_nginx_publishes_ports():
+def test_only_nginx_publishes_ports(compose):
     for name, svc in compose["services"].items():
         if name == "nginx":
             assert svc.get("ports"), "nginx must publish host ports"
@@ -140,7 +140,7 @@ def test_only_nginx_publishes_ports():
             assert not svc.get("ports"), f"{name} must not publish host ports"
 
 
-def test_redis_requires_password():
+def test_redis_requires_password(compose):
     redis_svc = compose["services"]["redis"]
     cmd = " ".join(map(str, redis_svc.get("command", [])))
     assert "requirepass" in cmd, "redis must require a password"
@@ -148,7 +148,7 @@ def test_redis_requires_password():
     assert "REDISCLI_AUTH" in hc, "redis healthcheck must authenticate"
 
 
-def test_backend_services_have_kev_cache_volume():
+def test_backend_services_have_kev_cache_volume(compose):
     """KEV cache dir comes from a named volume via KEV_CACHE_DIR."""
     for name in ["backend", "worker", "beat"]:
         svc = compose["services"][name]
@@ -160,7 +160,7 @@ def test_backend_services_have_kev_cache_volume():
         )
 
 
-def test_beat_schedule_writable_with_read_only_rootfs():
+def test_beat_schedule_writable_with_read_only_rootfs(compose):
     """Celery beat writes its schedule file; point it at tmpfs, not the rootfs."""
     beat_cmd = " ".join(map(str, compose["services"]["beat"].get("command", [])))
     assert "--schedule=" in beat_cmd or "-s " in beat_cmd, (
