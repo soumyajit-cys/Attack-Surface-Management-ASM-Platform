@@ -64,10 +64,15 @@ def test_backend_runtime_has_no_build_tools():
 
 
 def test_dockerignore_files_exist_and_cover_basics():
-    for path in [ROOT / "backend" / ".dockerignore", ROOT / "frontend" / ".dockerignore"]:
+    shared = [".git", "node_modules", "venv", ".env", "dist"]
+    per_image = {
+        ROOT / "backend" / ".dockerignore": ["tests", "__pycache__"],
+        ROOT / "frontend" / ".dockerignore": ["*.test.ts", "__snapshots__"],
+    }
+    for path, extra in per_image.items():
         assert path.exists(), f"{path} is missing"
         text = path.read_text()
-        for entry in [".git", "node_modules", "venv", "tests", ".env", "dist", "__pycache__"]:
+        for entry in shared + extra:
             assert entry in text, f"{path} does not exclude {entry}"
 
 
