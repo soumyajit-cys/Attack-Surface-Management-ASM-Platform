@@ -2,9 +2,8 @@
 # Format: one CVE/check ID per line, `#` comments allowed. Entries here
 # suppress ONLY the listed finding; everything else still fails the build
 # (HIGH/CRITICAL, fixed vulnerabilities only).
-
-# DS-0002 (Dockerfiles run as root): accepted temporarily because container
-# user hardening (non-root user, read-only rootfs, dropped capabilities) is
-# tracked as task 1.6 batch-3 item 4. REMOVE this entry in that batch; the
-# filesystem gate must go red again if Dockerfiles regress to root.
-DS-0002
+#
+# EMPTY BY DESIGN. The former DS-0002 (Dockerfiles ran as root) exception
+# was removed on 2026-10-17 once both runtime images declared a non-root
+# USER (task 1.6 batch 3, commits for the multi-stage Dockerfiles). The
+# filesystem gate must stay red if any image regresses to root.
