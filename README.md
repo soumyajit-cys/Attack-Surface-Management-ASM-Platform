@@ -64,7 +64,7 @@ flowchart TD
     BEAT --> RD
     WORKER -->|enrichment| MAIL
     WORKER -->|alerts| WEB
-    API -.->|/metrics gated| PROM["Prometheus scratcher (deny-by-default)"]
+    API -.->|"/metrics gated"| PROM["Prometheus scraper<br/>token or CIDR required"]
 ```
 
 ## Feature status
