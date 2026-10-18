@@ -74,6 +74,32 @@ All three target a replica/scratch copy first when you can; they accept a
    (compose reads images by tag+digest; rollback is a redeploy, not a
    database downgrade — Alembic downgrades are NOT automatic).
 
-## SMTP is required for digests and password-reset emailsSet `SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM` (loopback-only for dev is fine);
-without it, sends fail closed/logs an error rather than silently dropping —
+## SMTP is required for digests and password-reset emails
+
+Setting `SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM` (loopback-only for dev is fine)
+is required; without it, sends fail closed/logs an error rather than silently dropping —
 password reset just won't deliver.
+
+## Tags and releases
+
+Single branch, tag-cut releases. **Nothing auto-publishes**: `docker-publish`
+builds ghcr images + CycloneDX SBOMs only for `v*` tags, so a tag is the
+release event.
+
+Ritual (on `main`, no feature branches, no force ops):
+
+1. Confirm `make release-check` is green (make check + audit + `uv lock
+   --check` + `npm ci --dry-run`). Never tag on red.
+2. Promote the `CHANGELOG.md` `## [Unreleased]` section into
+   `## [x.y.z] - <YYYY-MM-DD>` matching the bumped version.
+3. Bump the single version source the same commit:
+   `VERSION` (repo root). `backend/pyproject.toml` and
+   `frontend/package.json` mirror it — `backend/tests/v3/test_release_contract.py`
+   fails if they disagree, so one commit carries all three edits.
+4. Commit `chore(release): x.y.z` and let the owner push `main` (owner-only).
+5. Owner creates the tag off that commit:
+   `git tag -a vX.Y.Z -m "SentinelASM vX.Y.Z" && git push origin vX.Y.Z`.
+   The tag triggers `docker-publish` (images + CycloneDX SBOM artifacts).
+6. Post-tag: `docker compose pull && docker compose up -d` on the host,
+   verify with the upgrade checklist above; any fix repeats the ritual
+   (never retag) — bump the patch version instead.
