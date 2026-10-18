@@ -41,7 +41,10 @@ def render_api_md(schema: dict) -> str:
             # derive the auth column from the endpoint family instead:
             # /health and /auth/* (login, register, refresh, reset) accept
             # unauthenticated callers — everything under /api/v1 does not.
-            if path in {"/health", "/metrics"} or path.startswith("/api/v1/auth/"):
+            if path in {"/health", "/metrics", "/api/v1/auth/register",
+                        "/api/v1/auth/login", "/api/v1/auth/refresh",
+                        "/api/v1/auth/forgot-password",
+                        "/api/v1/auth/reset-password"}:
                 security = "public"
             else:
                 security = "jwt or X-API-Key"
