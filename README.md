@@ -189,8 +189,16 @@ curl -s -X POST http://localhost:8000/api/v1/auth/register \
 ### Screenshots / demo data
 
 ```bash
-cd backend && venv/bin/python ../scripts/seed_demo.py   # made in item 5; refuses non-demo_/scratch_ DBs
+psql -h localhost -U postgres -c "CREATE DATABASE demo_local OWNER sentinel;"
+DATABASE_URL=postgresql://sentinel:sentinelpass@localhost:5432/demo_local make migrate
+DATABASE_URL=postgresql://sentinel:sentinelpass@localhost:5432/demo_local \
+  backend/venv/bin/python scripts/seed_demo.py     # FIXTURE data only, no network
 ```
+
+The seeder refuses anything not named `demo_*`/`scratch_*` (db_guard rule),
+then creates one demo org, an admin user (`demo` / `Demo-Passw0rd!` — change
+it after first login), 2 assets, 5 findings, alerts, an alert integration and
+scan history from `scripts/seed_demo.py`'s FIXTURE objects.
 
 ### Docker compose (full stack on http://localhost)
 
