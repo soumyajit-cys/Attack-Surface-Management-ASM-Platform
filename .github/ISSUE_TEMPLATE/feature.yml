@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a capability — outcome first, mechanism second.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can an operator not do today? Link the failing scenario (screenshots are fine, credentials never).
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: The smallest change that closes the gap. Name affected components (backend/api/v1, frontend/pages, compose, docs).
+  - type: checkboxes
+    attributes:
+      label: Constraints
+      options:
+        - label: Single-branch policy understood — this will be merged to `main`, not developed on a side branch
+        - label: Any seeded/demo data comes from FIXTURE objects (no network, no real org data)

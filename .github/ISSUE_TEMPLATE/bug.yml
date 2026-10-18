@@ -1,0 +1,33 @@
+name: Bug report
+description: Something is broken in SentinelASM as shipped.
+labels: ["bug"]
+body:
+  - type: checkboxes
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I ran `make check` and it is green on my fork of `main`
+        - label: This is NOT a security vulnerability (report those via GitHub Security Advisories — see SECURITY.md)
+        - label: I did not modify the dev database `sentinelasm`; any scratch DB was created via `scripts/db_guard.sh` rules
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, expected vs actual. If it involves the compose stack, include the `docker compose ps` healthlines (no secrets, no env values).
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: "output of `git log --oneline -1` (or a v* tag)"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Trim to the failing lines. Strip anything that looks like a token,
+        password, or DATABASE_URL before pasting.
+      render: text
