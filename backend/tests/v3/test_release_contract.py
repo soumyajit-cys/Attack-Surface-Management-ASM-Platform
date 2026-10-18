@@ -71,6 +71,7 @@ def test_semver_in_changelog_header_matches_version():
         # newest semver header must equal VERSION (releases are cut off main
         # after bumping it -- see docs/OPERATIONS.md tag ritual)
         assert semver_headers[0] == _version(), (
-            f"newest changelog header {semver_headers[0]!r} != VERSION {_version()!r}`
-            " — promote the Unreleased section and bump VERSION together"
+            f"newest changelog header {semver_headers[0]!r} != VERSION "
+            f"{_version()!r} - promote the Unreleased section and bump "
+            "VERSION together"
         )
