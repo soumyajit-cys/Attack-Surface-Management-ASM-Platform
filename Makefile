@@ -3,7 +3,7 @@
 # Backend venv lives at backend/venv (see README quickstart); lint also needs
 # `pip install ruff mypy`, frontend needs `npm install` under frontend/.
 
-.PHONY: setup migrate dev test lint up down secrets-scan check lock audit
+.PHONY: setup migrate dev test lint up down secrets-scan check lock audit openapi
 
 # Local Postgres superuser credentials (only used by `check` to
 # create/drop its scratch database; override with `make check
@@ -60,6 +60,9 @@ check: ## CI gate mirror, in order (run before every push): ruff, mypy, pytest o
 	cd frontend && npx prettier --check src
 	cd frontend && npm test
 	cd frontend && npm run build
+
+openapi: ## regenerate docs/openapi.json + docs/API.md from the app (schema-only; no DB, no network)
+	cd backend && KEY=$$(venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())") JWT_SECRET=openapi-export-dummy-value SECRETS_ENCRYPTION_KEY=$$KEY REDIS_URL=redis://localhost:6379/15 venv/bin/python scripts/export_openapi.py
 
 secrets-scan: ## gitleaks secret scan (blocking; needs a gitleaks binary or Docker)
 	if command -v gitleaks >/dev/null 2>&1; then \
