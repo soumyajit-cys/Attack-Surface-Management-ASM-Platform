@@ -34,6 +34,7 @@ def _run_seeder(database_url: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         timeout=60,
+        check=False,  # the seeder is EXPECTED to fail here; exit code is the assertion
     )
 
 
