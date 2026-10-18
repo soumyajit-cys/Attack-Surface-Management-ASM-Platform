@@ -37,7 +37,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_PREFIXES = ("demo_", "scratch_")
 DEV_DB_NAME = "sentinelasm"
 
