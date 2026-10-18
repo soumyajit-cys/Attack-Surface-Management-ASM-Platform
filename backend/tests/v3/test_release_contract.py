@@ -62,7 +62,8 @@ def test_semver_in_changelog_header_matches_version():
     import re
 
     text = CHANGELOG.read_text()
-    headers = re.findall(r"^## \[([^\]]+)\]", text, re.M)
+    headers = [ln[len("## ["):].split("]")[0]
+               for ln in text.splitlines() if ln.startswith("## [")]
     assert headers, "no release headers in CHANGELOG.md"
     semver_headers = [h for h in headers if h != "Unreleased"]
     for h in semver_headers:
