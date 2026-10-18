@@ -216,13 +216,14 @@ def create_schema_and_seed(database_url: str, name: str) -> None:
             session.flush()
             session.add(Domain(organization_id=org.id, asset_id=asset.id,
                                **spec["domain"]))
-            for title, severity, message in spec["findings"]:
+            for title, severity, description in spec["findings"]:
                 session.add(Finding(
                     organization_id=org.id,
                     asset_id=asset.id,
                     title=title,
                     severity=severity,
-                    message=message,
+                    category="fixture",
+                    description=description,
                 ))
             assets.append(asset)
         session.flush()
