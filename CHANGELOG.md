@@ -36,7 +36,7 @@ when they disagree).
   `cap_drop: ALL`, `no-new-privileges`, resource limits; unprivileged nginx.
 - Redis `--requirepass` (generated `REDIS_PASSWORD`, never printed).
 - Supply-chain: hashed uv lockfile + frontend `package-lock.json` with
-  `make lock`/`make audit`,每一个人 SHA-pinned GitHub Actions, digest-pinned
+  `make lock`/`make audit`, SHA-pinned GitHub Actions, digest-pinned
   images, gitleaks, Trivy fs + image scans (HIGH/CRITICAL, fixed-only,
   empty `.trivyignore`), weekly read-only audit workflow, CycloneDX SBOMs on
   tag builds.
@@ -55,5 +55,5 @@ RBAC, alerting + digest, CSV/PDF reporting, Prometheus metrics, hardened
 compose deployment, 589+ backend characterization tests and 28 frontend tests
 red-green through `make check`.
 
-[Unreleased]: ../compare/HEAD..HEAD
-[0.1.0]: #0.1.0-initial-public-snapshot
+[Unreleased]: #unreleased
+[0.1.0]: #010---2026-10-18

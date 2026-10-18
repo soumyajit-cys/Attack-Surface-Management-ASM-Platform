@@ -3,7 +3,7 @@
 # Backend venv lives at backend/venv (see README quickstart); lint also needs
 # `pip install ruff mypy`, frontend needs `npm install` under frontend/.
 
-.PHONY: setup migrate dev test lint up down secrets-scan check lock audit openapi
+.PHONY: setup migrate dev test lint up down secrets-scan check lock audit openapi release-check
 
 # Local Postgres superuser credentials (only used by `check` to
 # create/drop its scratch database; override with `make check
@@ -46,6 +46,12 @@ lock: ## regenerate backend/uv.lock from backend/pyproject.toml
 audit: ## pip-audit over the locked backend set + npm audit (frontend prod)
 	cd backend && uv export --frozen --no-dev --output-file /tmp/sentinelasm-requirements.audit.txt && uvx pip-audit -r /tmp/sentinelasm-requirements.audit.txt; rm -f /tmp/sentinelasm-requirements.audit.txt
 	cd frontend && npm audit --omit=dev --audit-level=high
+
+release-check: ## full pre-tag gate: make check + make audit + lockfile currency (run before cutting a v* tag; see docs/OPERATIONS.md)
+	$(MAKE) check
+	$(MAKE) audit
+	cd backend && uv lock --check
+	cd frontend && npm ci --dry-run >/dev/null
 
 check: ## CI gate mirror, in order (run before every push): ruff, mypy, pytest on a fresh scratch DB, tsc, eslint, prettier, vitest, vite build
 	cd backend && ruff check .

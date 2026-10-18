@@ -74,8 +74,6 @@ All three target a replica/scratch copy first when you can; they accept a
    (compose reads images by tag+digest; rollback is a redeploy, not a
    database downgrade — Alembic downgrades are NOT automatic).
 
-## SMTP is required for digests and password-reset emails
-
-Set `SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM` (loopback-only for dev is fine);
+## SMTP is required for digests and password-reset emailsSet `SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM` (loopback-only for dev is fine);
 without it, sends fail closed/logs an error rather than silently dropping —
 password reset just won't deliver.
