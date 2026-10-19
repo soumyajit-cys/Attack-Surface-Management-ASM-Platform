@@ -177,7 +177,7 @@ class _Listener:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as key_f:
             key_f.write(key.private_bytes(
                 serialization.Encoding.PEM,
-                serialization.PrivateFormat.TraditionalPKCS,
+                serialization.PrivateFormat.TraditionalOpenSSL,
                 serialization.NoEncryption(),
             ))
         return cert_f.name, key_f.name
@@ -320,8 +320,10 @@ class TestPortScannerRealSockets:
         from services.scanner import port_scanner as ps
 
         with _Listener(banner=b"fixture-sshd-2.0\r\n") as srv:
-            # Banner policy from the live port (TEST-ONLY: the production
-            # constant stays in place for every other port).
+            # TEST-ONLY sweep target: the real code path just needs a small
+            # port list containing the listener port (open + banner grab)
+            # and a port that is closed here (23).
+            socket_sweep.setattr(ps, "COMMON_PORTS", [23, srv.port])
             socket_sweep.setattr(ps, "BANNER_PORTS", frozenset({srv.port}))
             results = _run(ps.scan_ports("scanme.example"))
             by_port = {r["port"]: r for r in results}
@@ -331,14 +333,15 @@ class TestPortScannerRealSockets:
             assert open_row["protocol"] == "tcp"
             assert open_row["service"] is None  # ephemeral port not mapped
             assert open_row["banner"] == "fixture-sshd-2.0"
-            # every COMMON port reported exactly once; closed ports too
-            assert len(results) == len(ps.COMMON_PORTS)
-            assert by_port.get(23, {}).get("status") == "closed"
+            assert len(results) == 2
+            assert by_port[23]["status"] == "closed"
+            assert "banner" not in by_port[23]  # closed rows carry no banner
 
     def test_open_silent_port_has_no_banner(self, loopback_seam, socket_sweep):
         from services.scanner import port_scanner as ps
 
         with _Listener(silent=True) as srv:
+            socket_sweep.setattr(ps, "COMMON_PORTS", [srv.port])
             socket_sweep.setattr(ps, "BANNER_PORTS", frozenset({srv.port}))
             results = _run(ps.scan_ports("quiet.example"))
             by_port = {r["port"]: r for r in results}
@@ -405,34 +408,24 @@ class TestHeaderScannerRealServer:
         from services.scanner import header_scanner as hs
 
         srv_key, valid = pki["valid"]
-
-        def fake_fetch(url, **kw):
-            assert url.startswith("https://"), url
-            return fetch_url_validated(url, **kw)
-
         with _Listener(srv_key, valid,
                        response=_DISABLED_HEADERS_RESPONSE) as srv:
-            loopback_seam.setenv("SSL_CERT_FILE", self := None)  # marker only
-
-        # Rerun with trust: SSL_CERT_FILE is read at connect time via the
-        # default context, so we rebuild the listener inside the env patch.
-        loopback_seam2 = loopback_seam
-        with _Listener(srv_key, valid,
-                       response=_DISABLED_HEADERS_RESPONSE) as srv:
-            loopback_seam2.setenv("SSL_CERT_FILE", pki["anchor_pem"]
-                                  and _write_anchor(pki))
+            # Trust the fixture CA: SSL_CERT_FILE is honored by the default
+            # context at connect time (same pattern as test_egress_tls.py).
+            loopback_seam.setenv("SSL_CERT_FILE", _write_anchor(pki))
             findings = _run(hs.analyze_headers(
                 f"https://right.example:{srv.port}/"))
 
         titles = {f["title"] for f in findings}
         assert "Missing CSP Header" in titles
         assert "Missing X-Frame-Options Header" in titles
-        assert ("Information Disclosure: Server Header") in titles
-        assert ("Information Disclosure: X-Powered-By Header") in titles
-        assert "Missing HSTS Header" in titles  # HSTS was present-but-weak? no:
-        # strict-transport-security present with max-age=3600 → too-low
-        # finding instead of the "missing" one.
+        assert "Information Disclosure: Server Header" in titles
+        assert "Information Disclosure: X-Powered-By Header" in titles
+        # HSTS was present but with max-age=3600 — a "too low" finding, not
+        # a "missing" one, and no "Invalid TLS certificate" on a clean cert.
         assert "HSTS Max-Age Too Low" in titles
+        assert "Missing HSTS Header" not in titles
+        assert "Invalid TLS certificate" not in titles
 
     def test_self_signed_downgrades_and_records_finding(
             self, pki, loopback_seam):
@@ -458,8 +451,49 @@ class TestHeaderScannerRealServer:
                        silent=True) as srv:
             findings = _run(hs.analyze_headers(
                 f"https://right.example:{srv.port}/"))
-        # both attempts (verified + unverified) get garbage/silence → no find.
+        # both attempts (verified + unverified) get silence → no findings.
         assert findings == []
+
+
+class TestProductionGuardNotWeakened:
+    """The same calls WITHOUT the test-only seam must be blocked.
+
+    ``localhost`` resolves to 127.0.0.1 via the REAL resolver: the
+    production SSRF/egress guard fail-closes on it
+    (``EgressBlocked``). These tests pin that none of the scanner modules
+    monkey-patch or weaken the guard themselves — a loopback connection
+    only becomes possible through the explicit ``loopback_seam`` fixture
+    in THIS file.
+    """
+
+    def test_resolve_blocks_loopback_without_seam(self):
+        from utils.egress import EgressBlocked, resolve_validated_ips
+
+        with pytest.raises(EgressBlocked):
+            resolve_validated_ips("localhost", 443)
+
+    def test_port_scanner_blocked_without_seam(self):
+        from services.scanner import port_scanner as ps
+        from utils.egress import EgressBlocked
+
+        with pytest.raises(EgressBlocked):
+            _run(ps.scan_ports("localhost"))
+
+    def test_header_scanner_blocked_without_seam(self):
+        from services.scanner import header_scanner as hs
+        from utils.egress import EgressBlocked
+
+        with pytest.raises(EgressBlocked):
+            _run(hs.analyze_headers("https://localhost:22/"))
+
+    def test_ssl_scanner_without_seam_blocks_or_fails(self):
+        from services.scanner import ssl_scanner as ss
+        from utils.egress import EgressBlocked
+
+        # Same call shape as the seam tests, no seam: the real guard must
+        # refuse (EgressBlocked), never reach loopback.
+        with pytest.raises(EgressBlocked):
+            _run(ss.analyze_ssl("localhost"))
 
 
 def _write_anchor(pki) -> str:
