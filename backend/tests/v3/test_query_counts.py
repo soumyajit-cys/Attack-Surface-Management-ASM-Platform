@@ -114,7 +114,7 @@ def test_export_assets_csv_output_correct(db, org_factory):
     assert rows[1][1] == "asset-0"
     assert rows[1][3] == "1"          # domain count
     assert rows[1][4] == "2"          # subdomain count
-    assert rows[1][5] == "6"          # open ports (1 open per sub x 3 subs? see below)
+    assert rows[1][5] == "4"          # open ports (2 open sub x 2 subs)
     assert rows[1][6] == "1"          # critical findings
     assert rows[1][7] == "1"          # high
     assert rows[1][8] == "1"          # medium
@@ -170,10 +170,11 @@ def _integrations(db, org, n):
     db.commit()
 
 
-@pytest.mark.anyio
-async def test_process_finding_alerts_select_count_constant(db, org_factory,
-                                                            select_counter,
-                                                            monkeypatch):
+def test_process_finding_alerts_select_count_constant(db, org_factory,
+                                                      select_counter,
+                                                      monkeypatch):
+    import asyncio
+
     org_many, _ = org_factory("qc-int-many", "qc-im", "im@qc.test")
     _integrations(db, org_many, 5)
 
@@ -196,7 +197,7 @@ async def test_process_finding_alerts_select_count_constant(db, org_factory,
     monkeypatch.setattr(alerting_service, "send_jira_alert", _ok)
 
     del select_counter[:]
-    await alerting_service.process_finding_alerts(db, finding, asset)
+    asyncio.run(alerting_service.process_finding_alerts(db, finding, asset))
     many_stmts = len(select_counter)
 
     # 5 integrations = 5 times db.get() before batching.
@@ -206,10 +207,11 @@ async def test_process_finding_alerts_select_count_constant(db, org_factory,
     )
 
 
-@pytest.mark.anyio
-async def test_send_email_digest_select_count_constant(db, org_factory,
-                                                       select_counter,
-                                                       monkeypatch):
+def test_send_email_digest_select_count_constant(db, org_factory,
+                                                 select_counter,
+                                                 monkeypatch):
+    import asyncio
+
     org_big, _ = org_factory("qc-dig-big", "qc-dgb", "dgb@qc.test")
     _grid(db, org_big, assets_n=6, domains_per=1, subs_per=1, ports_per=1,
           findings_per=6)  # 36 findings, digest takes up to 50
@@ -225,7 +227,7 @@ async def test_send_email_digest_select_count_constant(db, org_factory,
     monkeypatch.setattr(alerting_service, "send_email", lambda *a, **k: True)
 
     del select_counter[:]
-    sent = await alerting_service.send_email_digest(db, config)
+    sent = asyncio.run(alerting_service.send_email_digest(db, config))
 
     assert sent is True
     # Per-finding asset lookups before batching: dozens of SELECTs.
