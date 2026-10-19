@@ -312,30 +312,40 @@ async def _dispatch_finding_to_integrations(
 
     Returns the number of integrations skipped for unreadable credentials.
     Delivery outcomes are recorded + committed per integration so one bad
-    row (or one failed send) cannot block the round.
+    row (or one failed send) cannot block the round. The session's
+    ``expire_on_commit`` is disabled for the round: every commit inside
+    here is followed by an immediate write to the SAME objects, so the
+    default expiry-then-refresh cycle would add a refresh SELECT per
+    integration with zero correctness benefit.
     """
     skipped = 0
-    for integration in integrations:
-        if not severity_meets_threshold(finding.severity, integration.min_severity):
-            continue
+    previous_expire = db.expire_on_commit
+    db.expire_on_commit = False
+    try:
+        for integration in integrations:
+            if not severity_meets_threshold(finding.severity, integration.min_severity):
+                continue
 
-        unreadable = _unreadable_credential(integration)
-        if unreadable is not None:
-            _record_delivery(db, integration, False, detail=unreadable)
+            unreadable = _unreadable_credential(integration)
+            if unreadable is not None:
+                _record_delivery(db, integration, False, detail=unreadable)
+                db.commit()
+                skipped += 1
+                continue
+
+            success = False
+            if integration.channel == AlertChannel.SLACK:
+                success = await send_slack_alert(integration.webhook_url, finding, asset)
+            elif integration.channel == AlertChannel.DISCORD:
+                success = await send_discord_alert(integration.webhook_url, finding, asset)
+            elif integration.channel == AlertChannel.JIRA:
+                success = await send_jira_alert(integration, finding, asset)
+
+            _record_delivery(db, integration, success)
             db.commit()
-            skipped += 1
-            continue
-
-        success = False
-        if integration.channel == AlertChannel.SLACK:
-            success = await send_slack_alert(integration.webhook_url, finding, asset)
-        elif integration.channel == AlertChannel.DISCORD:
-            success = await send_discord_alert(integration.webhook_url, finding, asset)
-        elif integration.channel == AlertChannel.JIRA:
-            success = await send_jira_alert(integration, finding, asset)
-
-        _record_delivery(db, integration, success)
-        db.commit()
+    finally:
+        db.expire_on_commit = previous_expire
+        db.expire_all()
     return skipped
 
 
