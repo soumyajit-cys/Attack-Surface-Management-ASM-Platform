@@ -92,6 +92,11 @@ celery.conf.update(
             "schedule": 86400.0,    # daily
             "options": {"queue": "scans"},
         },
+        "purge-expired-rows": {
+            "task": "tasks.retention.purge_expired_rows",
+            "schedule": 86400.0,    # daily, off-peak-ish; batched + idempotent
+            "options": {"queue": "celery"},
+        },
     },
 
     # ── Dead-letter sink (tasks that exhaust retries land here) ──────────────

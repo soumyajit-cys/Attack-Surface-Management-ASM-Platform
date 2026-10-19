@@ -45,30 +45,32 @@ from utils.database import SessionLocal
 from utils.logger import logger
 from workers.celery_app import celery
 
-_AGE_RULES: tuple[tuple[str, type, str], ...] = (
-    # (result_key, model, Settings window name)
-    ("alerts", Alert, "retention_alert_days"),
-    ("scan_history", ScanHistory, "retention_scan_history_days"),
-    ("audit_logs", AuditLog, "retention_audit_log_days"),
+_AGE_RULES: tuple[tuple[str, type, str, str], ...] = (
+    # (result_key, model, timestamp column, Settings window name)
+    ("alerts", Alert, "created_at", "retention_alert_days"),
+    ("scan_history", ScanHistory, "started_at", "retention_scan_history_days"),
+    ("audit_logs", AuditLog, "created_at", "retention_audit_log_days"),
 )
 
 
 def _purge_age_table(
     db: Session,
     model: type,
+    column: str,
     cutoff: datetime,
     limit: int,
     dry_run: bool,
 ) -> int:
     """Delete at most ``limit`` rows older than ``cutoff`` (oldest first)."""
+    ts_col = getattr(model, column)
     id_rows = (
         db.query(model.id)
-        .filter(model.created_at < cutoff)  # type: ignore[attr-defined]
-        .order_by(model.created_at)
+        .filter(ts_col < cutoff)
+        .order_by(ts_col)
         .limit(limit)
         .all()
     )
-    ids = [row.id for (row,) in id_rows]
+    ids = [row[0] for row in id_rows]
     if not ids or dry_run:
         return len(ids)
     db.execute(delete(model).where(model.id.in_(ids)))
@@ -104,7 +106,7 @@ def _purge_surplus_snapshots(
         .limit(limit)
         .all()
     )
-    ids = [row.id for (row,) in surplus]
+    ids = [row[0] for row in surplus]
     if not ids or dry_run:
         return len(ids)
     db.execute(delete(AssetSnapshot).where(AssetSnapshot.id.in_(ids)))
@@ -133,10 +135,10 @@ def purge_expired_records(
         snapshot_keep_newest = app_settings.retention_snapshot_keep_newest
 
     counts: dict[str, Any] = {}
-    for key, model, window_setting in _AGE_RULES:
+    for key, model, column, window_setting in _AGE_RULES:
         days = getattr(app_settings, window_setting)
         cutoff = now - timedelta(days=days)
-        counts[key] = _purge_age_table(db, model, cutoff, limit, dry_run)
+        counts[key] = _purge_age_table(db, model, column, cutoff, limit, dry_run)
 
     counts["asset_snapshots"] = _purge_surplus_snapshots(
         db, snapshot_keep_newest, limit, dry_run
