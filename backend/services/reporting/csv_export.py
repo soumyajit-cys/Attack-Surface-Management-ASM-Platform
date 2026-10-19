@@ -3,7 +3,7 @@ import io
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from models import Finding, Asset, Organization, ScanHistory, Domain, Subdomain, Port, SSLResult, RiskScore
 
@@ -75,8 +75,6 @@ def export_assets_csv(
     organization_id: int,
 ) -> str:
     from sqlalchemy import func
-
-    from models.dns_record import DNSRecord  # noqa: F401 (already imported via models)
 
     assets = db.query(Asset).filter(
         Asset.organization_id == organization_id,
@@ -236,15 +234,9 @@ def export_domains_csv(
     ).options(
         # One joined load for the asset name + two selectin loads replace
         # three lazy SELECTs per domain below.
-        __import__("sqlalchemy.orm", fromlist=["joinedload"]).joinedload(
-            Domain.asset
-        ),
-        __import__("sqlalchemy.orm", fromlist=["selectinload"]).selectinload(
-            Domain.subdomains
-        ),
-        __import__("sqlalchemy.orm", fromlist=["selectinload"]).selectinload(
-            Domain.dns_records
-        ),
+        joinedload(Domain.asset),
+        selectinload(Domain.subdomains),
+        selectinload(Domain.dns_records),
     ).all()
 
     output = io.StringIO()
