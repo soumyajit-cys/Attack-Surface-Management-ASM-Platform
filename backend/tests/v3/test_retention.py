@@ -283,14 +283,15 @@ def test_snapshots_keep_newest_per_asset(db, two_orgs):
         db.add(snap)
         ids_b.append(snap)
     db.commit()
+    kept_expected = set(ids_a[3:])   # newest 3 snapshots of asset A
+    kept_ids = {s.id for s in kept_expected}
 
     result = _purge(db, snapshot_keep_newest=3, limit=100)
 
     assert result["asset_snapshots"] == 3, "asset A had 6, keep 3 → 3 deleted"
-    ids_a_created = [s.id for s in ids_a]
     remaining = {s.id for s in db.query(AssetSnapshot).filter(
         AssetSnapshot.asset_id == asset_a.id).all()}
-    assert remaining == set(ids_a_created[3:]), "newest 3 of asset A survive"
+    assert remaining == kept_ids, "newest 3 of asset A survive"
     assert db.query(AssetSnapshot).filter(
         AssetSnapshot.asset_id == asset_b.id).count() == 3, (
         "asset B (3 snapshots) is untouched: per-asset accounting, not global"
