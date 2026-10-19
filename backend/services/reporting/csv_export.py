@@ -74,9 +74,63 @@ def export_assets_csv(
     db: Session,
     organization_id: int,
 ) -> str:
+    from sqlalchemy import func
+
+    from models.dns_record import DNSRecord  # noqa: F401 (already imported via models)
+
     assets = db.query(Asset).filter(
         Asset.organization_id == organization_id,
     ).all()
+
+    # Batch every per-asset/per-subdomain lookup into five grouped queries
+    # (was: per-asset Domain/Finding/RiskScore SELECTs plus one Port.count()
+    # SELECT per subdomain).
+    asset_ids = [a.id for a in assets]
+
+    domains_by_asset: dict[int, list[Domain]] = {}
+    domain_subdomain_counts: dict[int, int] = {}
+    open_ports_by_asset: dict[int, int] = {}
+    severity_by_asset: dict[tuple[int, str], int] = {}
+    risk_by_asset: dict[int, RiskScore] = {}
+
+    if asset_ids:
+        for domain in (
+            db.query(Domain).filter(Domain.asset_id.in_(asset_ids)).all()
+        ):
+            domains_by_asset.setdefault(domain.asset_id, []).append(domain)
+
+        subdomain_counts = (
+            db.query(Subdomain.domain_id, func.count(Subdomain.id))
+            .join(Domain, Domain.id == Subdomain.domain_id)
+            .filter(Domain.asset_id.in_(asset_ids))
+            .group_by(Subdomain.domain_id)
+            .all()
+        )
+        domain_subdomain_counts = dict(subdomain_counts)
+
+        open_ports = (
+            db.query(Domain.asset_id, func.count(Port.id))
+            .join(Subdomain, Subdomain.domain_id == Domain.id)
+            .join(Port, Port.subdomain_id == Subdomain.id)
+            .filter(Domain.asset_id.in_(asset_ids), Port.status == "open")
+            .group_by(Domain.asset_id)
+            .all()
+        )
+        open_ports_by_asset = dict(open_ports)
+
+        severity_counts = (
+            db.query(Finding.asset_id, Finding.severity, func.count(Finding.id))
+            .filter(Finding.asset_id.in_(asset_ids))
+            .group_by(Finding.asset_id, Finding.severity)
+            .all()
+        )
+        severity_by_asset = {(aid, sev): c for aid, sev, c in severity_counts}
+
+        risk_by_asset = {
+            r.asset_id: r
+            for r in db.query(RiskScore).filter(
+                RiskScore.asset_id.in_(asset_ids)).all()
+        }
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -97,24 +151,18 @@ def export_assets_csv(
     ])
 
     for asset in assets:
-        domains = db.query(Domain).filter(Domain.asset_id == asset.id).all()
-        subdomain_count = sum(len(d.subdomains) for d in domains)
+        domains = domains_by_asset.get(asset.id, [])
+        subdomain_count = sum(
+            domain_subdomain_counts.get(d.id, 0) for d in domains
+        )
+        open_ports = open_ports_by_asset.get(asset.id, 0)
 
-        open_ports = 0
-        for domain in domains:
-            for sub in domain.subdomains:
-                open_ports += db.query(Port).filter(
-                    Port.subdomain_id == sub.id,
-                    Port.status == "open",
-                ).count()
+        critical = severity_by_asset.get((asset.id, "critical"), 0)
+        high = severity_by_asset.get((asset.id, "high"), 0)
+        medium = severity_by_asset.get((asset.id, "medium"), 0)
+        low = severity_by_asset.get((asset.id, "low"), 0)
 
-        findings = db.query(Finding).filter(Finding.asset_id == asset.id).all()
-        critical = sum(1 for f in findings if f.severity == "critical")
-        high = sum(1 for f in findings if f.severity == "high")
-        medium = sum(1 for f in findings if f.severity == "medium")
-        low = sum(1 for f in findings if f.severity == "low")
-
-        risk_score = db.query(RiskScore).filter(RiskScore.asset_id == asset.id).first()
+        risk_score = risk_by_asset.get(asset.id)
 
         writer.writerow([
             asset.id,
@@ -185,6 +233,18 @@ def export_domains_csv(
 ) -> str:
     domains = db.query(Domain).join(Asset).filter(
         Asset.organization_id == organization_id,
+    ).options(
+        # One joined load for the asset name + two selectin loads replace
+        # three lazy SELECTs per domain below.
+        __import__("sqlalchemy.orm", fromlist=["joinedload"]).joinedload(
+            Domain.asset
+        ),
+        __import__("sqlalchemy.orm", fromlist=["selectinload"]).selectinload(
+            Domain.subdomains
+        ),
+        __import__("sqlalchemy.orm", fromlist=["selectinload"]).selectinload(
+            Domain.dns_records
+        ),
     ).all()
 
     output = io.StringIO()
