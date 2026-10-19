@@ -463,6 +463,15 @@ async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
         logger.info("No findings for email digest, skipping")
         return False
 
+    # Batch the asset-name lookup (was one SELECT per finding).
+    _asset_ids = {f.asset_id for f in findings if f.asset_id is not None}
+    asset_names: dict[int, str] = {}
+    if _asset_ids:
+        asset_names = {
+            a.id: a.name
+            for a in db.query(Asset).filter(Asset.id.in_(_asset_ids)).all()
+        }
+
     recipients = [e.strip() for e in config.recipient_emails.split(",") if e.strip()]
     if not recipients:
         logger.warning("No recipient emails configured for digest")
@@ -494,9 +503,8 @@ async def send_email_digest(db: Session, config: EmailDigestConfig) -> bool:
         html += f'<h3 style="color: {color};">{severity.upper()} ({len(severity_findings)})</h3><ul>'
 
         for f in severity_findings[:10]:
-            asset = db.query(Asset).filter(Asset.id == f.asset_id).first()
             desc = (f.description[:200] if f.description else "No description")
-            html += f'<li><strong>{f.title}</strong> - {asset.name if asset else "Unknown asset"}<br><small>{desc}</small></li>'
+            html += f'<li><strong>{f.title}</strong> - {asset_names.get(f.asset_id, "Unknown asset")}<br><small>{desc}</small></li>'
 
         html += "</ul>"
 
