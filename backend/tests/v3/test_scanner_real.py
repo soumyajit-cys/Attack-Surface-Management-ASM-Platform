@@ -25,6 +25,7 @@ responses and failures go through the real parsing code.
 from __future__ import annotations
 
 import asyncio
+import logging
 import socket as real_socket
 import ssl as stdlib_ssl
 import tempfile
@@ -103,7 +104,7 @@ def _name(cn: str) -> x509.Name:
 
 def _build_cert(key, subject: str, issuer_key, issuer_name: x509.Name, *,
                 not_before: datetime, not_after: datetime,
-                is_ca: bool = False) -> x509.Certificate:
+                is_ca: bool = False, with_san: bool = True) -> x509.Certificate:
     builder = (
         x509.CertificateBuilder()
         .subject_name(_name(subject))
@@ -131,10 +132,11 @@ def _build_cert(key, subject: str, issuer_key, issuer_name: x509.Name, *,
             critical=False,
         )
     else:
-        builder = builder.add_extension(
-            x509.SubjectAlternativeName([x509.DNSName(subject)]),
-            critical=False,
-        )
+        if with_san:
+            builder = builder.add_extension(
+                x509.SubjectAlternativeName([x509.DNSName(subject)]),
+                critical=False,
+            )
         # Python 3.13 defaults to VERIFY_X509_STRICT: the issued cert must
         # carry Authority/Subject Key Identifier extensions.
         builder = builder.add_extension(
@@ -147,6 +149,19 @@ def _build_cert(key, subject: str, issuer_key, issuer_name: x509.Name, *,
             critical=False,
         )
     return builder.sign(issuer_key, hashes.SHA256())
+
+
+@pytest.fixture()
+def leaf_without_san():
+    """A valid leaf certificate with NO subjectAltName extension."""
+    now = datetime.now(timezone.utc)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return _build_cert(
+        key, "nosan.example", key, _name("nosan.example"),
+        not_before=now - timedelta(days=1),
+        not_after=now + timedelta(days=30),
+        with_san=False,
+    )
 
 
 @pytest.fixture()
@@ -347,6 +362,60 @@ class TestSSLScannerRealServer:
 
         assert result["tls_version"] == "TLSv1.2"
         assert result["cipher_version"] in ("TLSv1.2", "TLSv1.3")
+
+
+class TestDecodeCertDer:
+    """ssl_scanner._decode_cert_der: pure cryptography-based DER decoding.
+
+    The fallback path (verified handshake refused, e.g. expired/self-signed)
+    gets only a DER blob; this decoder must reproduce the ``getpeercert()``
+    dict shape ``_parse_cert`` consumes — and NEVER raise on bad input.
+    """
+
+    def test_der_decode_matches_getpeercert_shape(self, pki):
+        from services.scanner.ssl_scanner import _decode_cert_der, _format_name
+
+        _key, cert = pki["valid"]
+        der = cert.public_bytes(serialization.Encoding.DER)
+        decoded = _decode_cert_der(der)
+
+        assert decoded is not None
+        assert "commonName=right.example" in _format_name(decoded["subject"])
+        assert "commonName=FixtureCA" in _format_name(decoded["issuer"])
+        assert decoded["subjectAltName"] == (("DNS", "right.example"),)
+        # notAfter in the OpenSSL text shape _parse_cert strptime()s — equal
+        # to the source certificate's own UTC not-after, formatted the same.
+        assert decoded["notAfter"] == cert.not_valid_after_utc.strftime(
+            "%b %d %H:%M:%S %Y GMT")
+
+    def test_der_decode_without_san(self, leaf_without_san):
+        from services.scanner.ssl_scanner import _decode_cert_der
+
+        der = leaf_without_san.public_bytes(serialization.Encoding.DER)
+        decoded = _decode_cert_der(der)
+
+        assert decoded is not None
+        assert "subjectAltName" not in decoded  # absent extension, not []
+        assert decoded["subject"]
+
+    def test_malformed_der_fails_closed_with_warning(self, caplog):
+        from services.scanner.ssl_scanner import _decode_cert_der
+
+        with caplog.at_level(logging.WARNING, logger="sentinelasm"):
+            decoded = _decode_cert_der(b"this is not DER")
+
+        assert decoded is None  # fail closed, never raise
+        warnings = [
+            r for r in caplog.records
+            if "Failed to decode TLS certificate" in r.getMessage()
+        ]
+        assert warnings, "malformed DER must log a warning"
+        # the warning names the exception type
+        assert "ValueError" in warnings[0].getMessage()
+
+        # empty DER also fails closed
+        with caplog.at_level(logging.WARNING, logger="sentinelasm"):
+            assert _decode_cert_der(b"") is None
 
 
 # ══ port_scanner ══════════════════════════════════════════════════════════════

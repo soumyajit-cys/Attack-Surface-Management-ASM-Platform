@@ -3,6 +3,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
+from cryptography import x509
+
 from utils.egress import connect_tls_socket, EgressBlocked
 from utils.logger import logger
 
@@ -72,19 +74,71 @@ async def _analyze_ssl_unverified(host: str, error: str) -> Optional[dict]:
 def _decode_cert_der(cert_der: bytes) -> Optional[dict]:
     """Decode a DER certificate to the ``getpeercert()``-shaped dict.
 
-    Uses ``ssl._ssl._test_decode_cert`` (the stdlib's own decoder for
-    PEM files) on a temp file, which yields exactly the verified-path
-    dict shape ``_parse_cert`` consumes.
+    Parses with ``cryptography`` (``x509.load_der_x509_certificate``) using
+    no private stdlib APIs. Fails closed: any undecodable input logs a
+    warning naming the exception type and returns ``None``.
     """
-    import tempfile
-
     if not cert_der:
         return None
-    pem = ssl.DER_cert_to_PEM_cert(cert_der)
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem") as f:
-        f.write(pem)
-        f.flush()
-        return ssl._ssl._test_decode_cert(f.name)
+    try:
+        cert = x509.load_der_x509_certificate(cert_der)
+    except Exception as exc:  # noqa: BLE001 - fail closed on any parse error
+        logger.warning(
+            "Failed to decode TLS certificate (%s): %s",
+            type(exc).__name__, exc,
+        )
+        return None
+
+    decoded: dict = {
+        "subject": _name_to_getpeercert_shape(cert.subject),
+        "issuer": _name_to_getpeercert_shape(cert.issuer),
+        # OpenSSL text shape ``_parse_cert`` strptime()s: "%b %d %H:%M:%S %Y %Z".
+        "notAfter": cert.not_valid_after_utc.strftime("%b %d %H:%M:%S %Y GMT"),
+    }
+    try:
+        san = cert.extensions.get_extension_for_class(
+            x509.SubjectAlternativeName
+        ).value
+    except x509.ExtensionNotFound:
+        pass  # no SAN: the key stays absent, like getpeercert()
+    else:
+        decoded["subjectAltName"] = tuple(
+            ("DNS", name)
+            for name in san.get_values_for_type(x509.DNSName)
+        )
+    return decoded
+
+
+_GETPEERCERT_OID_NAMES = {
+    # getpeercert() reports OpenSSL short names; map the common oids so the
+    # fallback path formats names identically to the verified path.
+    x509.NameOID.COMMON_NAME: "commonName",
+    x509.NameOID.COUNTRY_NAME: "countryName",
+    x509.NameOID.STATE_OR_PROVINCE_NAME: "stateOrProvinceName",
+    x509.NameOID.LOCALITY_NAME: "localityName",
+    x509.NameOID.ORGANIZATION_NAME: "organizationName",
+    x509.NameOID.ORGANIZATIONAL_UNIT_NAME: "organizationalUnitName",
+    x509.NameOID.SERIAL_NUMBER: "serialNumber",
+    x509.NameOID.EMAIL_ADDRESS: "emailAddress",
+    x509.NameOID.DOMAIN_COMPONENT: "domainComponent",
+}
+
+
+def _name_to_getpeercert_shape(name) -> list:
+    """x509.Name → ``[[("commonName", "value"), ...], ...]`` (list of RDNs)."""
+    out: list = []
+    for rdn in name.rdns:
+        attrs = []
+        for attr in rdn:
+            short = _GETPEERCERT_OID_NAMES.get(
+                attr.oid, attr.oid.dotted_string)
+            value = (
+                attr.value.decode("utf-8", errors="replace")
+                if isinstance(attr.value, bytes) else attr.value
+            )
+            attrs.append((short, value))
+        out.append(attrs)
+    return out
 
 
 def _parse_cert(host: str, cert: dict, cert_der: bytes, tls_version: str, cipher: tuple) -> dict:
