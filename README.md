@@ -196,9 +196,10 @@ DATABASE_URL=postgresql://sentinel:sentinelpass@localhost:5432/demo_local \
 ```
 
 The seeder refuses anything not named `demo_*`/`scratch_*` (db_guard rule),
-then creates one demo org, an admin user (`demo` / `Demo-Passw0rd!` — change
-it after first login), 2 assets, 5 findings, alerts, an alert integration and
-scan history from `scripts/seed_demo.py`'s FIXTURE objects.
+then creates one demo org, an admin user (`demo` with a **random password
+printed once to the terminal** — record it when you see it; lose it and you
+reseed), 2 assets, 5 findings, alerts, an alert integration and scan history
+from `scripts/seed_demo.py`'s FIXTURE objects.
 
 ### Docker compose (full stack on http://localhost)
 
