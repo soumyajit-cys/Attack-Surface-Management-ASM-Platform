@@ -186,13 +186,33 @@ def _scan_history_grid(db, orgs, *, old_days, fresh_days):
 
 def test_purge_per_org_safety(db, two_orgs):
     """Org B's fresh rows never die because org A's rows aged out."""
+    from models.alert import Alert
     from models.scan_history import ScanHistory
 
     org_a, org_b = two_orgs
-    _grid_rows(db, [org_a, org_b], old_days=180, fresh_days=180)
+    # Org A: rows older than every window (365 d+). Org B: created NOW —
+    # no window can touch them.
+    asset_a = _asset(db, org_a.id)
+    asset_b = _asset(db, org_b.id)
+    db.add(Alert(organization_id=org_a.id, asset_id=asset_a.id, title="old-A",
+                 severity="high", message="[fixture]",
+                 created_at=_old(400)))
+    db.add(ScanHistory(organization_id=org_a.id, asset_id=asset_a.id,
+                       target="old.example", status="completed",
+                       started_at=_old(400)))
+    db.add(Alert(organization_id=org_b.id, asset_id=asset_b.id, title="fresh-B",
+                 severity="high", message="[fixture]", created_at=NOW))
+    db.add(ScanHistory(organization_id=org_b.id, asset_id=asset_b.id,
+                       target="fresh.example", status="completed",
+                       started_at=NOW))
+    db.commit()
+
     result = _purge(db)
-    # both orgs' old rows go (global, age-driven) — never each other's fresh rows
-    assert result["alerts"] == 2 and result["scan_history"] == 2
+
+    # Both orgs' aged rows go (global, age-driven) — fresh ones never.
+    assert result["alerts"] == 1 and result["scan_history"] == 1
+    titles = {a.title for a in db.query(Alert).all()}
+    assert titles == {"fresh-B"}
     targets = {t for (t,) in db.query(ScanHistory.target).all()}
     assert targets == {"fresh.example"}
 

@@ -149,6 +149,9 @@ def purge_expired_records(
         db.commit()
     else:
         db.rollback()
+    # Bulk DELETE bypasses the identity map; expire it so no later ORM read
+    # trips over a deleted-but-still-referenced instance.
+    db.expire_all()
 
     logger.info(
         "retention purge complete (dry_run=%s): "
