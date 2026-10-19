@@ -21,9 +21,9 @@ Prereqs: migrations applied (``make migrate``) and backend deps available
     DATABASE_URL=postgresql://sentinel:sentinelpass@localhost:5432/demo_local \
         backend/venv/bin/python scripts/seed_demo.py
 
-Demo login (fixture value, not a secret): username ``demo``,
-password ``Demo-Passw0rd!`` — printed nowhere by this script; change it via
-the app after first login if the demo is long-lived.
+Demo login: username ``demo``; the password is generated randomly at seed
+time and printed ONCE to the terminal (never stored in docs, logs, or this
+repository). If the printout is lost, drop the demo DB and reseed.
 
 Idempotency: refuses to run twice against the same DB (the demo org name
 already existing aborts with a clear message; drop the scratch/demo DB
@@ -33,6 +33,7 @@ instead of un-seeding).
 from __future__ import annotations
 
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -50,7 +51,8 @@ FIXTURE = {
         "username": "demo",
         "email": "demo@example.com",
         "role": "admin",
-        "password": "Demo-Passw0rd!",
+        # The password is NOT a fixture: generate_demo_password() supplies a
+        # random one-time value at seed time (printed once to the terminal).
     },
     "assets": [
         {
@@ -153,7 +155,17 @@ def enforce_db_guard(database_url: str) -> str:
     return name
 
 
-def create_schema_and_seed(database_url: str, name: str) -> None:
+def generate_demo_password() -> str:
+    """Random one-time demo password (~21 chars of [A-Za-z0-9_-]).
+
+    Clears the 8-char policy with a wide margin; returned to the caller for
+    a single terminal print, never persisted anywhere else.
+    """
+    return secrets.token_urlsafe(15)
+
+
+def create_schema_and_seed(database_url: str, name: str,
+                           password: str) -> None:
     sys.path.insert(0, str(ROOT / "backend"))
 
     from sqlalchemy import create_engine, select
@@ -198,7 +210,7 @@ def create_schema_and_seed(database_url: str, name: str) -> None:
             organization_id=org.id,
             username=fixture_user["username"],
             email=fixture_user["email"],
-            password_hash=hash_password(fixture_user["password"]),
+            password_hash=hash_password(password),
             role=fixture_user["role"],
         )
         session.add(user)

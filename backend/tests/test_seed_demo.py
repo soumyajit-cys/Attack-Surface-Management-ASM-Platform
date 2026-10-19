@@ -69,3 +69,27 @@ def test_seeder_does_not_import_network_libraries():
     for banned in ["import requests", "import httpx", "import urllib",
                    "import socket", "urllib.request", "aiohttp"]:
         assert banned not in text, f"seeder must stay network-free: {banned!r}"
+
+
+def test_seeder_generates_a_random_one_time_password():
+    """The demo password is generated at seed time and printed once — never a
+    documented constant. The seeder exposes generate_demo_password() so the
+    randomness itself is testable; seed() accepts an explicit password."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("seed_demo", SEEDER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    first = module.generate_demo_password()
+    second = module.generate_demo_password()
+    assert first != second, "demo passwords must be random per seed run"
+    assert len(first) >= 12, "demo password must clear the min-8 policy with margin"
+    assert "Passw0rd" not in first
+
+
+def test_seeder_has_no_hardcoded_password_constant():
+    text = SEEDER.read_text()
+    assert "Demo-Passw0rd!" not in text, (
+        "the seeder must not ship a documented password constant"
+    )

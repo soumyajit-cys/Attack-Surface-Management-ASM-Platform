@@ -50,3 +50,13 @@ def test_readme_links_security_docs():
     text = README.read_text()
     assert "docs/threat-model.md" in text
     assert "[MIT](LICENSE)" in text or "LICENSE" in text
+
+
+def test_readme_contains_no_demo_credentials():
+    """The demo password is printed once by scripts/seed_demo.py; the README
+    must never document a working credential (Passw0rd-style constants)."""
+    text = README.read_text()
+    assert "Passw0rd" not in text, (
+        "README documents a real demo credential — the seeder now prints a "
+        "one-time random password instead; remove the constant"
+    )
