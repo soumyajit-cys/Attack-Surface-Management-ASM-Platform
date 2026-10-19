@@ -327,6 +327,11 @@ async def get_scan_status(
     if scan is None:
         raise NotFoundError("Scan not found", code="scan_not_found")
 
+    # Surfaced so a partially broken scanner package (a failed module
+    # import leaves a whole phase without scanner modules) is visible to
+    # the operator at the API level too, matching the scan summary.
+    from app.scanning.registry import registry as scanner_registry
+
     return {
         "scan_id": scan.id,
         "target": scan.target,
@@ -334,4 +339,5 @@ async def get_scan_status(
         "error": scan.error,
         "started_at": scan.started_at,
         "completed_at": scan.completed_at,
+        "unavailable_phases": scanner_registry.unavailable_phases(),
     }

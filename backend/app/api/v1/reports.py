@@ -144,8 +144,13 @@ async def executive_summary_pdf(
             asset_id=asset_id,
             since=since,
         )
-    except RuntimeError as exc:
-        raise AppError(str(exc), code="pdf_unavailable")
+    except RuntimeError:
+        # Static on purpose: the RuntimeError text carries deployment
+        # internals (e.g. the fpdf2 install hint) that must not leak.
+        raise AppError(
+            "PDF generation is unavailable on this deployment",
+            code="pdf_unavailable",
+        )
     except Exception as exc:
         from utils.logger import get_correlation_id, logger
 
@@ -182,8 +187,13 @@ async def finding_detail_pdf(
 
     try:
         pdf_bytes = generate_finding_detail_pdf(db, finding_id)
-    except RuntimeError as exc:
-        raise AppError(str(exc), code="pdf_unavailable")
+    except RuntimeError:
+        # Static on purpose: the RuntimeError text carries deployment
+        # internals (e.g. the fpdf2 install hint) that must not leak.
+        raise AppError(
+            "PDF generation is unavailable on this deployment",
+            code="pdf_unavailable",
+        )
     except Exception as exc:
         from utils.logger import get_correlation_id, logger
 

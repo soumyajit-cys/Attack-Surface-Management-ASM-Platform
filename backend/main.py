@@ -25,6 +25,11 @@ async def lifespan(app: FastAPI):
             "SECURITY: REQUIRE_DOMAIN_VERIFICATION is off — scans run without "
             "ownership proof. Local development only; never disable in production."
         )
+    # Discover scanner modules eagerly at startup so broken scanner imports
+    # are loud immediately (not silently swallowed until the first scan).
+    from app.scanning.registry import registry as scanner_registry
+
+    scanner_registry.warmup()
     yield
 
 

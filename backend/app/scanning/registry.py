@@ -56,9 +56,57 @@ class ScannerRegistry:
     Discovery walks ``scanner_modules/`` once and caches the result.
     """
 
+    #: Phases the scan pipeline executes through this registry. Discovery
+    #: runs through services (resolve_domain etc.), not via registry modules.
+    _PIPELINED_SCANNER_PHASES: tuple[ScanPhase, ...] = (
+        ScanPhase.PORT,
+        ScanPhase.SSL,
+        ScanPhase.HEADER,
+    )
+
     def __init__(self) -> None:
         self._entries: dict[str, ScannerEntry] = {}
         self._discovered = False
+        # module name -> "ExcType: message" for every failed import
+        self._failed_imports: dict[str, str] = {}
+
+    @property
+    def failed_imports(self) -> dict[str, str]:
+        """Scanner modules that failed to import during discovery."""
+        return dict(self._failed_imports)
+
+    def unavailable_phases(self) -> list[str]:
+        """Pipelined scanner phases that currently have NO modules.
+
+        After discovery this lists every phase whose scanner module either
+        failed to import or is missing entirely — the value surfaced in each
+        scan summary and the scan detail API so a partially broken scanner
+        package is never silent.
+        """
+        self._discover_once()
+        registered = {entry.phase for entry in self._entries.values()}
+        return [
+            phase.value
+            for phase in self._PIPELINED_SCANNER_PHASES
+            if phase not in registered
+        ]
+
+    def warmup(self) -> list[str]:
+        """Force discovery and log unavailable phases (called at startup).
+
+        Returns the unavailable-phase list so callers can surface it too.
+        """
+        phases = self.unavailable_phases()
+        if phases:
+            logger.warning(
+                "Scanner registry warm-up: phases unavailable "
+                "(no registered scanner module): %s (failed imports: %s)",
+                phases,
+                self._failed_imports or "none",
+            )
+        else:
+            logger.info("Scanner registry warm-up: all phases available")
+        return phases
 
     def register(self, entry: ScannerEntry) -> None:
         if entry.name in self._entries:
@@ -108,7 +156,8 @@ def _discover_scanner_modules(reg: ScannerRegistry) -> None:
         module_name = f"scanner_modules.{py_file.stem}"
         try:
             importlib.import_module(module_name)
-        except Exception:
+        except Exception as exc:
+            reg._failed_imports[module_name] = f"{type(exc).__name__}: {exc}"
             logger.exception("Failed to import scanner module: %s", module_name)
 
 

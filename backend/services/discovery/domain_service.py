@@ -15,8 +15,13 @@ async def resolve_domain(domain: str):
         from app.core.ssrf import pinned_resolve
         ip = pinned_resolve(domain)
         return {"domain": domain, "ip": ip, "pinned": True}
-    except Exception:
-        pass
+    except Exception as exc:
+        # Named loudly: a silently failing pin store degrades every scan
+        # into fresh-DNS mode and would otherwise be invisible.
+        logger.warning(
+            "Pinned IP lookup failed for %s (%s): %s",
+            domain, type(exc).__name__, exc,
+        )
 
     # Fallback to fresh DNS resolution. Blocked or unresolvable targets
     # yield no IP (callers fail the scan loudly instead of probing).

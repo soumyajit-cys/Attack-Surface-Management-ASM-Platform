@@ -356,6 +356,29 @@ def _resolve_subdomain_ips(db: Session, subdomains) -> None:
     db.commit()
 
 
+def _new_summary(scan_registry) -> dict:
+    """The summary dict every scan starts with.
+
+    ``unavailable_phases`` is always present (possibly empty) so a
+    scan whose scanner modules failed to import is never silent.
+    """
+    return {
+        "ports_open": 0,
+        "ports_total": 0,
+        "open_port_numbers": [],
+        "ssl": {"scanned": 0, "issues": 0},
+        "headers": {"scanned": 0, "issues": 0},
+        "ssl_findings": [],
+        "header_findings": [],
+        "unpinned_skipped": [],
+        # Template scanning is unwired until Phase 4 (see
+        # services/findings/finding_engine.run_nuclei_scan): always skipped.
+        # Flip this when the VULN phase lands in app/scanning/scope.py.
+        "nuclei_skipped": True,
+        "unavailable_phases": scan_registry.unavailable_phases(),
+    }
+
+
 def _scan_targets(
     db: Session,
     scan: ScanHistory,
@@ -369,20 +392,7 @@ def _scan_targets(
     from app.scanning.registry import ScanPhase, registry
 
     targets = persisted["subdomains"]
-    summary = {
-        "ports_open": 0,
-        "ports_total": 0,
-        "open_port_numbers": [],
-        "ssl": {"scanned": 0, "issues": 0},
-        "headers": {"scanned": 0, "issues": 0},
-        "ssl_findings": [],
-        "header_findings": [],
-        "unpinned_skipped": [],
-        # Template scanning is unwired until Phase 4 (see
-        # services/findings/finding_engine.run_nuclei_scan): always skipped.
-        # Flip this when the VULN phase lands in app/scanning/scope.py.
-        "nuclei_skipped": True,
-    }
+    summary = _new_summary(registry)
     org_label = str(scan.organization_id)
 
     can_port = scope_policy.phase_allowed(scope, ScanPhase.PORT)
