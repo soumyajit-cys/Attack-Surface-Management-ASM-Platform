@@ -102,6 +102,15 @@ def _build_cert(key, subject: str, issuer_key, issuer_name: x509.Name, *,
             x509.BasicConstraints(ca=True, path_length=None), critical=True
         )
         builder = builder.add_extension(
+            x509.KeyUsage(
+                digital_signature=False, content_commitment=False,
+                key_encipherment=False, data_encipherment=False,
+                key_agreement=False, key_cert_sign=True, crl_sign=True,
+                encipher_only=False, decipher_only=False,
+            ),
+            critical=True,
+        )
+        builder = builder.add_extension(
             x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
             critical=False,
         )
@@ -133,6 +142,11 @@ def pki(tmp_path):
                           not_after=now + timedelta(days=2), is_ca=True)
     srv_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
+    ss_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    selfsigned = _build_cert(ss_key, "right.example", ss_key,
+                             _name("right.example"),
+                             not_before=now - timedelta(days=1),
+                             not_after=now + timedelta(days=30))
     return {
         "anchor_pem": ca_cert.public_bytes(serialization.Encoding.PEM),
         "valid": (srv_key, _build_cert(
@@ -143,9 +157,8 @@ def pki(tmp_path):
             srv_key, "right.example", ca_key, ca_cert.subject,
             not_before=now - timedelta(days=2),
             not_after=now - timedelta(days=1))),
-        "selfsigned_key": rsa.generate_private_key(
-            public_exponent=65537, key_size=2048),
-        "selfsigned": _name("right.example"),
+        "selfsigned_key": ss_key,
+        "selfsigned": selfsigned,
     }
 
 
@@ -403,7 +416,8 @@ class TestPortScannerRealSockets:
             by_port = {r["port"]: r for r in results}
 
             assert by_port[srv.port]["status"] == "open"
-            assert by_port[srv.port]["banner"] is None  # graceful timeout
+            # silent server: the grab gets EOF ("") or a timeout (None)
+            assert by_port[srv.port]["banner"] in (None, "")
 
     def test_egress_blocked_propagates(self, loopback_seam):
         from services.scanner import port_scanner as ps
