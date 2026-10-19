@@ -70,8 +70,7 @@ def _grid(db, org, *, assets_n, domains_per, subs_per, ports_per, findings_per):
             db.add(Finding(organization_id=org.id, asset_id=asset.id,
                            title=f"f{fi}{ai}", severity=("critical", "high",
                            "medium", "low")[fi % 4], description="d"))
-        db.add(RiskScore(organization_id=org.id, asset_id=asset.id,
-                         score=50.0 + ai))
+        db.add(RiskScore(asset_id=asset.id, score=50.0 + ai))
         assets.append(asset)
     db.commit()
     return assets

@@ -30,6 +30,15 @@ def export_findings_csv(
 
     findings = query.order_by(Finding.created_at.desc()).all()
 
+    # Batch the asset-name lookup (was one SELECT per finding).
+    asset_ids = {f.asset_id for f in findings if f.asset_id is not None}
+    asset_names: dict[int, str] = {}
+    if asset_ids:
+        asset_names = {
+            a.id: a.name
+            for a in db.query(Asset).filter(Asset.id.in_(asset_ids)).all()
+        }
+
     output = io.StringIO()
     writer = csv.writer(output)
 
@@ -46,10 +55,9 @@ def export_findings_csv(
     ])
 
     for f in findings:
-        asset = db.query(Asset).filter(Asset.id == f.asset_id).first()
         writer.writerow([
             f.id,
-            asset.name if asset else "Unknown",
+            asset_names.get(f.asset_id, "Unknown"),
             f.asset_id,
             f.title,
             f.severity,
