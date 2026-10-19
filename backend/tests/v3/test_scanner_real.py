@@ -43,6 +43,13 @@ from utils.egress import (
     fetch_url_validated,
 )
 
+# Import the seam-victim modules EAGERLY, before any seam fixture runs.
+# A `from utils.egress import resolve_validated_ips` copy made while the
+# seam is active would freeze the test-only lambda into the module's
+# namespace forever (monkeypatch restores only attributes it set).
+from services.discovery import domain_service as _seam_victim_domain  # noqa: F401
+from services.scanner import port_scanner as _seam_victim_port  # noqa: F401
+
 
 def _run(coro):
     return asyncio.run(coro)
@@ -558,17 +565,9 @@ class TestProductionGuardNotWeakened:
             resolve_validated_ips("localhost", 443)
 
     def test_port_scanner_blocked_without_seam(self):
-        import utils.egress as eg
         from services.scanner import port_scanner as ps
-        print("GUARD ps.resolve:", ps.resolve_validated_ips)
-        print("GUARD eg.resolve:", eg.resolve_validated_ips)
         from utils.egress import EgressBlocked
 
-        try:
-            ips = ps.resolve_validated_ips("localhost", 443)
-            print("GUARD resolve SUCCEEDED:", ips)
-        except Exception as exc:
-            print("GUARD resolve raised:", type(exc).__name__, exc)
         with pytest.raises(EgressBlocked):
             _run(ps.scan_ports("localhost"))
 
@@ -581,12 +580,15 @@ class TestProductionGuardNotWeakened:
 
     def test_ssl_scanner_without_seam_blocks_or_fails(self):
         from services.scanner import ssl_scanner as ss
-        from utils.egress import EgressBlocked
+        from utils.egress import EgressBlocked, resolve_validated_ips
 
-        # Same call shape as the seam tests, no seam: the real guard must
-        # refuse (EgressBlocked), never reach loopback.
+        # Same call shape as the seam tests, no seam: the real resolver
+        # refuses (EgressBlocked). analyze_ssl's documented catch-all
+        # converts resolution refusal into a fail-closed None — it never
+        # reaches loopback either way, and the guard event is logged.
         with pytest.raises(EgressBlocked):
-            _run(ss.analyze_ssl("localhost"))
+            resolve_validated_ips("localhost", 443)
+        assert _run(ss.analyze_ssl("localhost")) is None
 
 
 def _write_anchor(pki) -> str:
@@ -611,7 +613,9 @@ class TestDNSService:
                 return ["93.184.216.34", "93.184.216.35"]
             if rtype == "TXT":
                 return ['"v=spf1 -all"']
-            raise Exception("NXDOMAIN")
+            import dns.exception as dns_exc
+
+            raise dns_exc.DNSException("NXDOMAIN")
 
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         results = _run(ds.enumerate_dns("demo-corp.example"))
@@ -734,7 +738,8 @@ class TestWhoisService:
 
         class _Data:
             registrar = "Fixture Registrar LLC"
-            creation_date = datetime(2020, 1, 2, 3, 4, 5)
+            creation_date = datetime(2020, 1, 2, 3, 4, 5,
+                                     tzinfo=timezone.utc)
 
         monkeypatch.setattr(ws.whois, "whois", lambda d: _Data())
         result = _run(ws.get_whois("demo-corp.example"))
@@ -746,7 +751,7 @@ class TestWhoisService:
         from services.discovery import whois_service as ws
 
         def boom(domain):
-            raise Exception("whois server down")
+            raise OSError("whois server down")
 
         monkeypatch.setattr(ws.whois, "whois", boom)
         result = _run(ws.get_whois("demo-corp.example"))
