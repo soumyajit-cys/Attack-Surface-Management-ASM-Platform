@@ -146,6 +146,7 @@ def enforce_db_guard(database_url: str) -> str:
             env={**os.environ, "DATABASE_URL": database_url},
             capture_output=True,
             text=True,
+            check=False,  # non-zero exit IS the guard refusing; handled below
         )
         if result.returncode != 0:
             tpl = (result.stdout + result.stderr).strip() or "db_guard failed"
