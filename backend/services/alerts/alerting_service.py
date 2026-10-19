@@ -302,21 +302,20 @@ def _unreadable_credential(integration: AlertIntegration) -> str | None:
     return None
 
 
-async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
-    """Dispatch finding to all matching alert integrations for the org.
+async def _dispatch_finding_to_integrations(
+    db: Session,
+    integrations: list[AlertIntegration],
+    finding: Finding,
+    asset: Asset,
+) -> int:
+    """Send one finding-shaped alert through every matching integration.
 
-    Integration IDs are listed first (plain integers, never decrypted) so
-    one unreadable row cannot sink the round: each row loads in isolation
-    and failures are recorded without touching ORM-decrypted state.
+    Returns the number of integrations skipped for unreadable credentials.
+    Delivery outcomes are recorded + committed per integration so one bad
+    row (or one failed send) cannot block the round.
     """
-    id_rows = db.query(AlertIntegration.id).filter(
-        AlertIntegration.organization_id == asset.organization_id,
-        AlertIntegration.is_active == True,
-    ).all()
-
     skipped = 0
-    for (integration_id,) in id_rows:
-        integration = db.get(AlertIntegration, integration_id)
+    for integration in integrations:
         if not severity_meets_threshold(finding.severity, integration.min_severity):
             continue
 
@@ -337,6 +336,28 @@ async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) ->
 
         _record_delivery(db, integration, success)
         db.commit()
+    return skipped
+
+
+def _load_integrations(db: Session, organization_id: int) -> list:
+    """Batch-load every active integration for the org in ONE SELECT.
+
+    Decryption failures stay row-isolated at the column level
+    (``UndecryptableSecret`` placeholders), so batching does not turn one
+    unreadable row into a wholesale failure.
+    """
+    return db.query(AlertIntegration).filter(
+        AlertIntegration.organization_id == organization_id,
+        AlertIntegration.is_active == True,  # noqa: E712
+    ).all()
+
+
+async def process_finding_alerts(db: Session, finding: Finding, asset: Asset) -> None:
+    """Dispatch finding to all matching alert integrations for the org."""
+    integrations = _load_integrations(db, asset.organization_id)
+    skipped = await _dispatch_finding_to_integrations(
+        db, integrations, finding, asset
+    )
 
     if skipped:
         logger.error(
@@ -407,38 +428,17 @@ async def process_change_alerts(db: Session, alerts: list, asset: Asset) -> None
     ``alerts`` are :class:`Alert` rows created by
     :func:`services.history.change_detector.persist_alerts`. Severity
     thresholds, channel routing, and retry behavior are identical to
-    :func:`process_finding_alerts`.
+    :func:`process_finding_alerts`. Integrations are batch-loaded ONCE
+    (not again per alert).
     """
-    id_rows = db.query(AlertIntegration.id).filter(
-        AlertIntegration.organization_id == asset.organization_id,
-        AlertIntegration.is_active == True,
-    ).all()
+    integrations = _load_integrations(db, asset.organization_id)
 
     skipped = 0
     for alert in alerts:
         finding_like = _change_alert_as_finding(alert)
-        for (integration_id,) in id_rows:
-            integration = db.get(AlertIntegration, integration_id)
-            if not severity_meets_threshold(finding_like.severity, integration.min_severity):
-                continue
-
-            unreadable = _unreadable_credential(integration)
-            if unreadable is not None:
-                _record_delivery(db, integration, False, detail=unreadable)
-                db.commit()
-                skipped += 1
-                continue
-
-            success = False
-            if integration.channel == AlertChannel.SLACK:
-                success = await send_slack_alert(integration.webhook_url, finding_like, asset)
-            elif integration.channel == AlertChannel.DISCORD:
-                success = await send_discord_alert(integration.webhook_url, finding_like, asset)
-            elif integration.channel == AlertChannel.JIRA:
-                success = await send_jira_alert(integration, finding_like, asset)
-
-            _record_delivery(db, integration, success)
-            db.commit()
+        skipped += await _dispatch_finding_to_integrations(
+            db, integrations, finding_like, asset
+        )
 
     if skipped:
         logger.error(
