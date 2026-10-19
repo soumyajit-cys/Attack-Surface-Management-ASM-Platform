@@ -134,6 +134,22 @@ class Settings(BaseSettings):
     # drop the old). See app/core/crypto.py.
     secrets_encryption_key: str = ""
 
+    # Retention (Phase 2.2). The beat task tasks.retention.purge_expired_rows
+    # deletes rows older than the per-table window (age measured on
+    # created_at / started_at) in bounded batches. Snapshots are
+    # count-based: the newest N per asset are always kept. Raising a value
+    # only ever keeps MORE data; there is no default that deletes everything.
+    retention_alert_days: int = 90
+    retention_scan_history_days: int = 180
+    retention_audit_log_days: int = 365
+    retention_snapshot_keep_newest: int = 50
+    # Hard cap on rows deleted per table per run (0 = unlimited).
+    retention_batch_limit: int = 1000
+
+    @property
+    def retention_batch_size(self) -> int:
+        return max(self.retention_batch_limit, 0) or 10**6
+
     @property
     def webhook_allowed_port_set(self) -> frozenset[int]:
         """Parsed ``webhook_allowed_ports`` (validated non-empty at startup)."""

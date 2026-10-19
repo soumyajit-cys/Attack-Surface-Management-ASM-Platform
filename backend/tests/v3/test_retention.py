@@ -152,8 +152,9 @@ def test_purge_age_boundaries(db, two_orgs):
     assert result["alerts"] == 2, "only the two 90d+-old alerts are deleted"
     after = _table_counts(db)
     assert after["alerts"] == 2
-    titles = {a.title for a in db.query(
-        __import__("models.alert", fromlist=["Alert"]).Alert).all()}
+    from models.alert import Alert
+
+    titles = {a.title for a in db.query(Alert).all()}
     assert titles == {"fresh"}
 
 
@@ -338,6 +339,4 @@ def test_beat_schedule_entry_registered():
     assert entry is not None, "beat schedule must include purge-expired-rows"
     assert entry["task"] == "tasks.retention.purge_expired_rows"
     assert "tasks.retention_tasks" in celery.conf.include
-    assert celery.app.conf.task_routes.get("tasks.retention.*") == {
-        "queue": "celery",
-    }
+    assert celery.conf.task_routes.get("tasks.retention.*") == {"queue": "celery"}
