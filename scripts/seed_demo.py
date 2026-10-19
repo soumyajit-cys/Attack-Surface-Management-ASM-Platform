@@ -275,8 +275,7 @@ def create_schema_and_seed(database_url: str, name: str,
         f"{len(FIXTURE['assets'])} assets, "
         f"{sum(len(a['findings']) for a in FIXTURE['assets'])} findings, "
         f"{len(FIXTURE['alerts'])} alerts, 1 alert integration (no "
-        "credentials), 2 scan-history rows. Log in via the frontend with the "
-        "fixture user from scripts/seed_demo.py."
+        "credentials), 2 scan-history rows."
     )
 
 
@@ -285,7 +284,17 @@ def main() -> None:
     if not database_url:
         refuse("seed_demo: DATABASE_URL is not set -- refusing to run")
     name = enforce_db_guard(database_url)
-    create_schema_and_seed(database_url, name)
+    password = generate_demo_password()
+    create_schema_and_seed(database_url, name, password)
+    # One-time credential printout: the ONLY copy the operator gets (it is
+    # not written to the DB, docs, or any log line). Shown after the commit
+    # so a failed run never dangles a password for a half-seeded org.
+    print(
+        "─────────────────────────────────────────────────────────\n"
+        f"  Demo user:   demo\n"
+        f"  Password (shown ONCE; record it now): {password}\n"
+        "─────────────────────────────────────────────────────────"
+    )
 
 
 if __name__ == "__main__":
