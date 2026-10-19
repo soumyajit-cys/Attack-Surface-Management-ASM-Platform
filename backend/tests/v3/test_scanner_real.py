@@ -53,10 +53,19 @@ def _run(coro):
 
 @pytest.fixture()
 def loopback_seam(monkeypatch):
-    """Aim the egress resolver at loopback (same seam as test_egress_tls)."""
-    monkeypatch.setattr(
-        "utils.egress.resolve_validated_ips", lambda host, port=80: ["127.0.0.1"]
-    )
+    """Aim the egress resolver at loopback (same seam as test_egress_tls).
+
+    TEST-ONLY: beyond ``utils.egress`` itself, every module that copied the
+    name via ``from utils.egress import resolve_validated_ips`` gets the
+    same seam, so a module first-imported while this fixture is active can
+    never freeze the seam into its own namespace (pytest would not restore
+    a copy it never set). Everything is restored at teardown by monkeypatch.
+    """
+    seam = lambda host, port=80: ["127.0.0.1"]  # noqa: E731
+    monkeypatch.setattr("utils.egress.resolve_validated_ips", seam)
+    for copy in ("services.scanner.port_scanner.resolve_validated_ips",
+                 "services.discovery.domain_service.resolve_validated_ips"):
+        monkeypatch.setattr(copy, seam, raising=False)
     return monkeypatch
 
 
@@ -549,9 +558,17 @@ class TestProductionGuardNotWeakened:
             resolve_validated_ips("localhost", 443)
 
     def test_port_scanner_blocked_without_seam(self):
+        import utils.egress as eg
         from services.scanner import port_scanner as ps
+        print("GUARD ps.resolve:", ps.resolve_validated_ips)
+        print("GUARD eg.resolve:", eg.resolve_validated_ips)
         from utils.egress import EgressBlocked
 
+        try:
+            ips = ps.resolve_validated_ips("localhost", 443)
+            print("GUARD resolve SUCCEEDED:", ips)
+        except Exception as exc:
+            print("GUARD resolve raised:", type(exc).__name__, exc)
         with pytest.raises(EgressBlocked):
             _run(ps.scan_ports("localhost"))
 
