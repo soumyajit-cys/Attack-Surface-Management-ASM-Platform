@@ -24,6 +24,7 @@ celery = Celery(
         "tasks.scheduler_tasks",
         "tasks.cve_tasks",
         "tasks.verification_tasks",
+        "tasks.retention_tasks",
     ],
 )
 
@@ -71,6 +72,7 @@ celery.conf.update(
         "tasks.scheduler.process_due_scan_policies": {"queue": "scans"},
         "tasks.scheduler.send_due_email_digests": {"queue": "celery"},
         "tasks.verification.*": {"queue": "scans"},
+        "tasks.retention.*": {"queue": "celery"},
     },
 
     # ── Beat schedule (scan policies + email digests + verification) ────
