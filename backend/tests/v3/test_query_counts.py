@@ -17,7 +17,7 @@ import io
 import pytest
 from sqlalchemy import event
 
-import services.alerts.alerting_service as alerting_service
+from services.alerts import alerting_service
 from services.reporting import csv_export
 
 
