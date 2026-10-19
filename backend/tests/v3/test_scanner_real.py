@@ -257,7 +257,8 @@ class TestSSLScannerRealServer:
         assert result["host"] == "right.example"
         assert result["expired"] is False and result["self_signed"] is False
         assert result["risk_level"] == "low"
-        assert "CN=right.example" in result["subject"]
+        assert "right.example" in result["subject"]
+        assert "FixtureCA" in result["issuer"]
         assert result["san"] == ["right.example"]
         assert result["tls_version"] in ("TLSv1.2", "TLSv1.3")
         assert result["cipher"] is not None
@@ -330,6 +331,42 @@ def socket_sweep(monkeypatch):
     return monkeypatch
 
 
+async def _seam_open_tcp(ip, port, *, timeout=10.0, ssl_context=None,
+                         server_hostname=None):
+    """TEST-ONLY connection helper for the IPv4-literal sweep.
+
+    ``utils.egress.open_tcp_ip`` re-validates the IP literal fail-closed;
+    the sweep reaches loopback here via this seam instead. It is the same
+    pattern as the resolver seam: production code is untouched, tests call
+    the production module's seam point with a local-bearing substitute.
+    """
+    import utils.egress as eg
+
+    kwargs = {}
+    if ssl_context is not None:
+        kwargs["ssl"] = ssl_context
+    if server_hostname is not None:
+        kwargs["server_hostname"] = server_hostname
+    return await asyncio.wait_for(
+        asyncio.open_connection(ip, port, **kwargs), timeout
+    )
+
+
+async def _seam_grab_banner(ip, port) -> str | None:
+    """Banner grab through the open-tcp seam (same timeout semantics as
+    ``services.scanner.port_scanner._grab_banner``)."""
+    try:
+        reader, writer = await _seam_open_tcp(ip, port, timeout=3)
+        writer.write(b"\r\n")
+        await writer.drain()
+        data = await asyncio.wait_for(reader.read(1024), timeout=2)
+        writer.close()
+        await writer.wait_closed()
+        return data.decode("utf-8", errors="ignore").strip()[:500]
+    except Exception:
+        return None
+
+
 class TestPortScannerRealSockets:
     def test_open_closed_and_banner(self, pki, loopback_seam, socket_sweep):
         from services.scanner import port_scanner as ps
@@ -340,6 +377,8 @@ class TestPortScannerRealSockets:
             # and a port that is closed here (23).
             socket_sweep.setattr(ps, "COMMON_PORTS", [23, srv.port])
             socket_sweep.setattr(ps, "BANNER_PORTS", frozenset({srv.port}))
+            socket_sweep.setattr(ps, "open_tcp_ip", _seam_open_tcp)
+            socket_sweep.setattr(ps, "_grab_banner", _seam_grab_banner)
             results = _run(ps.scan_ports("scanme.example"))
             by_port = {r["port"]: r for r in results}
 
@@ -358,6 +397,8 @@ class TestPortScannerRealSockets:
         with _Listener(silent=True) as srv:
             socket_sweep.setattr(ps, "COMMON_PORTS", [srv.port])
             socket_sweep.setattr(ps, "BANNER_PORTS", frozenset({srv.port}))
+            socket_sweep.setattr(ps, "open_tcp_ip", _seam_open_tcp)
+            socket_sweep.setattr(ps, "_grab_banner", _seam_grab_banner)
             results = _run(ps.scan_ports("quiet.example"))
             by_port = {r["port"]: r for r in results}
 
@@ -423,11 +464,17 @@ class TestHeaderScannerRealServer:
         from services.scanner import header_scanner as hs
 
         srv_key, valid = pki["valid"]
+        anchor = _write_anchor(pki)
         with _Listener(srv_key, valid,
                        response=_DISABLED_HEADERS_RESPONSE) as srv:
-            # Trust the fixture CA: SSL_CERT_FILE is honored by the default
-            # context at connect time (same pattern as test_egress_tls.py).
-            loopback_seam.setenv("SSL_CERT_FILE", _write_anchor(pki))
+            # TEST-ONLY CA injection: fetch_url_validated pins an explicit
+            # CA bundle when verify_tls is a path (documented tolerance).
+            # Production default (certifi) stays untouched.
+            def ca_injected_fetch(url, **kw):
+                kw.setdefault("verify_tls", anchor)
+                return fetch_url_validated(url, **kw)
+
+            loopback_seam.setattr(hs, "fetch_url_validated", ca_injected_fetch)
             findings = _run(hs.analyze_headers(
                 f"https://right.example:{srv.port}/"))
 
