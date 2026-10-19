@@ -51,6 +51,12 @@ async def _analyze_ssl_unverified(host: str, error: str) -> Optional[dict]:
 
         ssl_sock.close()
 
+        # With verify_mode=CERT_NONE ``getpeercert()`` returns an EMPTY dict
+        # (no verification context), so the fallback would silently drop
+        # every expired/self-signed certificate. Decode the DER ourselves.
+        if not cert and cert_der:
+            cert = _decode_cert_der(cert_der)
+
         if not cert:
             return None
 
@@ -61,6 +67,24 @@ async def _analyze_ssl_unverified(host: str, error: str) -> Optional[dict]:
     except Exception as exc:
         logger.warning("SSL analysis (unverified) failed for %s: %s", host, exc)
         return None
+
+
+def _decode_cert_der(cert_der: bytes) -> Optional[dict]:
+    """Decode a DER certificate to the ``getpeercert()``-shaped dict.
+
+    Uses ``ssl._ssl._test_decode_cert`` (the stdlib's own decoder for
+    PEM files) on a temp file, which yields exactly the verified-path
+    dict shape ``_parse_cert`` consumes.
+    """
+    import tempfile
+
+    if not cert_der:
+        return None
+    pem = ssl.DER_cert_to_PEM_cert(cert_der)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem") as f:
+        f.write(pem)
+        f.flush()
+        return ssl._ssl._test_decode_cert(f.name)
 
 
 def _parse_cert(host: str, cert: dict, cert_der: bytes, tls_version: str, cipher: tuple) -> dict:

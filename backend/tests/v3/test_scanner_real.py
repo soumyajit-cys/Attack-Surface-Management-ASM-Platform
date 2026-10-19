@@ -101,9 +101,24 @@ def _build_cert(key, subject: str, issuer_key, issuer_name: x509.Name, *,
         builder = builder.add_extension(
             x509.BasicConstraints(ca=True, path_length=None), critical=True
         )
+        builder = builder.add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
+            critical=False,
+        )
     else:
         builder = builder.add_extension(
             x509.SubjectAlternativeName([x509.DNSName(subject)]),
+            critical=False,
+        )
+        # Python 3.13 defaults to VERIFY_X509_STRICT: the issued cert must
+        # carry Authority/Subject Key Identifier extensions.
+        builder = builder.add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                issuer_key.public_key()),
+            critical=False,
+        )
+        builder = builder.add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
             critical=False,
         )
     return builder.sign(issuer_key, hashes.SHA256())
@@ -123,7 +138,7 @@ def pki(tmp_path):
         "valid": (srv_key, _build_cert(
             srv_key, "right.example", ca_key, ca_cert.subject,
             not_before=now - timedelta(days=1),
-            not_after=now + timedelta(days=30))),
+            not_after=now + timedelta(days=45))),
         "expired": (srv_key, _build_cert(
             srv_key, "right.example", ca_key, ca_cert.subject,
             not_before=now - timedelta(days=2),
@@ -246,7 +261,7 @@ class TestSSLScannerRealServer:
         assert result["san"] == ["right.example"]
         assert result["tls_version"] in ("TLSv1.2", "TLSv1.3")
         assert result["cipher"] is not None
-        assert result["expires_soon"] is False  # valid for 30 days
+        assert result["expires_soon"] is False  # valid for 45 days
 
     def test_expired_cert_falls_back_and_flags_critical(self, pki,
                                                         loopback_seam):
