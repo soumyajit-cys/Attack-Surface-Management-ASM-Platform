@@ -103,12 +103,30 @@ def _details_block(call_text: str) -> str | None:
 
 
 def _literal_keys(block: str) -> list[str]:
-    import json
-    import re
+    """Literal string keys of the details dict (nested dicts included).
 
-    # drop string VALUES so their contents can't masquerade as keys
-    masked = re.sub(r'"(?:[^"\\]|\\.)*"', '""', block)
-    return re.findall(r'"([A-Za-z0-9_.\-]+)"\s*:', masked)
+    Rejects **-splats and non-literal keys: anything the static scan cannot
+    see into is treated as unsafe by default.
+    """
+    import ast
+
+    tree = ast.parse(block, mode="eval")
+    keys: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key in node.keys:
+                if key is None:
+                    raise AssertionError(
+                        "details uses a **-splat; write literal keys so the "
+                        "static scan can see them")
+                if not isinstance(key, ast.Constant) \
+                        or not isinstance(key.value, str):
+                    raise AssertionError(
+                        "details uses a non-literal key "
+                        f"(ast.{type(key).__name__}); write a literal "
+                        "string key")
+                keys.append(key.value)
+    return keys
 
 
 class TestAuditCallSites:
