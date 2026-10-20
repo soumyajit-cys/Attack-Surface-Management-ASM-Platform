@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
 import { TwoFactorSection } from '../components/TwoFactorSection'
+import { ChangePasswordCard } from '../components/ChangePasswordCard'
 import {
   User,
   Lock,
@@ -26,7 +27,6 @@ export function Settings() {
     username: user?.username || '',
     email: user?.email || '',
   })
-  const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' })
   const [saving, setSaving] = useState(false)
 
   const handleProfileSave = async (e: React.FormEvent) => {
