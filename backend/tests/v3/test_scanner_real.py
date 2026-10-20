@@ -104,7 +104,8 @@ def _name(cn: str) -> x509.Name:
 
 def _build_cert(key, subject: str, issuer_key, issuer_name: x509.Name, *,
                 not_before: datetime, not_after: datetime,
-                is_ca: bool = False, with_san: bool = True) -> x509.Certificate:
+                is_ca: bool = False, with_san: bool = True,
+                san_ip: str | None = None) -> x509.Certificate:
     builder = (
         x509.CertificateBuilder()
         .subject_name(_name(subject))
@@ -133,8 +134,12 @@ def _build_cert(key, subject: str, issuer_key, issuer_name: x509.Name, *,
         )
     else:
         if with_san:
+            san_entries: list[x509.GeneralName] = [x509.DNSName(subject)]
+            if san_ip:
+                san_entries.insert(0, x509.IPAddress(
+                    ipaddress.ip_address(san_ip)))
             builder = builder.add_extension(
-                x509.SubjectAlternativeName([x509.DNSName(subject)]),
+                x509.SubjectAlternativeName(san_entries),
                 critical=False,
             )
         # Python 3.13 defaults to VERIFY_X509_STRICT: the issued cert must
@@ -416,6 +421,27 @@ class TestDecodeCertDer:
         # empty DER also fails closed
         with caplog.at_level(logging.WARNING, logger="sentinelasm"):
             assert _decode_cert_der(b"") is None
+
+    def test_der_decode_skips_non_dns_san_entries(self):
+        """An IP SAN entry (a non-DNS SAN) is filtered out of ``san`` —
+        exactly like the verified getpeercert() path, which only lifts
+        DNS entries (covers the non-DNS skip branch of _parse_cert)."""
+        from services.scanner.ssl_scanner import _decode_cert_der
+
+        now = datetime.now(timezone.utc)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cert = _build_cert(
+            key, "ipsan.example", key, _name("ipsan.example"),
+            not_before=now - timedelta(days=1),
+            not_after=now + timedelta(days=30),
+            san_ip="203.0.113.50",
+        )
+
+        decoded = _decode_cert_der(cert.public_bytes(
+            serialization.Encoding.DER))
+
+        assert decoded is not None
+        assert decoded["subjectAltName"] == (("DNS", "ipsan.example"),)
 
 
     def test_real_grab_banner_body_runs(self, pki, loopback_seam, socket_sweep):
