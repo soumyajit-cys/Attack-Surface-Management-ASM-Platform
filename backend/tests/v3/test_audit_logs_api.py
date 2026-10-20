@@ -19,11 +19,12 @@ MARK_B = "auditmarkb.example.com"
 
 @pytest.fixture()
 def audit_orgs(client, db, org_factory):
-    """Two orgs, each with its own audit rows; returns admin auth headers."""
-    from app.core.audit import record_audit
-    from models import Organization, User
+    """Two orgs, each with its own audit rows; returns admin auth headers.
+
+    Fixture rows are dated deep in the past so rows written by org_factory
+    (itself audited, dated "now") can never fall inside test windows.
+    """
     from models.audit_log import AuditLog
-    from models.user import User as UserModel
 
     org_a, admin_a = org_factory(
         "Audit Org A", "audita", "audita@example.com")

@@ -12,10 +12,11 @@ import ipaddress
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import Principal, require_permissions_dep
+from app.core.errors import BadRequestError
 from app.core.permissions import Permission
 from app.db.session import get_db
 from models.audit_log import AuditLog
@@ -70,16 +71,14 @@ async def list_audit_logs(
     FastAPI itself rejects malformed datetimes and out-of-bounds pagination.
     """
     if since is not None and until is not None and since > until:
-        raise HTTPException(
-            status_code=400, detail="since must not be after until")
+        raise BadRequestError("since must not be after until")
 
     canonical_ip: str | None = None
     if ip:
         try:
             canonical_ip = str(ipaddress.ip_address(ip.strip()))
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail="ip filter must be an IP literal")
+            raise BadRequestError("ip filter must be an IP literal")
 
     # Parameterized only: every filter is a bound SQLAlchemy comparison
     # (no string building), backed by the migration-e5f6a7b8c9d1 indexes
