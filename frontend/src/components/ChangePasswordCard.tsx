@@ -87,7 +87,11 @@ export function ChangePasswordCard({ totpEnabled }: { totpEnabled: boolean }) {
   }
 
   return (
-    <form onSubmit={handlePasswordChange} className="space-y-5 max-w-md" data-testid="change-password-card">
+    <form
+      onSubmit={handlePasswordChange}
+      className="space-y-5 max-w-md"
+      data-testid="change-password-card"
+    >
       <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
 
       {error && (

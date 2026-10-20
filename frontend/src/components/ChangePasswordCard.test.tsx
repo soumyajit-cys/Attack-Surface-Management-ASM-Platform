@@ -33,9 +33,7 @@ function envelopeError(status: number, code: string, message: string): unknown {
     config: { headers: new AxiosHeaders() },
     data: { error: { code, message } },
   })
-  vi.mocked(getApiErrorCode).mockImplementation((e) =>
-    axiosIsEnvelope(e) ? code : undefined,
-  )
+  vi.mocked(getApiErrorCode).mockImplementation((e) => (axiosIsEnvelope(e) ? code : undefined))
   vi.mocked(getApiErrorMessage).mockImplementation((e) =>
     axiosIsEnvelope(e) ? message : 'Something went wrong',
   )
@@ -55,9 +53,7 @@ describe('ChangePasswordCard', () => {
     render(<ChangePasswordCard totpEnabled={false} />)
     expect(screen.getByLabelText(/^current password$/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/^new password$/i)).toBeInTheDocument()
-    expect(
-      screen.queryByLabelText(/authenticator or recovery code/i),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/authenticator or recovery code/i)).not.toBeInTheDocument()
   })
 
   it('shows the required 2FA field when 2FA is enabled', async () => {
@@ -104,9 +100,7 @@ describe('ChangePasswordCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /update password/i }))
 
     expect(api.changePassword).not.toHaveBeenCalled()
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /passwords do not match/i,
-    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(/passwords do not match/i)
   })
 
   it('renders the password_reuse error inline', async () => {
