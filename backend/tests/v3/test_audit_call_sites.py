@@ -33,22 +33,37 @@ REJECTED_FORMS = ("details=dict(", "details=f{")
 
 
 def _balanced(text: str, start: int, open_ch: str, close_ch: str) -> int | None:
-    """Return the index just after the balanced block, or None on underflow."""
+    """Return the index just after the balanced block, or None on underflow.
+
+    Skips over string literals (with escapes) so their contents can't break
+    the bracket matching.
+    """
     depth = 0
-    for i in range(start, len(text)):
+    i = start
+    n = len(text)
+    while i < n:
         ch = text[i]
+        if ch in ('"', "'"):
+            quote = ch
+            i += 1
+            while i < n:
+                if text[i] == "\\":
+                    i += 2
+                    continue
+                if text[i] == quote:
+                    break
+                i += 1
+            if i >= n:
+                return None
+            i += 1
+            continue
         if ch == open_ch:
             depth += 1
         elif ch == close_ch:
             depth -= 1
             if depth == 0:
                 return i + 1
-        elif ch == '"' and open_ch != '"':
-            # skip string literals so braces inside strings don't count
-            j = text.find('"', i + 1)
-            if j == -1:
-                return None
-            i = j  # noqa — loop variable bumped deliberately
+        i += 1
     return None
 
 
