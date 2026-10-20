@@ -36,6 +36,15 @@ export function getApiErrorMessage(error: unknown, fallback = 'Something went wr
   return fallback
 }
 
+/** Pull the machine-readable v1 error code out of the error envelope. */
+export function getApiErrorCode(error: unknown): string | undefined {
+  if (axios.isAxiosError(error)) {
+    const envelope = error.response?.data as { error?: { code?: string } } | undefined
+    return envelope?.error?.code
+  }
+  return undefined
+}
+
 export interface AuthUser {
   id: number
   username: string
@@ -345,6 +354,14 @@ class ApiClient {
     ip?: string
   }): Promise<PaginatedResponse<AuditLogEntry>> {
     return this.get<PaginatedResponse<AuditLogEntry>>('/audit-logs', { params })
+  }
+
+  async changePassword(payload: {
+    current_password: string
+    new_password: string
+    code?: string
+  }): Promise<{ message: string }> {
+    return this.post<{ message: string }>('/auth/change-password', payload)
   }
 
   async requestVerification(
