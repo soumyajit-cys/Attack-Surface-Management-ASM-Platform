@@ -311,7 +311,7 @@ async def refresh(
                     organization_id=user.organization_id,
                     actor=user.username,
                     action="auth.refresh_reuse",
-                    details={"revoked_tokens": revoked},
+                    details={"revoked_sessions": revoked},
                     request=request,
                 )
                 db.commit()
@@ -707,7 +707,7 @@ async def admin_reset_2fa(
     record_audit(
         db, organization_id=principal.organization_id,
         actor=principal.user.username, action="auth.2fa_reset",
-        details={"username": data.username, "revoked_tokens": revoked},
+        details={"username": data.username, "revoked_sessions": revoked},
         request=request,
     )
     db.commit()
@@ -898,7 +898,7 @@ async def change_password(
     record_audit(
         db, organization_id=user.organization_id, actor=user.username,
         action="auth.password_changed",
-        details={"revoked_tokens": revoked},
+        details={"revoked_sessions": revoked},
         request=request,
     )
     db.commit()
