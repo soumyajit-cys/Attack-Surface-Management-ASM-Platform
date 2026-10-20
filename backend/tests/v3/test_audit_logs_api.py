@@ -54,6 +54,20 @@ def audit_orgs(client, db, org_factory):
         ip_address="203.0.113.50",
         created_at=base + timedelta(minutes=10),
     ))
+    # nested + case-bent secret row: scrubber must recurse and fold case
+    db.add(AuditLog(
+        organization_id=org_a.id, actor="audita",
+        action="scan.nested",
+        details=(
+            '{"target": "audita.example.com",'
+            ' "profile": {"PassWord": "hunter9", "real_name": "safe"},'
+            ' "labels": [{"Webhook_URL": "http://hook.example/x", "keep": 1},'
+            ' "plain-string"],'
+            ' "totp_enabled": true}'
+        ),
+        ip_address="203.0.113.50",
+        created_at=base + timedelta(minutes=11),
+    ))
     db.commit()
 
     def login(username):
