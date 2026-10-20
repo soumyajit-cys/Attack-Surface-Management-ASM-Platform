@@ -65,7 +65,7 @@ def audit_orgs(client, db, org_factory):
             ' "plain-string"],'
             ' "totp_enabled": true}'
         ),
-        ip_address="203.0.113.50",
+        ip_address="198.51.100.77",
         created_at=base + timedelta(minutes=11),
     ))
     db.commit()
