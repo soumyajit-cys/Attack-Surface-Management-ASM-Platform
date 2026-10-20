@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
 import type { AuditLogEntry } from '../lib/types'
@@ -33,8 +33,7 @@ export function AuditLog() {
   const [actorUntil, setActorUntil] = useState('')
   const [ip, setIp] = useState('')
 
-  const fetchEntries = useCallback(
-    async (targetPage: number) => {
+  const fetchEntries = async (targetPage: number) => {
       const localFilters = {
         page: targetPage,
         page_size: PAGE_SIZE,
@@ -60,13 +59,10 @@ export function AuditLog() {
       } finally {
         setLoading(false)
       }
-    },
-    [action, actor, actorSince, actorUntil, ip, addToast],
-  )
+  }
 
   useEffect(() => {
     fetchEntries(1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
