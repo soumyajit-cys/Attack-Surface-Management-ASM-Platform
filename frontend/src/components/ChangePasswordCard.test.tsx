@@ -9,6 +9,7 @@ import { ChangePasswordCard } from './ChangePasswordCard'
 vi.mock('../lib/api', () => ({
   api: { changePassword: vi.fn().mockResolvedValue({ message: 'Password changed' }) },
   getApiErrorMessage: vi.fn(() => 'Something went wrong'),
+  getApiErrorCode: vi.fn(() => undefined),
 }))
 vi.mock('../components/ui/Toaster', () => ({
   useToast: () => ({ addToast: vi.fn() }),
@@ -48,8 +49,8 @@ async function fill(label: RegExp, value: string) {
 describe('ChangePasswordCard', () => {
   it('hides the 2FA field when 2FA is not enabled', () => {
     render(<ChangePasswordCard totpEnabled={false} />)
-    expect(screen.getByLabelText(/current password/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/new password/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^current password$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^new password$/i)).toBeInTheDocument()
     expect(
       screen.queryByLabelText(/authenticator or recovery code/i),
     ).not.toBeInTheDocument()
@@ -60,9 +61,9 @@ describe('ChangePasswordCard', () => {
     const codeInput = screen.getByLabelText(/authenticator or recovery code/i)
     expect(codeInput).toBeRequired()
 
-    await fill(/current password/i, 'password123')
-    await fill(/new password/i, 'brandnewpass1')
-    await fill(/confirm new password/i, 'brandnewpass1')
+    await fill(/^current password$/i, 'password123')
+    await fill(/^new password$/i, 'brandnewpass1')
+    await fill(/^confirm new password$/i, 'brandnewpass1')
     fireEvent.change(codeInput, { target: { value: '654321' } })
     fireEvent.click(screen.getByRole('button', { name: /update password/i }))
 
@@ -75,15 +76,15 @@ describe('ChangePasswordCard', () => {
       }),
     )
     // everything cleared after success
-    expect(screen.getByLabelText(/current password/i)).toHaveValue('')
+    expect(screen.getByLabelText(/^current password$/i)).toHaveValue('')
     expect(screen.getByLabelText(/authenticator or recovery code/i)).toHaveValue('')
   })
 
   it('omits the code field from the payload when 2FA is off', async () => {
     render(<ChangePasswordCard totpEnabled={false} />)
-    await fill(/current password/i, 'password123')
-    await fill(/new password/i, 'brandnewpass1')
-    await fill(/confirm new password/i, 'brandnewpass1')
+    await fill(/^current password$/i, 'password123')
+    await fill(/^new password$/i, 'brandnewpass1')
+    await fill(/^confirm new password$/i, 'brandnewpass1')
     fireEvent.click(screen.getByRole('button', { name: /update password/i }))
 
     await waitFor(() => expect(api.changePassword).toHaveBeenCalled())
