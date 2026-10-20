@@ -31,7 +31,7 @@ def audit_orgs(client, db, org_factory):
     org_b, admin_b = org_factory(
         "Audit Org B", "auditb", "auditb@example.com")
 
-    base = datetime.now(timezone.utc)
+    base = datetime.now(timezone.utc) - timedelta(days=100)
     for org, actor, mark, ip in (
         (org_a, "audita", MARK_A, "203.0.113.50"),
         (org_b, "auditb", MARK_B, "203.0.113.60"),
