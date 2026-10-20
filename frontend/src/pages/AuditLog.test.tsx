@@ -60,9 +60,7 @@ describe('AuditLog page', () => {
     })
     render(<AuditLog />)
 
-    expect(
-      await screen.findByText(/no audit log entries yet/i),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/no audit log entries yet/i)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

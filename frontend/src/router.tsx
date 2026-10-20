@@ -24,9 +24,7 @@ const Organizations = lazy(() =>
 const Alerting = lazy(() => import('./pages/Alerting').then((m) => ({ default: m.Alerting })))
 const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })))
 const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
-const AuditLog = lazy(() =>
-  import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })),
-)
+const AuditLog = lazy(() => import('./pages/AuditLog').then((m) => ({ default: m.AuditLog })))
 const TwoFactorSetup = lazy(() =>
   import('./pages/TwoFactorSetup').then((m) => ({ default: m.TwoFactorSetup })),
 )

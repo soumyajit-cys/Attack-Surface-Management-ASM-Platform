@@ -34,31 +34,31 @@ export function AuditLog() {
   const [ip, setIp] = useState('')
 
   const fetchEntries = async (targetPage: number) => {
-      const localFilters = {
-        page: targetPage,
-        page_size: PAGE_SIZE,
-        action: action.trim() || undefined,
-        actor: actor.trim() || undefined,
-        since: toUtcIso(actorSince),
-        until: toUtcIso(actorUntil),
-        ip: ip.trim() || undefined,
-      }
-      setLoading(true)
-      setError(null)
-      try {
-        const data = await api.getAuditLogs(localFilters)
-        setEntries(data.items)
-        setTotal(data.total)
-        setPage(targetPage)
-      } catch (err) {
-        const message = getApiErrorMessage(err)
-        setError(message)
-        setEntries([])
-        setTotal(0)
-        addToast({ type: 'error', title: 'Failed to load audit log', message })
-      } finally {
-        setLoading(false)
-      }
+    const localFilters = {
+      page: targetPage,
+      page_size: PAGE_SIZE,
+      action: action.trim() || undefined,
+      actor: actor.trim() || undefined,
+      since: toUtcIso(actorSince),
+      until: toUtcIso(actorUntil),
+      ip: ip.trim() || undefined,
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.getAuditLogs(localFilters)
+      setEntries(data.items)
+      setTotal(data.total)
+      setPage(targetPage)
+    } catch (err) {
+      const message = getApiErrorMessage(err)
+      setError(message)
+      setEntries([])
+      setTotal(0)
+      addToast({ type: 'error', title: 'Failed to load audit log', message })
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -132,7 +132,10 @@ export function AuditLog() {
         </div>
 
         {error && (
-          <div role="alert" className="mx-6 mt-4 p-4 bg-red-50 border border-red-300 rounded-md text-red-800">
+          <div
+            role="alert"
+            className="mx-6 mt-4 p-4 bg-red-50 border border-red-300 rounded-md text-red-800"
+          >
             <p className="font-medium">Failed to load the audit log</p>
             <p className="text-sm">{error}</p>
           </div>
@@ -170,7 +173,8 @@ export function AuditLog() {
               {!loading && entries.length === 0 && !error && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-gray-500">
-                    No audit log entries{total === 0 && !action && !actor && !ip ? ' yet.' : ' match these filters.'}
+                    No audit log entries
+                    {total === 0 && !action && !actor && !ip ? ' yet.' : ' match these filters.'}
                   </td>
                 </tr>
               )}
@@ -183,8 +187,12 @@ export function AuditLog() {
                   <td className="px-4 py-4">
                     <span className="font-mono text-sm text-gray-900">{entry.action}</span>
                   </td>
-                  <td className="px-4 py-4 text-gray-500 font-mono text-sm">{entry.ip_address ?? '—'}</td>
-                  <td className="px-4 py-4 text-gray-500 text-sm">{formatDetails(entry.details)}</td>
+                  <td className="px-4 py-4 text-gray-500 font-mono text-sm">
+                    {entry.ip_address ?? '—'}
+                  </td>
+                  <td className="px-4 py-4 text-gray-500 text-sm">
+                    {formatDetails(entry.details)}
+                  </td>
                 </tr>
               ))}
             </tbody>
