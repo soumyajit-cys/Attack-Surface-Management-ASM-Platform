@@ -100,6 +100,7 @@ COVERED_LIST_ROUTES = {
     ("GET", "/api/v1/reports/pdf/executive-summary"),
     ("POST", "/api/v1/scan-policies"),
     ("GET", "/api/v1/scan-policies"),
+    ("GET", "/api/v1/audit-logs"),
 }
 
 
@@ -333,6 +334,7 @@ def test_list_endpoints_exclude_other_org(client, matrix):
         "/api/v1/organizations/api-keys",
         "/api/v1/alerting/integrations",
         "/api/v1/alerting/digest",
+        "/api/v1/audit-logs",
     ]
     for url in urls:
         response = client.get(url, headers=headers_a)

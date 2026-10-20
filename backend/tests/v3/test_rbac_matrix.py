@@ -126,6 +126,7 @@ EXPECTED = {
     ("POST", "/api/v1/auth/login/2fa"): frozenset(),
     ("POST", "/api/v1/organizations/2fa-requirement"): frozenset({Permission.ORG_MANAGE}),
     ("POST", "/api/v1/auth/admin/reset-2fa"): frozenset({Permission.ORG_MANAGE}),
+    ("GET", "/api/v1/audit-logs"): frozenset({Permission.ORG_MANAGE}),
 }
 
 
@@ -237,6 +238,7 @@ READ_CASES = [
     ("GET", "/api/v1/organizations/api-keys", None),
     ("GET", "/api/v1/alerting/integrations", None),
     ("GET", "/api/v1/scan-policies", None),
+    ("GET", "/api/v1/audit-logs", None),
     ("GET", "/api/v1/scans/{scan_id}", "scan"),
     ("GET", "/api/v1/findings/{finding_id}", "finding"),
     ("GET", "/api/v1/assets/{asset_id}", "asset"),
