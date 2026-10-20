@@ -40,46 +40,6 @@ export function Settings() {
     setSaving(false)
   }
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (passwordData.new !== passwordData.confirm) {
-      addToast({ type: 'error', title: 'Passwords do not match' })
-      return
-    }
-    if (passwordData.new.length < 8) {
-      addToast({ type: 'error', title: 'Password must be at least 8 characters' })
-      return
-    }
-    setSaving(true)
-    addToast({
-      type: 'info',
-      title: 'Password change not yet available',
-      message: 'Password change will be available in a future release.',
-    })
-    setPasswordData({ current: '', new: '', confirm: '' })
-    setSaving(false)
-  }
-
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (passwordData.new !== passwordData.confirm) {
-      addToast({ type: 'error', title: 'Passwords do not match' })
-      return
-    }
-    if (passwordData.new.length < 8) {
-      addToast({ type: 'error', title: 'Password must be at least 8 characters' })
-      return
-    }
-    setSaving(true)
-    addToast({
-      type: 'info',
-      title: 'Password change not yet available',
-      message: 'Password change will be available in a future release.',
-    })
-    setPasswordData({ current: '', new: '', confirm: '' })
-    setSaving(false)
-  }
-
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'security', label: 'Security', icon: Lock },
