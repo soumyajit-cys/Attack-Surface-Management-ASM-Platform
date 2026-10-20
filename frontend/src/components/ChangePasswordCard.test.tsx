@@ -94,9 +94,9 @@ describe('ChangePasswordCard', () => {
 
   it('blocks submission client-side when confirm mismatches', async () => {
     render(<ChangePasswordCard totpEnabled={false} />)
-    await fill(/current password/i, 'password123')
-    await fill(/new password/i, 'brandnewpass1')
-    await fill(/confirm new password/i, 'different99')
+    await fill(/^current password$/i, 'password123')
+    await fill(/^new password$/i, 'brandnewpass1')
+    await fill(/^confirm new password$/i, 'different99')
     fireEvent.click(screen.getByRole('button', { name: /update password/i }))
 
     expect(api.changePassword).not.toHaveBeenCalled()
@@ -110,9 +110,9 @@ describe('ChangePasswordCard', () => {
       envelopeError(400, 'password_reuse', 'New password must differ from the current password'),
     )
     render(<ChangePasswordCard totpEnabled={false} />)
-    await fill(/current password/i, 'password123')
-    await fill(/new password/i, 'password123')
-    await fill(/confirm new password/i, 'password123')
+    await fill(/^current password$/i, 'password123')
+    await fill(/^new password$/i, 'password123')
+    await fill(/^confirm new password$/i, 'password123')
     fireEvent.click(screen.getByRole('button', { name: /update password/i }))
 
     const alert = await screen.findByRole('alert')
@@ -125,9 +125,9 @@ describe('ChangePasswordCard', () => {
       envelopeError(401, 'invalid_credentials', 'Invalid credentials'),
     )
     render(<ChangePasswordCard totpEnabled={false} />)
-    await fill(/current password/i, 'wrongpass1')
-    await fill(/new password/i, 'brandnewpass1')
-    await fill(/confirm new password/i, 'brandnewpass1')
+    await fill(/^current password$/i, 'wrongpass1')
+    await fill(/^new password$/i, 'brandnewpass1')
+    await fill(/^confirm new password$/i, 'brandnewpass1')
     fireEvent.click(screen.getByRole('button', { name: /update password/i }))
 
     const alert = await screen.findByRole('alert')
