@@ -17,7 +17,11 @@ vi.mock('../components/ui/Toaster', () => ({
 
 import { api, getApiErrorCode, getApiErrorMessage } from '../lib/api'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.clearAllMocks()
+  api.changePassword.mockResolvedValue({ message: 'Password changed' })
+})
 
 function envelopeError(status: number, code: string, message: string): unknown {
   // Shape-faithful AxiosError: getApiErrorCode/getApiErrorMessage read the
