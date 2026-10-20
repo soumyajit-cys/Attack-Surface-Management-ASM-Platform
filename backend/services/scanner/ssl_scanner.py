@@ -145,18 +145,18 @@ def _parse_cert(host: str, cert: dict, cert_der: bytes, tls_version: str, cipher
     issuer = _format_name(cert.get("issuer", []))
     subject = _format_name(cert.get("subject", []))
 
-    not_after = cert.get("notAfter")
-    expires_at = None
-    expired = False
-    expires_soon = False
-    if not_after:
-        try:
-            expires_at = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
-            now = datetime.now(timezone.utc)
-            expired = expires_at < now
-            expires_soon = (expires_at - now).days <= 30
-        except Exception:
-            pass
+    # No defensive branch on purpose: both dict producers GUARANTEE
+    # "notAfter" — a verified getpeercert() and our own _decode_cert_der
+    # (which formats it from not_valid_after_utc). A malformed or missing
+    # value would raise past _parse_cert into analyze_ssl's catch-all,
+    # which fails closed (logs + returns None) instead of silently
+    # treating an unknown expiry as safe.
+    expires_at = datetime.strptime(
+        cert["notAfter"], "%b %d %H:%M:%S %Y %Z"
+    ).replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    expired = expires_at < now
+    expires_soon = (expires_at - now).days <= 30
 
     san = []
     for ext in cert.get("subjectAltName", []):
