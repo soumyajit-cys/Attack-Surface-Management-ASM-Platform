@@ -95,12 +95,8 @@ describe('AuditLog page', () => {
       target: { value: '203.0.113.50' },
     })
     fireEvent.click(screen.getByRole('button', { name: /apply/i }))
+    await screen.findByText(/no audit log entries match these filters/i)
 
-    await waitForCall(actionValue('user.login'))
-
-    function actionValue(_v: string) {
-      return api.getAuditLogs
-    }
     // explicit assertion on the last request's params
     const last = vi.mocked(api.getAuditLogs).mock.calls.at(-1)?.[0]
     expect(last).toMatchObject({

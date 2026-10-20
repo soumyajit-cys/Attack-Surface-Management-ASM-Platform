@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Scan,
   Settings,
+  History,
   Users,
   Bell,
   Shield,
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Policies', href: '/scan-policies', icon: FileText },
   { name: 'Alerting', href: '/alerting', icon: Bell },
   { name: 'Reports', href: '/reports', icon: FileText },
+  { name: 'Audit Log', href: '/audit-logs', icon: History },
   { name: 'Organization', href: '/organizations', icon: Users },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
