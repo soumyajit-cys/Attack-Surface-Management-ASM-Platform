@@ -781,7 +781,7 @@ async def reset_password(
         organization_id=user.organization_id,
         actor=user.username,
         action="auth.sessions_revoked",
-        details={"revoked_tokens": revoked, "reason": "password_reset"},
+        details={"revoked_sessions": revoked, "reason": "password_reset"},
         request=request,
     )
     db.commit()

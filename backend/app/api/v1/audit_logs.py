@@ -27,13 +27,39 @@ _ORG_MANAGE_DEP = require_permissions_dep(Permission.ORG_MANAGE)
 
 MAX_PAGE_SIZE = 100
 
-# details keys scrubbed from every response row (case-insensitive): audit
-# writers never put secrets in details, but the crawl of history is not
-# guaranteed — the VIEWER guarantees no secret names are ever returned.
-_SECRET_DETAIL_KEYS = frozenset({
-    "password", "secret", "token", "api_key", "apikey", "authorization",
-    "totp_secret", "recovery_code", "cookie", "webhook_secret",
-})
+# Substring patterns, case-insensitive, scrubbed from ``details`` keys at
+# every nesting level (nested dicts and lists included). A key whose name
+# matches ANY pattern is dropped before serialization; the audit VIEWER
+# guarantees no secret-looking material is ever returned even if a writer
+# slips. Bare "key"/"ip"/"email" are deliberately NOT patterns (identifiers,
+# not credentials).
+_SCRUB_PATTERNS: tuple[str, ...] = (
+    "password", "passcode",          # password material and its sibling
+    "otp", "totp",                   # second factors and their seeds
+    "secret", "token", "credential", "authorization", "cookie",
+    "api_key", "apikey",             # API credentials
+    "recovery_code",                 # single-use 2FA codes
+    "webhook", "url",                # webhook/callback targets are credentials here
+    "private",                       # private keys / private material
+)
+
+
+def _matches_deny(key: str) -> bool:
+    folded = key.casefold()
+    return any(pattern in folded for pattern in _SCRUB_PATTERNS)
+
+
+def _scrub_sensitive(value: object) -> object:
+    """Recursively drop secret-named keys from parsed details."""
+    if isinstance(value, dict):
+        return {
+            key: _scrub_sensitive(item)
+            for key, item in value.items()
+            if not (isinstance(key, str) and _matches_deny(key))
+        }
+    if isinstance(value, list):
+        return [_scrub_sensitive(item) for item in value]
+    return value
 
 
 def _scrub_details(raw: str | None) -> dict:
@@ -46,11 +72,8 @@ def _scrub_details(raw: str | None) -> dict:
         return {}
     if not isinstance(parsed, dict):
         return {}
-    return {
-        key: value
-        for key, value in parsed.items()
-        if key.lower() not in _SECRET_DETAIL_KEYS
-    }
+    scrubbed = _scrub_sensitive(parsed)
+    return scrubbed if isinstance(scrubbed, dict) else {}
 
 
 @router.get("")
