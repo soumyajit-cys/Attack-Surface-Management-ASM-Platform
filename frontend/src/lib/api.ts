@@ -14,6 +14,7 @@ import type {
   DigestConfig,
   PaginatedResponse,
   ScansListResponse,
+  AuditLogEntry,
   DashboardData,
   AssetDetailData,
   ChangeEvent,
@@ -332,6 +333,18 @@ class ApiClient {
     status?: string
   }): Promise<ScansListResponse> {
     return this.get<ScansListResponse>('/scans', { params })
+  }
+
+  async getAuditLogs(params?: {
+    page?: number
+    page_size?: number
+    action?: string
+    actor?: string
+    since?: string
+    until?: string
+    ip?: string
+  }): Promise<PaginatedResponse<AuditLogEntry>> {
+    return this.get<PaginatedResponse<AuditLogEntry>>('/audit-logs', { params })
   }
 
   async requestVerification(

@@ -196,6 +196,16 @@ export interface ScansListResponse extends PaginatedResponse<Scan> {
   unavailable_phases?: string[]
 }
 
+export interface AuditLogEntry {
+  id: number
+  actor: string | null
+  action: string
+  /** Details JSON, scrubbed server-side (secret-named keys never returned). */
+  details: Record<string, unknown>
+  ip_address: string | null
+  created_at: string
+}
+
 export interface DashboardData {
   assets: number
   findings: number
