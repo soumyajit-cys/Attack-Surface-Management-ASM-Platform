@@ -150,6 +150,26 @@ export function Scans() {
         </div>
       </div>
 
+      <div className="space-y-4">
+        {unavailablePhases.length > 0 && (
+          <div
+            role="alert"
+            data-testid="unavailable-phases-warning"
+            className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-300 rounded-md text-amber-800"
+          >
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Some scan phases did not run</p>
+              <p className="text-sm">
+                Scanner modules for the following phases are unavailable:
+                <span className="font-mono"> {unavailablePhases.join(', ')}</span>. Results from
+                this scan may be incomplete — check the application logs for failed imports.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
