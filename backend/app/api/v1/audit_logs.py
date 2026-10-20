@@ -105,8 +105,6 @@ async def list_audit_logs(
         .limit(page_size)
         .all()
     )
-    # count() ran with a plain func.count() over the same index-friendly filters.
-    assert total is not None
 
     return {
         "total": total,
