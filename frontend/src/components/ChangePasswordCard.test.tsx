@@ -20,7 +20,7 @@ import { api, getApiErrorCode, getApiErrorMessage } from '../lib/api'
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  api.changePassword.mockResolvedValue({ message: 'Password changed' })
+  vi.mocked(api.changePassword).mockResolvedValue({ message: 'Password changed' })
 })
 
 function envelopeError(status: number, code: string, message: string): unknown {
