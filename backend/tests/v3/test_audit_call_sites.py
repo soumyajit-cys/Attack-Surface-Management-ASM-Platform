@@ -76,19 +76,17 @@ def _call_sites():
             text = path.read_text(encoding="utf-8")
             idx = 0
             while (found := text.find("record_audit(", idx)) != -1:
-                if "def record_audit(" in text[max(0, found - 8):found]:
-                    break_flag = False  # skip the definition itself
-                    if break_flag:
-                        idx = found + 1
-                        continue
                 end = _balanced(text, found, "(", ")")
                 if end is None:
                     raise AssertionError(
                         f"unbalanced record_audit( in {path.name} "
                         f"line {text[:found].count(chr(10)) + 1}")
-                line = text[:found].count("\n") + 1
-                sites.append((path.relative_to(BACKEND_ROOT), line,
-                              text[found:end]))
+                call_text = text[found:end]
+                # skip the function definition itself
+                if "def record_audit(" not in call_text:
+                    line = text[:found].count("\n") + 1
+                    sites.append((path.relative_to(BACKEND_ROOT), line,
+                                  call_text))
                 idx = found + 1
     return sites
 
