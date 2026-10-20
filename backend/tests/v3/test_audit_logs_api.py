@@ -69,6 +69,7 @@ def audit_orgs(client, db, org_factory):
         "auth_b": login("auditb"),
         "org_a_id": org_a.id,
         "org_b_id": org_b.id,
+        "base": base,
     }
 
 
@@ -146,7 +147,7 @@ class TestAuditLogViewer:
         assert "IP literal" in response.json()["error"]["message"]
 
     def test_since_until_window(self, client, audit_orgs):
-        base = datetime.now(timezone.utc) - timedelta(days=100)
+        base = audit_orgs["base"]
         response = client.get(
             "/api/v1/audit-logs",
             params={
