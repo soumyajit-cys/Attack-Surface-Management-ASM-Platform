@@ -29,6 +29,7 @@ export function Scans() {
   const [requesting, setRequesting] = useState(false)
   const [checking, setChecking] = useState(false)
   const [verifiedDomains, setVerifiedDomains] = useState<VerifiedDomain[]>([])
+  const [unavailablePhases, setUnavailablePhases] = useState<string[]>([])
 
   const fetchVerifiedDomains = async () => {
     try {
