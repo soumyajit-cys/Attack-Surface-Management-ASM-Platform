@@ -290,10 +290,15 @@ async def list_scans(
         .all()
     )
 
+    # Registry state applies to every scan row equally, so it surfaces once
+    # in the envelope; the UI renders a "phases did not run" warning.
+    from app.scanning.registry import registry as scanner_registry
+
     return {
         "total": total,
         "page": page,
         "page_size": page_size,
+        "unavailable_phases": scanner_registry.unavailable_phases(),
         "items": [
             {
                 "id": s.id,
