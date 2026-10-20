@@ -6,6 +6,7 @@ from app.api.v1 import (
     alerting,
     alerts,
     assets,
+    audit_logs,
     auth,
     dashboard,
     findings,
@@ -26,3 +27,4 @@ api_v1_router.include_router(organizations.router, prefix="/v1")
 api_v1_router.include_router(alerting.router, prefix="/v1")
 api_v1_router.include_router(reports.router, prefix="/v1")
 api_v1_router.include_router(scan_policies.router, prefix="/v1")
+api_v1_router.include_router(audit_logs.router, prefix="/v1")
