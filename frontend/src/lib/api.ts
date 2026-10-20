@@ -14,6 +14,7 @@ import type {
   APIKey,
   DigestConfig,
   PaginatedResponse,
+  ScansListResponse,
   DashboardData,
   AssetDetailData,
   ChangeEvent,
@@ -330,8 +331,8 @@ class ApiClient {
     page?: number
     page_size?: number
     status?: string
-  }): Promise<PaginatedResponse<Scan>> {
-    return this.get<PaginatedResponse<Scan>>('/scans', { params })
+  }): Promise<ScansListResponse> {
+    return this.get<ScansListResponse>('/scans', { params })
   }
 
   async requestVerification(
