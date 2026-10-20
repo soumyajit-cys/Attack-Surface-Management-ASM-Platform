@@ -24,6 +24,7 @@ or `X-API-Key: <key>`; `/auth/*` and `/health` need neither.
 | `/api/v1/assets/{asset_id}` | `GET` | Get Asset | jwt or X-API-Key |
 | `/api/v1/assets/{asset_id}/enrich` | `POST` | Enrich Asset | jwt or X-API-Key |
 | `/api/v1/assets/{asset_id}/graph` | `GET` | Get Asset Graph | jwt or X-API-Key |
+| `/api/v1/audit-logs` | `GET` | List Audit Logs | jwt or X-API-Key |
 | `/api/v1/auth/2fa/confirm` | `POST` | Confirm 2Fa | jwt or X-API-Key |
 | `/api/v1/auth/2fa/disable` | `POST` | Disable 2Fa | jwt or X-API-Key |
 | `/api/v1/auth/2fa/enroll` | `POST` | Enroll 2Fa | jwt or X-API-Key |
