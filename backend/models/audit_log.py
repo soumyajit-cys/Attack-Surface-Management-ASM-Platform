@@ -52,6 +52,8 @@ class AuditLog(Base):
     # single-column action / ip_address filters.
     __table_args__ = (
         Index("ix_audit_logs_org_created", "organization_id", "created_at"),
+        Index("ix_audit_logs_action", "action"),
+        Index("ix_audit_logs_ip", "ip_address"),
     )
 
     organization = relationship(
