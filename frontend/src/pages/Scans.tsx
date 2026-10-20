@@ -49,6 +49,7 @@ export function Scans() {
     try {
       const data = await api.getScans({ page: 1, page_size: PAGE_SIZE })
       setScans(data.items)
+      setUnavailablePhases(data.unavailable_phases ?? [])
     } catch (error) {
       addToast({ type: 'error', title: 'Failed to load scans', message: getApiErrorMessage(error) })
     } finally {
