@@ -43,6 +43,7 @@ def record_audit(
         actor=actor,
         action=action,
         details=json.dumps(details or {}, default=str),
+        ip_address=client_ip(request),
     )
     db.add(entry)
     db.flush()
