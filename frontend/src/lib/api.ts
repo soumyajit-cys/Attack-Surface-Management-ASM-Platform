@@ -7,7 +7,6 @@ import axios, {
 import type {
   Asset,
   Finding,
-  Scan,
   ScanPolicy,
   AlertIntegration,
   Invitation,
