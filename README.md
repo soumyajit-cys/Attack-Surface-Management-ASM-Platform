@@ -304,6 +304,17 @@ API-key scopes (`read` / `write` / `admin`) narrow the owning user's role — ne
 effective_permissions = role_permissions ∩ scope_grants
 ```
 
+### Audit log
+
+`GET /api/v1/audit-logs` (org-managers only) serves this organization's audit
+trail with filters (action / actor / since / until / ip), pagination capped at
+100 rows/page, and server-side scrubbing of secret-named `details` keys
+(`password`, `token`, `webhook`, `url`, … — case-insensitive, at every
+nesting level). Note on the IP filter: the `audit_logs.ip_address` column was
+introduced by migration `20261020_0001-e5f6a7b8c9d1` — rows written
+**before** that migration have no recorded source IP, so the `ip` filter and
+the IP column simply come back empty for them.
+
 ## Monitoring
 
 Prometheus metrics are exposed at `GET /metrics` (deny by default: a request
