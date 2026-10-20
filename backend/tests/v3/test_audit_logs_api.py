@@ -268,6 +268,37 @@ class TestAuditLogNeverReturnsSecrets:
         details = response.json()["items"][0]["details"]
         assert details == {"note": "safe-region-7"}
 
+    def test_scrub_recurses_into_nested_dicts_and_lists(self, client, audit_orgs):
+        response = client.get(
+            "/api/v1/audit-logs",
+            params={"action": "scan.nested"},
+            headers=audit_orgs["auth_a"],
+        )
+        assert response.status_code == 200, response.text
+        details = response.json()["items"][0]["details"]
+
+        assert details == {
+            "target": "audita.example.com",
+            "profile": {"real_name": "safe"},
+            "labels": [{"keep": 1}, "plain-string"],
+            # "totp_enabled" trips the "totp" pattern — the owner-specified
+            # denylist wins even for an innocuous boolean key.
+        }
+
+    def test_scrub_is_case_insensitive(self, client, audit_orgs):
+        response = client.get(
+            "/api/v1/audit-logs",
+            params={"action": "scan.nested"},
+            headers=audit_orgs["auth_a"],
+        )
+        assert response.status_code == 200
+        blob = response.text
+
+        assert "hunter9" not in blob       # "PassWord" case-bent key scrubbed
+        assert "hook.example" not in blob  # "Webhook_URL" case-bent scrubbed
+        # survivor proves the row matched at all
+        assert "plain-string" in blob
+
     def test_parameterized_only_no_sql_injection_via_filters(
             self, client, audit_orgs):
         # Malicious filter payloads must not return cross-org data.
