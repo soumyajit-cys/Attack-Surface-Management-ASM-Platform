@@ -418,6 +418,23 @@ class TestDecodeCertDer:
             assert _decode_cert_der(b"") is None
 
 
+    def test_real_grab_banner_body_runs(self, pki, loopback_seam, socket_sweep):
+        """The REAL ``_grab_banner`` runs end-to-end against the listener.
+
+        The seam substitutes only ``open_tcp_ip`` (resolution/egress); the
+        banner function body itself is the production code path (this is
+        what the other port tests deliberately monkeypatch — here we don't).
+        """
+        from services.scanner import port_scanner as ps
+
+        with _Listener(banner=b"real-banner-line\r\n") as srv:
+            socket_sweep.setattr(ps, "open_tcp_ip", _seam_open_tcp)
+            assert _run(ps._grab_banner("127.0.0.1", srv.port)) == (
+                "real-banner-line")
+            # closed port → connect refused → graceful None, no raise
+            assert _run(ps._grab_banner("127.0.0.1", 23)) is None
+
+
 # ══ port_scanner ══════════════════════════════════════════════════════════════
 
 
