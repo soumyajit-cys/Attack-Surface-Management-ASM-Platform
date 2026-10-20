@@ -190,6 +190,12 @@ export interface PaginatedResponse<T> {
   items: T[]
 }
 
+/** GET /scans envelope: registry state applies to every scan row equally. */
+export interface ScansListResponse extends PaginatedResponse<Scan> {
+  /** Pipelined scan phases with no registered scanner module (list endpoint). */
+  unavailable_phases?: string[]
+}
+
 export interface DashboardData {
   assets: number
   findings: number
