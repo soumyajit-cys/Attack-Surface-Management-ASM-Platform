@@ -121,7 +121,7 @@ def _literal_keys(block: str) -> list[str]:
                         "static scan can see them")
                 if not isinstance(key, ast.Constant) \
                         or not isinstance(key.value, str):
-                    raise AssertionError(
+                    raise TypeError(
                         "details uses a non-literal key "
                         f"(ast.{type(key).__name__}); write a literal "
                         "string key")
