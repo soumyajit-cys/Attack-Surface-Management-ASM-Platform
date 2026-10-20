@@ -146,46 +146,7 @@ export function Settings() {
           )}
 
           {activeTab === 'security' && (
-            <form onSubmit={handlePasswordChange} className="space-y-6 max-w-md">
-              <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
-              <div>
-                <label className="label">Current Password</label>
-                <input
-                  type="password"
-                  className="input"
-                  value={passwordData.current}
-                  onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <label className="label">New Password</label>
-                <input
-                  type="password"
-                  className="input"
-                  value={passwordData.new}
-                  onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
-                  required
-                  minLength={8}
-                />
-                <p className="text-sm text-gray-500 mt-1">Must be at least 8 characters</p>
-              </div>
-              <div>
-                <label className="label">Confirm New Password</label>
-                <input
-                  type="password"
-                  className="input"
-                  value={passwordData.confirm}
-                  onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="flex justify-end pt-4">
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update Password'}
-                </button>
-              </div>
-            </form>
+            <ChangePasswordCard totpEnabled={user?.totp_enabled === true} />
           )}
 
           {activeTab === 'security' && <TwoFactorSection />}
