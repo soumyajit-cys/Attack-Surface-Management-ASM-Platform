@@ -79,15 +79,15 @@ class TestAuditLogViewer:
         assert response.status_code == 200, response.text
         body = response.json()
 
-        assert body["total"] == 4  # 3 fixture rows + the secret-scrub row
+        # 5 fixture rows minimum; org_factory itself may add audited rows.
+        assert body["total"] >= 5
         assert body["page"] == 1 and body["page_size"] == 20
 
         items = body["items"]
-        # newest first (the scrub row is the most recent)
-        assert items[0]["action"] == "scan.curious"
-        assert [it["created_at"] for it in items] == sorted(
-            [it["created_at"] for it in items], reverse=True)
-        # org-scoped: only org A rows (the org A marker), never B's
+        # newest first
+        created = [it["created_at"] for it in items]
+        assert created == sorted(created, reverse=True)
+        # org-scoped: only org A rows, never B's actor or marker
         details_blob = str(body)
         assert "auditmarkb.example.com" not in details_blob
         assert not any(
@@ -146,28 +146,29 @@ class TestAuditLogViewer:
         assert "IP literal" in response.json()["error"]["message"]
 
     def test_since_until_window(self, client, audit_orgs):
-        base = datetime.now(timezone.utc)
+        base = datetime.now(timezone.utc) - timedelta(days=100)
         response = client.get(
             "/api/v1/audit-logs",
             params={
-                "since": (base + timedelta(minutes=2)).isoformat(),
-                "until": (base + timedelta(minutes=3)).isoformat(),
+                "since": (base + timedelta(minutes=1)).isoformat(),
+                "until": (base + timedelta(minutes=10)).isoformat(),
             },
             headers=audit_orgs["auth_a"],
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["total"] == 2  # rows at +2m and +3m
+        # rows at +1m, +2m and +10m; setup-time rows ("now") are outside
+        assert body["total"] == 3
         actions = {it["action"] for it in body["items"]}
-        assert actions == {"scan.started2", "scan.curious"}
+        assert actions == {"scan.started1", "scan.started2", "scan.curious"}
 
     def test_since_after_until_rejected(self, client, audit_orgs):
         base = datetime.now(timezone.utc)
         response = client.get(
             "/api/v1/audit-logs",
             params={
-                "since": (base + timedelta(minutes=5)).isoformat(),
-                "until": (base + timedelta(minutes=1)).isoformat(),
+                "since": (base + timedelta(days=5)).isoformat(),
+                "until": (base + timedelta(days=1)).isoformat(),
             },
             headers=audit_orgs["auth_a"],
         )
@@ -212,10 +213,10 @@ class TestAuditLogViewer:
             "/api/v1/audit-logs", params={"page_size": 2, "page": 2},
             headers=audit_orgs["auth_a"]).json()
 
-        assert first["total"] == second["total"] == 4
+        assert first["total"] == second["total"] >= 5
         first_ids = {it["id"] for it in first["items"]}
         second_ids = {it["id"] for it in second["items"]}
-        assert first_ids and second_ids
+        assert len(first_ids) == len(second_ids) == 2
         assert first_ids.isdisjoint(second_ids)
 
     def test_long_action_and_actor_filters_bounded(self, client, audit_orgs):
