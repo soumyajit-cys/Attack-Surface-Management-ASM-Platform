@@ -25,6 +25,7 @@ responses and failures go through the real parsing code.
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import socket as real_socket
 import ssl as stdlib_ssl
