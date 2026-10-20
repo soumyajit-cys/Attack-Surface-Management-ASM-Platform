@@ -98,7 +98,8 @@ describe('AuditLog page', () => {
     await screen.findByText(/no audit log entries match these filters/i)
 
     // explicit assertion on the last request's params
-    const last = vi.mocked(api.getAuditLogs).mock.calls.at(-1)?.[0]
+    const calls = vi.mocked(api.getAuditLogs).mock.calls
+    const last = calls[calls.length - 1]?.[0]
     expect(last).toMatchObject({
       page: 1,
       action: 'user.login',
