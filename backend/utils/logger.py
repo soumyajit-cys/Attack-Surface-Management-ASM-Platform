@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from config import settings
 
-correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="") 
 
 
 class JsonFormatter(logging.Formatter):
