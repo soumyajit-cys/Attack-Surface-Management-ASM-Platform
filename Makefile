@@ -53,7 +53,8 @@ release-check: ## full pre-tag gate: make check + make audit + lockfile currency
 	cd backend && uv lock --check
 	cd frontend && npm ci --dry-run >/dev/null
 
-check: ## CI gate mirror, in order (run before every push): ruff, mypy, pytest on a fresh scratch DB, tsc, eslint, prettier, vitest, vite build
+check: ## CI gate mirror, in order (run before every push): text integrity, ruff, mypy, pytest on a fresh scratch DB, tsc, eslint, prettier, vitest, vite build
+	backend/venv/bin/python scripts/check_text_integrity.py
 	cd backend && ruff check .
 	cd backend && venv/bin/mypy . --ignore-missing-imports
 	DATABASE_URL=$(CHECK_DB_URL) bash scripts/db_guard.sh
