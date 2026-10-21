@@ -327,6 +327,21 @@ jobs:
           trivyignores: .trivyignore
           exit-code: '1'
 
+  text-integrity:
+    name: Text integrity (NUL / UTF-8)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+
+      # stdlib-only gate born from the 2026-10-20 null-byte commit
+      # (918ae86 / cbd7f6d): fails when any tracked text file contains a
+      # NUL byte or invalid UTF-8. No setup step needed.
+      - name: Scan tracked text files
+        run: python3 scripts/check_text_integrity.py
+
   docker-build:
     name: Build Docker Images (no push)
     runs-on: ubuntu-latest
