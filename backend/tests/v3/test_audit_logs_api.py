@@ -347,6 +347,34 @@ class TestAuditLogNeverReturnsSecrets:
         for item in scan_rows["items"]:
             assert "totp_enabled" not in str(item["details"])
 
+    def test_allowlisted_field_kept_only_as_bool_value(
+            self, client, db, audit_orgs):
+        """Cross-check on the allowlist: an allowlisted key is only kept
+        when its value is a safe primitive (bool state / numeric count).
+        A string under a boolean-named key could smuggle material — e.g.
+        totp_enabled="secret-string" must be dropped."""
+        from models.audit_log import AuditLog
+
+        base = audit_orgs["base"]
+        db.add(AuditLog(
+            organization_id=audit_orgs["org_a_id"], actor="audita",
+            action="auth.2fa_enabled",
+            details='{"totp_enabled": "secret-string", "note": "keep"}',
+            ip_address="198.51.100.77",
+            created_at=base + timedelta(minutes=12),
+        ))
+        db.commit()
+
+        response = client.get(
+            "/api/v1/audit-logs",
+            params={"action": "auth.2fa_enabled"},
+            headers=audit_orgs["auth_a"],
+        )
+        assert response.status_code == 200, response.text
+        details = response.json()["items"][0]["details"]
+        assert details == {"note": "keep"}
+        assert "secret-string" not in response.text
+
     def test_parameterized_only_no_sql_injection_via_filters(
             self, client, audit_orgs):
         # Malicious filter payloads must not return cross-org data.
