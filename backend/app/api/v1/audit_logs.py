@@ -81,15 +81,21 @@ def _matches_deny(key: str) -> bool:
 def _scrub_sensitive(value: object, allowed: frozenset[str] = frozenset()) -> object:
     """Recursively drop secret-named keys from parsed details.
 
-    Keys in ``allowed`` for this action family survive even when their
-    name trips a deny pattern.
+    Keys in ``allowed`` for this action family survive, but ONLY when the
+    value is a justified safe primitive: bool (state flags are the point
+    of allowlisted events) or int/float (counts). Strings are NOT kept —
+    a boolean-named string can smuggle material (e.g.
+    ``totp_enabled="secret-string"`` is dropped). Nested objects and None
+    are dropped too: None conveys nothing vs. absence.
     """
     if isinstance(value, dict):
         result: dict[str, object] = {}
         for key, item in value.items():
             foldable = isinstance(key, str)
-            if foldable and _matches_deny(key) and key.casefold() not in allowed:
-                continue
+            if foldable and _matches_deny(key):
+                if key.casefold() in allowed and _is_safe_primitive(item):
+                    result[key] = item
+                continue  # deny-named key never recurses deeper
             result[key] = _scrub_sensitive(item, allowed)
         return result
     if isinstance(value, list):
