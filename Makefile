@@ -3,7 +3,7 @@
 # Backend venv lives at backend/venv (see README quickstart); lint also needs
 # `pip install ruff mypy`, frontend needs `npm install` under frontend/.
 
-.PHONY: setup migrate dev test lint up down secrets-scan check-text-integrity check lock audit openapi release-check
+.PHONY: setup migrate dev test lint lint-workflows up down secrets-scan check-text-integrity check lock audit openapi release-check
 
 # Local Postgres superuser credentials (only used by `check` to
 # create/drop its scratch database; override with `make check
@@ -34,6 +34,9 @@ lint: ## ruff + mypy (backend) and eslint + prettier check (frontend)
 	cd frontend && npx eslint src --ext .ts,.tsx
 	cd frontend && npx prettier --check src
 
+lint-workflows: ## actionlint (pinned 1.7.12 in backend dev group) over .github/workflows
+	cd backend && uv run --frozen actionlint
+
 up: setup ## full stack via compose on http://localhost (needs Docker)
 	docker compose up --build
 
@@ -53,8 +56,9 @@ release-check: ## full pre-tag gate: make check + make audit + lockfile currency
 	cd backend && uv lock --check
 	cd frontend && npm ci --dry-run >/dev/null
 
-check: ## CI gate mirror, in order (run before every push): text integrity, ruff, mypy, pytest on a fresh scratch DB, tsc, eslint, prettier, vitest, vite build
+check: ## CI gate mirror, in order (run before every push): text integrity, workflow lint, ruff, mypy, pytest on a fresh scratch DB, tsc, eslint, prettier, vitest, vite build
 	backend/venv/bin/python scripts/check_text_integrity.py
+	$(MAKE) lint-workflows
 	cd backend && ruff check .
 	cd backend && venv/bin/mypy . --ignore-missing-imports
 	DATABASE_URL=$(CHECK_DB_URL) bash scripts/db_guard.sh
