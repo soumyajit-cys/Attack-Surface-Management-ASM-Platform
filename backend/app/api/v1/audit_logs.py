@@ -58,14 +58,16 @@ def _allowed_for_action(action: str | None) -> frozenset[str]:
     A key earns its place here only when a reviewed boolean/counter IS the
     point of the event (the secret material itself still never passes —
     the deny patterns are checked first). "family" entries match the
-    action exactly or as a dot-prefix, e.g. ``auth.2fa`` covers
-    ``auth.2fa_enabled``, ``auth.2fa_reset``, ``auth.2fa_codes_regenerated``.
+    action exactly or by prefix with a ``.``/``_`` separator, e.g.
+    ``auth.2fa`` covers ``auth.2fa_enabled``, ``auth.2fa_reset``,
+    ``auth.2fa_codes_regenerated``.
     """
     if not action:
         return frozenset()
     allowed: set[str] = set()
     for family, keys in _ACTION_KEY_ALLOWLIST.items():
-        if action == family or action.startswith(family + "."):
+        if action == family or action.startswith(family + ".") \
+                or action.startswith(family + "_"):
             allowed.update(keys)
     return frozenset(allowed)
 
