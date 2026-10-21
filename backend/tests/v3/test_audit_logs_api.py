@@ -299,6 +299,54 @@ class TestAuditLogNeverReturnsSecrets:
         # survivor proves the row matched at all
         assert "plain-string" in blob
 
+    def test_totp_enabled_survives_only_on_2fa_actions(self, client, db, audit_orgs):
+        """Per-action allowlist: ``totp_enabled`` stays visible on 2FA
+        events (the single allowed field so far) and remains scrubbed on
+        every other action family."""
+        from models.audit_log import AuditLog
+
+        base = audit_orgs["base"]
+        db.add(AuditLog(
+            organization_id=audit_orgs["org_a_id"], actor="audita",
+            action="auth.2fa_enabled",
+            details='{"totp_enabled": true, "secret": "material"}',
+            ip_address="198.51.100.77",
+            created_at=base + timedelta(minutes=12),
+        ))
+        db.add(AuditLog(
+            organization_id=audit_orgs["org_a_id"], actor="audita",
+            action="scan.started",
+            details='{"target": "audita.example.com", "totp_enabled": true}',
+            ip_address="198.51.100.77",
+            created_at=base + timedelta(minutes=13),
+        ))
+        db.commit()
+
+        response = client.get(
+            "/api/v1/audit-logs",
+            params={"action": "auth.2fa_enabled"},
+            headers=audit_orgs["auth_a"],
+        )
+        assert response.status_code == 200, response.text
+        details = response.json()["items"][0]["details"]
+        assert details == {"totp_enabled": True}  # allowed field visible
+        assert "material" not in response.text    # secrets still dropped
+
+        refused = client.get(
+            "/api/v1/audit-logs",
+            params={"action": "actor-never-matches-this-row"},
+            headers=audit_orgs["auth_a"],
+        )
+        assert refused.status_code == 200
+        assert refused.json()["items"] == []
+        scan_rows = client.get(
+            "/api/v1/audit-logs",
+            params={"action": "scan.started", "page_size": 50},
+            headers=audit_orgs["auth_a"],
+        ).json()
+        for item in scan_rows["items"]:
+            assert "totp_enabled" not in str(item["details"])
+
     def test_parameterized_only_no_sql_injection_via_filters(
             self, client, audit_orgs):
         # Malicious filter payloads must not return cross-org data.
