@@ -68,6 +68,9 @@ check: ## CI gate mirror, in order (run before every push): text integrity, ruff
 	cd frontend && npm test
 	cd frontend && npm run build
 
+check-text-integrity: ## fail if any tracked text file contains a NUL byte or invalid UTF-8
+	backend/venv/bin/python scripts/check_text_integrity.py
+
 openapi: ## regenerate docs/openapi.json + docs/API.md from the app (schema-only; no DB, no network)
 	cd backend && KEY=$$(venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())") JWT_SECRET=openapi-export-dummy-value SECRETS_ENCRYPTION_KEY=$$KEY REDIS_URL=redis://localhost:6379/15 venv/bin/python scripts/export_openapi.py
 
