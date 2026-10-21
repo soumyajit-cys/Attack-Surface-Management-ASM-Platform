@@ -507,6 +507,7 @@ async def confirm_2fa(
     record_audit(
         db, organization_id=user.organization_id, actor=user.username,
         action="auth.2fa_enabled", request=request,
+        details={"totp_enabled": True},
     )
     db.commit()
     return {"recovery_codes": codes}
@@ -547,6 +548,7 @@ async def disable_2fa(
     record_audit(
         db, organization_id=user.organization_id, actor=user.username,
         action="auth.2fa_disabled", request=request,
+        details={"totp_enabled": False},
     )
     db.commit()
     return MessageOut(message="2FA disabled")
