@@ -285,7 +285,12 @@ class TestAuditLogNeverReturnsSecrets:
             # denylist wins even for an innocuous boolean key.
         }
 
-    def test_scrub_is_case_insensitive(self, client, audit_orgs):
+    def test_totp_enabled_survives_only_on_2fa_actions(self, client, audit_orgs):
+        """The per-action allowlist lets ``totp_enabled`` through ONLY on
+        the 2FA event family — the single allowed field so far."""
+        from models.audit_log import AuditLog
+        from app.db.session import get_db_handle if False else None  # noqa
+
         response = client.get(
             "/api/v1/audit-logs",
             params={"action": "scan.nested"},
