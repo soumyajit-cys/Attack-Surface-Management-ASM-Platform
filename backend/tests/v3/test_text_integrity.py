@@ -43,7 +43,7 @@ class TestTextIntegrityGate:
 
     def test_clean_temp_file_has_no_problems(self, tmp_path):
         good = tmp_path / "clean.ts"
-        good.write_bytes("// just valid utf-8 éè中文\n".encode("utf-8"))
+        good.write_bytes("// just valid utf-8 éè中文\n".encode())
 
         assert check_text_integrity.scan([good]) == []
 
@@ -64,7 +64,7 @@ class TestTextIntegrityGate:
         result = subprocess.run(
             [str(BACKEND_ROOT / "venv" / "bin" / "python"),
              str(SCRIPT), str(bad)],
-            capture_output=True, text=True, cwd=REPO_ROOT,
+            capture_output=True, text=True, cwd=REPO_ROOT, check=False,
         )
         assert result.returncode == 1
         assert "contains a NUL byte" in result.stdout
