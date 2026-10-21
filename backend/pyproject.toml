@@ -57,6 +57,9 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
+    # Pinned CI-workflow linter (used by `make lint-workflows` and its CI job).
+    # Upgraded deliberately, with the pin bumped in the same commit.
+    "actionlint-py==1.7.12",
 ]
 
 [tool.uv]
