@@ -87,6 +87,33 @@ jobs:
         # Style baseline lives in frontend/.prettierrc.
         run: npx prettier --check src
 
+  lint-workflows:
+    name: Lint Workflows (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081  # v5
+
+      - name: Install dependencies
+        # actionlint-py is pinned exactly in the dev group
+        # (actionlint-py==1.7.12.25, see backend/pyproject.toml) so CI and
+        # `make lint-workflows` run the exact same tool version from uv.lock.
+        run: uv sync --frozen --group dev
+        working-directory: ./backend
+
+      - name: Run actionlint
+        run: cd backend && uv run --frozen actionlint
+
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
