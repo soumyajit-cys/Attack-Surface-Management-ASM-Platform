@@ -13,7 +13,7 @@ the scan also fails if a call site tries to hide its keys behind
 
 from pathlib import Path
 
-from app.api.v1.audit_logs import _matches_deny
+from app.api.v1.audit_logs import _allowed_for_action, _matches_deny
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SCAN_ROOTS = (
