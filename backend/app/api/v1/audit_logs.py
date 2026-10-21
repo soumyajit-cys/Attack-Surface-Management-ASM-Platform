@@ -44,25 +44,49 @@ _SCRUB_PATTERNS: tuple[str, ...] = (
 )
 
 
+def _allowed_for_action(action: str | None) -> frozenset[str]:
+    """Per-action allowlist — keys that stay VISIBLE for that action family.
+
+    A key earns its place here only when a reviewed boolean/counter IS the
+    point of the event (the secret material itself still never passes —
+    the deny patterns are checked first). "family" entries match the
+    action exactly or as a dot-prefix, e.g. ``auth.2fa`` covers
+    ``auth.2fa_enabled``, ``auth.2fa_reset``, ``auth.2fa_codes_regenerated``.
+    """
+    if not action:
+        return frozenset()
+    allowed: set[str] = set()
+    for family, keys in _ACTION_KEY_ALLOWLIST.items():
+        if action == family or action.startswith(family + "."):
+            allowed.update(keys)
+    return frozenset(allowed)
+
+
 def _matches_deny(key: str) -> bool:
     folded = key.casefold()
     return any(pattern in folded for pattern in _SCRUB_PATTERNS)
 
 
-def _scrub_sensitive(value: object) -> object:
-    """Recursively drop secret-named keys from parsed details."""
+def _scrub_sensitive(value: object, allowed: frozenset[str] = frozenset()) -> object:
+    """Recursively drop secret-named keys from parsed details.
+
+    Keys in ``allowed`` for this action family survive even when their
+    name trips a deny pattern.
+    """
     if isinstance(value, dict):
-        return {
-            key: _scrub_sensitive(item)
-            for key, item in value.items()
-            if not (isinstance(key, str) and _matches_deny(key))
-        }
+        result: dict[str, object] = {}
+        for key, item in value.items():
+            foldable = isinstance(key, str)
+            if foldable and _matches_deny(key) and key.casefold() not in allowed:
+                continue
+            result[key] = _scrub_sensitive(item, allowed)
+        return result
     if isinstance(value, list):
-        return [_scrub_sensitive(item) for item in value]
+        return [_scrub_sensitive(item, allowed) for item in value]
     return value
 
 
-def _scrub_details(raw: str | None) -> dict:
+def _scrub_details(raw: str | None, action: str | None = None) -> dict:
     """Parse the details JSON and drop secret-named keys (never returns them)."""
     if not raw:
         return {}
@@ -72,7 +96,8 @@ def _scrub_details(raw: str | None) -> dict:
         return {}
     if not isinstance(parsed, dict):
         return {}
-    scrubbed = _scrub_sensitive(parsed)
+    allowed = _allowed_for_action(action)
+    scrubbed = _scrub_sensitive(parsed, allowed)
     return scrubbed if isinstance(scrubbed, dict) else {}
 
 
