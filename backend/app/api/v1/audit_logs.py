@@ -103,6 +103,15 @@ def _scrub_sensitive(value: object, allowed: frozenset[str] = frozenset()) -> ob
     return value
 
 
+def _is_safe_primitive(item: object) -> bool:
+    """bools and numbers only — the justified allowlist value shapes.
+
+    State flags (bool) and counts (int/float) are what allowlisted events
+    exist to record; strings, None, and anything nested never pass.
+    """
+    return isinstance(item, (bool, int, float))
+
+
 def _scrub_details(raw: str | None, action: str | None = None) -> dict:
     """Parse the details JSON and drop secret-named keys (never returns them)."""
     if not raw:
