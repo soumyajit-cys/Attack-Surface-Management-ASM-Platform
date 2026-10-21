@@ -102,6 +102,14 @@ def _details_block(call_text: str) -> str | None:
     return call_text[brace:end] if end is not None else None
 
 
+def _action_of(call_text: str) -> str | None:
+    """The audit action name at a call site (literal-string keyword arg)."""
+    import re
+
+    match = re.search(r'\baction\s*=\s*"([a-z0-9_.]+)"', call_text)
+    return match.group(1) if match else None
+
+
 def _literal_keys(block: str) -> list[str]:
     """Literal string keys of the details dict (nested dicts included).
 
@@ -154,13 +162,18 @@ class TestAuditCallSites:
             block = _details_block(call_text)
             if block is None:
                 continue
-            for key in _literal_keys(block):
+            keys = _literal_keys(block)
+            action = _action_of(call_text)
+            for key in keys:
                 seen_keys.add(key.casefold())
-            for key in _literal_keys(block):
-                if _matches_deny(key) and key.casefold() not in allowed_keys:
+            for key in keys:
+                if _matches_deny(key) \
+                        and key.casefold() not in allowed_keys \
+                        and key not in _allowed_for_action(action):
                     flagged.append(
                         f"{rel_path}:{line}: details key `{key}` matches the "
-                        "audit deny patterns and is not allowlisted")
+                        f"audit deny patterns (action={action!r}) and is not "
+                        "allowlisted for that action")
         entries = "\n".join(f"  - {e}" for e in flagged)
         assert not flagged, (
             "sensitive-looking audit details keys found:\n\n"
