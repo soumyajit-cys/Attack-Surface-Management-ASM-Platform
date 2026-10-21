@@ -66,9 +66,10 @@ def _allowed_for_action(action: str | None) -> frozenset[str]:
         return frozenset()
     allowed: set[str] = set()
     for family, keys in _ACTION_KEY_ALLOWLIST.items():
-        if action == family or action.startswith(family + ".") \
-                or action.startswith(family + "_"):
+        if action == family \
+                or action.startswith((family + ".", family + "_")):
             allowed.update(keys)
+    return frozenset(allowed)
     return frozenset(allowed)
 
 
