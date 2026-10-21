@@ -58,8 +58,10 @@ dev = [
     "ruff",
     "mypy",
     # Pinned CI-workflow linter (used by `make lint-workflows` and its CI job).
-    # Upgraded deliberately, with the pin bumped in the same commit.
-    "actionlint-py==1.7.12",
+    # Upgraded deliberately, with the pin bumped in the same commit. Marker:
+    # upstream publishes wheels only up to the 3.14 series, so exclude the
+    # unpublished >= 3.15 interpreter space from resolution.
+    "actionlint-py==1.7.12 ; python_full_version < '3.15'",
 ]
 
 [tool.uv]
