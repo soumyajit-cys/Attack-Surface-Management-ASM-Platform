@@ -43,6 +43,14 @@ _SCRUB_PATTERNS: tuple[str, ...] = (
     "private",                       # private keys / private material
 )
 
+# Per-action allowlist (see _allowed_for_action): reviewed fields whose
+# BOOLEAN/STATE value is the point of the event. One entry so far:
+# the 2FA lifecycle events carry the totp_enabled flag so the audit
+# trail can answer "was 2FA on when this happened?".
+_ACTION_KEY_ALLOWLIST: dict[str, frozenset[str]] = {
+    "auth.2fa": frozenset({"totp_enabled"}),
+}
+
 
 def _allowed_for_action(action: str | None) -> frozenset[str]:
     """Per-action allowlist — keys that stay VISIBLE for that action family.
@@ -162,7 +170,7 @@ async def list_audit_logs(
                 "id": row.id,
                 "actor": row.actor,
                 "action": row.action,
-                "details": _scrub_details(row.details),
+                "details": _scrub_details(row.details, row.action),
                 "ip_address": row.ip_address,
                 "created_at": row.created_at,
             }
