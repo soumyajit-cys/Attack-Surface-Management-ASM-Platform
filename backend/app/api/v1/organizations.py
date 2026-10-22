@@ -21,13 +21,21 @@ from schemas.organization import (
 from app.core.audit import record_audit
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.core.permissions import Permission
-from app.api.deps import Principal, current_principal, require_permissions_dep
+from app.api.deps import (
+    Principal,
+    current_principal,
+    require_permissions_dep,
+    require_step_up_dep,
+)
 from app.db.session import get_db
 from auth.roles import ROLE_ADMIN
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 _ORG_ADMIN_DEP = require_permissions_dep(Permission.ORG_MANAGE)
+# Sensitive org-write routes additionally demand a fresh step-up
+# re-authentication (see POST /auth/step-up, 300 s marker).
+_STEPUP_DEP = require_step_up_dep()
 
 
 def _org_response(db: Session, org) -> dict:
@@ -101,6 +109,7 @@ async def create_invitation(
     data: InvitationCreate,
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ORG_ADMIN_DEP),
+    _stepup: None = Depends(_STEPUP_DEP),
 ):
     from models.user import User
 
@@ -243,6 +252,7 @@ async def revoke_invitation(
     request: Request,
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ORG_ADMIN_DEP),
+    _stepup: None = Depends(_STEPUP_DEP),
 ):
     invitation = db.query(Invitation).filter(
         Invitation.id == invitation_id,
@@ -269,9 +279,11 @@ async def revoke_invitation(
 
 @router.post("/api-keys", status_code=status.HTTP_201_CREATED)
 async def create_api_key(
+    request: Request,
     data: APIKeyCreate,
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ORG_ADMIN_DEP),
+    _stepup: None = Depends(_STEPUP_DEP),
 ):
     full_key, key_hash = APIKey.generate_key()
     expires_at = None
@@ -383,6 +395,7 @@ async def set_2fa_requirement(
     data: Requirement2FARequest,
     db: Session = Depends(get_db),
     principal: Principal = Depends(_ORG_ADMIN_DEP),
+    _stepup: None = Depends(_STEPUP_DEP),
 ):
     """Toggle org-wide 2FA enforcement (admin only, audited).
 

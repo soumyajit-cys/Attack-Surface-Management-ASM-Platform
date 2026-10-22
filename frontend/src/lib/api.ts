@@ -45,6 +45,25 @@ export function getApiErrorCode(error: unknown): string | undefined {
   return undefined
 }
 
+export type StepUpHandler = () => Promise<void>
+
+let stepUpRequiredHandler: StepUpHandler | null = null
+
+/**
+ * Register the global handler invoked when any request is answered with a
+ * `403 step_up_required` envelope. The handler should open a step-up
+ * dialog and resolve once the backend marker is granted (or reject to
+ * abort). Registered by StepUpDialog; cleared on unmount.
+ */
+export function setStepUpRequiredHandler(handler: StepUpHandler | null): void {
+  stepUpRequiredHandler = handler
+}
+
+/** Test/inspection accessor for the registered step-up handler. */
+export function getStepUpRequiredHandler(): StepUpHandler | null {
+  return stepUpRequiredHandler
+}
+
 export interface AuthUser {
   id: number
   username: string
@@ -119,7 +138,10 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response.data,
       async (error: AxiosError) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+        const originalRequest = error.config as InternalAxiosRequestConfig & {
+          _retry?: boolean
+          _stepupRetried?: boolean
+        }
 
         if (error.response?.status === 401 && !originalRequest._retry) {
           if (this.isRefreshing) {
@@ -152,6 +174,21 @@ class ApiClient {
             return Promise.reject(err)
           } finally {
             this.isRefreshing = false
+          }
+        }
+
+        if (
+          error.response?.status === 403 &&
+          getApiErrorCode(error) === 'step_up_required' &&
+          !originalRequest._stepupRetried
+        ) {
+          const handler = stepUpRequiredHandler
+          if (handler) {
+            // Retry the original request exactly once, after the dialog
+            // reports a successful step-up. Any second failure surfaces
+            // to the caller.
+            originalRequest._stepupRetried = true
+            return handler().then(() => this.client(originalRequest))
           }
         }
 
@@ -259,6 +296,11 @@ class ApiClient {
 
   async adminReset2fa(username: string) {
     return this.post('/auth/admin/reset-2fa', { username })
+  }
+
+  /** Step-up re-authentication (see StepUpDialog / step-up tests v1.6.x). */
+  async stepUp(password: string, code?: string) {
+    return this.post('/auth/step-up', { password, ...(code ? { code } : {}) })
   }
 
   async register(data: {

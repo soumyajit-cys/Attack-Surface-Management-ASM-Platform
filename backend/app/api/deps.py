@@ -15,6 +15,8 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from auth import jwt as token_service
+from auth import stepup as stepup_store
+from auth.stepup import StepupUnavailable
 from auth.token_store import token_store
 from models import APIKey, User
 
@@ -163,5 +165,68 @@ def require_permissions_dep(*needed: Permission):
     def dependency(principal: Principal = Depends(current_principal)) -> Principal:
         enforce_permissions(principal.permissions, *needed)
         return principal
+
+    return dependency
+
+
+def _bearer_access_jti(request: Request) -> str | None:
+    """jti of the presenting JWT access token (None for API keys etc.)."""
+    auth_header = request.headers.get("Authorization") or ""
+    if not auth_header.startswith("Bearer "):
+        return None
+    payload = token_service.decode_token(auth_header[7:])
+    if not payload or payload.get("type") != token_service.ACCESS:
+        return None
+    return payload.get("jti")
+
+
+def require_step_up_dep():
+    """Dependency factory: require a live step-up marker.
+
+    Sensitive org-admin write routes stack this AFTER
+    ``require_permissions_dep`` (permission failures win presentation
+    order). The marker is a server-side Redis entry keyed by user id +
+    presenting access jti with a 300 s TTL, planted only by
+    ``POST /auth/step-up``; each successful use is audited, never
+    revealing credentials. Redis loss fails closed.
+    """
+
+    def dependency(
+        request: Request,
+        principal: Principal = Depends(current_principal),
+        db: Session = Depends(get_db),
+    ) -> None:
+        from app.core.audit import client_ip, record_audit
+        from app.core.errors import ForbiddenError, ServiceUnavailableError
+
+        if principal.is_api_key:
+            # A marker must belong to a user session; API keys cannot
+            # step up at all (answer like the other step-up route).
+            raise ForbiddenError(
+                "Step-up re-authentication requires a user session",
+                code="step_up_required",
+            )
+        jti = _bearer_access_jti(request)
+        try:
+            ok = stepup_store.active(principal.user.id, jti)
+        except StepupUnavailable:
+            raise ServiceUnavailableError(
+                "Step-up verification temporarily unavailable",
+                code="auth_unavailable",
+            )
+        if not ok:
+            raise ForbiddenError(
+                "Step-up re-authentication required",
+                code="step_up_required",
+            )
+        record_audit(
+            db,
+            organization_id=principal.organization_id,
+            actor=principal.user.username,
+            action="auth.stepup_used",
+            details={"ip": client_ip(request), "route": request.url.path},
+            request=request,
+        )
+        db.commit()
 
     return dependency

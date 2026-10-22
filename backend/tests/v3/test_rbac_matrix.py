@@ -122,12 +122,91 @@ EXPECTED = {
     ("POST", "/api/v1/auth/2fa/enroll"): frozenset(),
     ("POST", "/api/v1/auth/2fa/confirm"): frozenset(),
     ("POST", "/api/v1/auth/2fa/disable"): frozenset(),
+    ("POST", "/api/v1/auth/step-up"): frozenset(),
     ("POST", "/api/v1/auth/2fa/regenerate-codes"): frozenset(),
     ("POST", "/api/v1/auth/login/2fa"): frozenset(),
     ("POST", "/api/v1/organizations/2fa-requirement"): frozenset({Permission.ORG_MANAGE}),
     ("POST", "/api/v1/auth/admin/reset-2fa"): frozenset({Permission.ORG_MANAGE}),
     ("GET", "/api/v1/audit-logs"): frozenset({Permission.ORG_MANAGE}),
 }
+
+
+# ── step-up decision matrix ─────────────────────────────────────────────────
+# Every non-GET route whose required permissions include ORG_MANAGE must
+# carry a require_step_up_dep closure OR be recorded here as an explicit
+# exemption with its justification, so a NEW sensitive route cannot be
+# added silently without a step-up decision.
+_STEPUP_EXEMPT = {
+    # Creating a NEW organization is the onboarding path: the caller
+    # moves out of their current org; there is nothing sensitive yet.
+    ("POST", "/api/v1/organizations"),
+    # The owner scoped step-up to key creation; scope/deletion edits
+    # operate on an existing key that was itself step-up created.
+    ("PATCH", "/api/v1/organizations/api-keys/{key_id}"),
+    ("DELETE", "/api/v1/organizations/api-keys/{key_id}"),
+}
+
+EXPECTED_STEPUP = {
+    ("POST", "/api/v1/auth/admin/unlock-account"),
+    ("POST", "/api/v1/auth/admin/reset-2fa"),
+    ("POST", "/api/v1/organizations/2fa-requirement"),
+    ("POST", "/api/v1/organizations/invitations"),
+    ("POST", "/api/v1/organizations/invitations/{invitation_id}/revoke"),
+    ("POST", "/api/v1/organizations/api-keys"),
+}
+
+
+def _stepup_protected_routes():
+    """Introspect app Routes for require_step_up_dep closures.
+
+    Mirrors _required_permissions: walks dependant dependency trees and
+    matches the closure factory qualname.
+    """
+    from main import app
+
+    protected = set()
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        methods = getattr(route, "methods", set()) or set()
+        if not path.startswith("/api/"):
+            continue
+        stack = list(getattr(route.dependant, "dependencies", []) or [])
+        seen = set()
+        found = False
+        while stack:
+            dep = stack.pop()
+            if id(dep) in seen:
+                continue
+            seen.add(id(dep))
+            call = getattr(dep, "call", None)
+            qualname = getattr(call, "__qualname__", "") or ""
+            if ("require_step_up_dep" in qualname
+                    and getattr(call, "__name__", "") == "dependency"):
+                found = True
+            sub = getattr(dep, "dependant", None)
+            if sub is not None:
+                stack.extend(getattr(sub, "dependencies", []) or [])
+        if found:
+            for method in sorted(methods - {"HEAD", "OPTIONS"}):
+                protected.add((method, path))
+    return protected
+
+
+def test_stepup_matrix():
+    """Sensitive routes need a step-up decision (protected or exempt)."""
+    protected = _stepup_protected_routes()
+    assert protected == EXPECTED_STEPUP, (
+        f"step-up drift: got {sorted(protected)}")
+
+    table = _route_table()
+    offenders = sorted(
+        (m, p) for (m, p), needed in table.items()
+        if m != "GET" and Permission.ORG_MANAGE in needed
+        and (m, p) not in EXPECTED_STEPUP
+        and (m, p) not in _STEPUP_EXEMPT)
+    assert not offenders, (
+        "ORG_MANAGE write routes without a step-up decision "
+        f"(add require_step_up_dep() or justify an exemption): {offenders}")
 
 
 def test_required_permissions_match_expectations():
@@ -195,6 +274,13 @@ def rbac(client, db, monkeypatch, org_factory):
                for role in ("viewer", "analyst", "admin")}
     # NOTE: admin username is rbacadmin (created by org_factory).
     headers["admin"] = login("rbacadmin")
+    # Sensitive org-write routes now require a fresh step-up; give the
+    # admin a live marker so behavior tests exercise the WRITE, not the
+    # gate (the gate itself is covered by tests/v3/test_stepup.py).
+    stepup = client.post("/api/v1/auth/step-up",
+                         json={"password": "password123"},
+                         headers=headers["admin"])
+    assert stepup.status_code == 200, stepup.text
 
     asset = Asset(organization_id=org.id, name="rbac.example.com")
     db.add(asset)

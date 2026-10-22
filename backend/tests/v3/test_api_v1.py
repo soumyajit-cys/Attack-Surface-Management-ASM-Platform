@@ -27,7 +27,14 @@ def _login(client, username="v3user"):
         json={"username": username, "password": "password123"},
     )
     assert response.status_code == 200, response.text
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+    # Api-key/invitation creation goes through the step-up gate now
+    # (v1.6.x); give every fresh session a live marker up front.
+    stepup = client.post("/api/v1/auth/step-up",
+                         json={"password": "password123"},
+                         headers=headers)
+    assert stepup.status_code == 200, stepup.text
+    return headers
 
 
 class TestScansV1:

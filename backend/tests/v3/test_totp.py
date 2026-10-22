@@ -280,6 +280,11 @@ def test_require_2fa_flow_and_guardrails(client, tfa, db):
     from models.user import User
 
     admin_h, _ = tfa("tfaadmin", org="TFA Req Org")
+    # 2fa-requirement and api-key creation are step-up-guarded now.
+    admin_stepup = client.post("/api/v1/auth/step-up",
+                               json={"password": "password123"},
+                               headers=admin_h)
+    assert admin_stepup.status_code == 200, admin_stepup.text
     # Refused while the enabling admin lacks 2FA.
     refused = client.post("/api/v1/organizations/2fa-requirement",
                           json={"enabled": True}, headers=admin_h)
@@ -345,6 +350,12 @@ def test_admin_reset_2fa_and_script(client, db, tfa):
     from models.user import User
 
     admin_h, _ = tfa("tfaresetadmin", org="TFA Reset Org")
+    # reset-2fa is a step-up-guarded route now; markers live ahead of the
+    # admin's own 2FA enrollment (which would make codes mandatory).
+    admin_stepup = client.post("/api/v1/auth/step-up",
+                               json={"password": "password123"},
+                               headers=admin_h)
+    assert admin_stepup.status_code == 200, admin_stepup.text
     _enable_2fa(client, admin_h)
     _register_victim = client.post(
         "/api/v1/auth/register",
@@ -381,6 +392,10 @@ def test_admin_reset_2fa_and_script(client, db, tfa):
         "/api/v1/auth/me", headers=victim_h).status_code == 401
     # Cross-org and unknown look identical: a foreign admin sees 404.
     foreign_h, _ = tfa("tfaforeignadmin", org="TFA Foreign Org")
+    foreign_stepup = client.post("/api/v1/auth/step-up",
+                                 json={"password": "password123"},
+                                 headers=foreign_h)
+    assert foreign_stepup.status_code == 200, foreign_stepup.text
     cross = client.post("/api/v1/auth/admin/reset-2fa",
                         json={"username": "tfaresetvictim"},
                         headers=foreign_h)

@@ -16,7 +16,14 @@ def _register(client, username, org):
               "password": "password123", "organization": org},
     )
     assert reg.status_code == 201, reg.text
-    return {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    # Invitations are a member-change surface now guarded by step-up;
+    # give every fresh admin session a live marker up front.
+    stepup = client.post("/api/v1/auth/step-up",
+                         json={"password": "password123"},
+                         headers=headers)
+    assert stepup.status_code == 200, stepup.text
+    return headers
 
 
 def _invite(client, headers, email="invited@example.com", role="analyst"):

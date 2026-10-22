@@ -175,10 +175,15 @@ def test_change_password_rejects_api_keys(client, db):
     """Automation keys cannot take over the password (403, JWT-only)."""
     _register(client, "pwkey")
     admin = _login(client, "pwkey")
+    admin_h = {"Authorization": f"Bearer {admin['access_token']}"}
+    # Api-key creation is step-up-guarded now (v1.6.x).
+    stepup = client.post("/api/v1/auth/step-up",
+                         json={"password": "password123"}, headers=admin_h)
+    assert stepup.status_code == 200, stepup.text
     created = client.post(
         "/api/v1/organizations/api-keys",
         json={"name": "pwkey"},
-        headers={"Authorization": f"Bearer {admin['access_token']}"})
+        headers=admin_h)
     assert created.status_code == 201, created.text
     key_h = {"X-API-Key": created.json()["key"]}
     denied = client.post(

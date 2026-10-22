@@ -31,6 +31,7 @@ from schemas.auth import (
     RegisterRequest,
     Reset2FARequest,
     ResetPasswordRequest,
+    StepUpRequest,
     UnlockAccountRequest,
 )
 
@@ -44,6 +45,7 @@ from app.api.deps import (
     Principal,
     principal_or_enroll,
     require_permissions_dep,
+    require_step_up_dep,
 )
 from app.core.permissions import Permission
 from app.schemas.auth import (
@@ -388,6 +390,7 @@ async def admin_unlock_account(
     db: Session = Depends(get_db),
     principal: Principal = Depends(
         require_permissions_dep(Permission.ORG_MANAGE)),
+    _stepup: None = Depends(require_step_up_dep()),
 ) -> MessageOut:
     """Clear a user's login-lockout counters (admin early-unlock).
 
@@ -686,6 +689,7 @@ async def admin_reset_2fa(
     db: Session = Depends(get_db),
     principal: Principal = Depends(
         require_permissions_dep(Permission.ORG_MANAGE)),
+    _stepup: None = Depends(require_step_up_dep()),
 ) -> MessageOut:
     """Clear a user's 2FA state (lost device). Same-org only; unknown and
     cross-org usernames share one 404. Revokes the user's sessions."""
@@ -714,6 +718,116 @@ async def admin_reset_2fa(
     )
     db.commit()
     return MessageOut(message="2FA reset")
+
+
+@router.post("/step-up", response_model=MessageOut)
+@limiter.limit(f"{settings.rate_limit_auth_requests_per_minute}/minute")
+async def step_up(
+    request: Request,
+    data: StepUpRequest,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(current_principal),
+) -> MessageOut:
+    """Step-up re-authentication for the calling session on success.
+
+    Same lockout counters and uniform failures as login; with 2FA enabled
+    a TOTP or recovery code is required. Plants a SHORT-LIVED server-side
+    redis marker (auth.stepup, TTL 300 s) bound to the presenting access
+    jti so ``require_step_up_dep`` routes answer normally for this
+    session. No client-held token is issued.
+    """
+    from auth import lockout as lockout_mod
+    from auth import stepup as stepup_mod
+    from auth import totp as totp_mod
+    from auth.stepup import StepupUnavailable
+    from app.core.errors import ForbiddenError, ServiceUnavailableError
+    from models.recovery_code import RecoveryCode
+
+    if principal.is_api_key:
+        raise ForbiddenError("Step-up requires a user session",
+                             code="api_key_forbidden")
+
+    user = principal.user
+    identifier = user.username.strip().lower()
+    ip = client_ip(request) or "unknown"
+    acct, ipc = lockout_mod.account_counter(), lockout_mod.ip_counter()
+    try:
+        if acct.is_locked(identifier) or ipc.is_locked(ip):
+            raise UnauthenticatedError("Invalid credentials")
+    except lockout_mod.LockoutUnavailable as exc:
+        logger.error("lockout store unreachable during step-up: %s",
+                     type(exc).__name__)
+        raise ServiceUnavailableError(
+            "Authentication temporarily unavailable",
+            code="auth_unavailable",
+        )
+
+    password_ok = verify_password(data.password, user.password_hash)
+    code_ok = True
+    matched_recovery = None
+    if password_ok and user.totp_enabled:
+        code_ok = False
+        if (user.totp_secret and data.code and len(data.code) == 6
+                and (step := totp_mod.verify_code(
+                    user.totp_secret, data.code,
+                    user.totp_last_step)) is not None
+                and totp_mod.claim_totp_step(db, user.id, step)):
+            code_ok = True
+        elif data.code:
+            for row in db.query(RecoveryCode).filter(
+                    RecoveryCode.user_id == user.id,
+                    RecoveryCode.used_at.is_(None)).all():
+                if totp_mod.verify_recovery_code(data.code, row.code_hash):
+                    matched_recovery = row
+                    code_ok = True
+                    break
+
+    if not password_ok or not code_ok:
+        try:
+            engaged, seconds, scope = False, 0, ""
+            engaged, seconds = acct.register_failure(identifier)
+            scope = "account"
+            if not engaged:
+                ip_engaged, ip_seconds = ipc.register_failure(ip)
+                if ip_engaged:
+                    engaged, seconds, scope = True, ip_seconds, "ip"
+            if engaged and seconds:
+                record_audit(
+                    db, organization_id=user.organization_id,
+                    actor=user.username, action="auth.account_locked",
+                    details={"scope": scope, "lock_seconds": seconds},
+                    request=request,
+                )
+            db.commit()
+        except lockout_mod.LockoutUnavailable:
+            logger.warning("lockout store unreachable during step-up "
+                           "failure recording")
+        raise UnauthenticatedError("Invalid credentials")
+
+    if matched_recovery is not None:
+        matched_recovery.used_at = datetime.now(timezone.utc)
+
+    auth_header = request.headers.get("Authorization") or ""
+    current_jti = (
+        token_service.decode_token(auth_header[7:]).get("jti")
+        if auth_header.startswith("Bearer ") else None
+    )
+    try:
+        stepup_mod.grant(user.id, current_jti)
+    except StepupUnavailable:
+        logger.error("step-up store unreachable; failing closed")
+        raise ServiceUnavailableError(
+            "Step-up verification temporarily unavailable",
+            code="auth_unavailable",
+        )
+    record_audit(
+        db, organization_id=user.organization_id,
+        actor=user.username, action="auth.stepup_granted",
+        details={"ip": client_ip(request)},
+        request=request,
+    )
+    db.commit()
+    return MessageOut(message="Step-up verified")
 
 
 @router.post("/forgot-password", response_model=MessageOut)

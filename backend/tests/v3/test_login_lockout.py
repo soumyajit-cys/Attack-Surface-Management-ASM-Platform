@@ -160,6 +160,11 @@ def test_admin_unlock_releases_lock(client, db):
 
     admin_h = _register(client, "lockadmin", org="Lock Admin Org")
     admin_headers = {"Authorization": f"Bearer {admin_h['access_token']}"}
+    # unlock-account is step-up-guarded now (v1.6.x).
+    stepup = client.post("/api/v1/auth/step-up",
+                         json={"password": "password123"},
+                         headers=admin_headers)
+    assert stepup.status_code == 200, stepup.text
     _register(client, "lockvictim", org="Lock Victim Tmp Org")
     # Same tenant: move the victim into the admin's org.
     from models.user import User
@@ -203,6 +208,10 @@ def test_unlock_forbidden_for_non_admins(client, db):
 def test_unlock_cross_org_matches_unknown(client, db):
     admin_h = _register(client, "lockadmin3", org="Lock Admin3 Org")
     admin_headers = {"Authorization": f"Bearer {admin_h['access_token']}"}
+    stepup = client.post("/api/v1/auth/step-up",
+                         json={"password": "password123"},
+                         headers=admin_headers)
+    assert stepup.status_code == 200, stepup.text
     _register(client, "lockother", org="Lock Other Org")
     cross = _unlock(client, admin_headers, "lockother")
     missing = _unlock(client, admin_headers, "nosuchuser")

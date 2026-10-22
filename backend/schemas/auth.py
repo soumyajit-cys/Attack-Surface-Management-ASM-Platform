@@ -38,6 +38,13 @@ class UnlockAccountRequest(BaseModel):
     username: str = Field(min_length=1, max_length=128)
 
 
+class StepUpRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+    # TOTP (6 digits) or a recovery code; required only when the user
+    # has 2FA enabled (same semantics as change-password).
+    code: str | None = Field(default=None, max_length=32)
+
+
 class EnrollRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
     code: str | None = Field(default=None, min_length=6, max_length=32)

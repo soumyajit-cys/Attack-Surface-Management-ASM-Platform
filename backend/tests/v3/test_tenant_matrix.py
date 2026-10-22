@@ -24,6 +24,7 @@ NO_TENANT_DATA = {
     ("POST", "/api/v1/auth/logout"),
     ("POST", "/api/v1/auth/forgot-password"),
     ("POST", "/api/v1/auth/reset-password"),
+    ("POST", "/api/v1/auth/step-up"),
     ("POST", "/api/v1/scans"),
     ("POST", "/api/v1/scans/verify-ownership"),
     ("POST", "/api/v1/organizations/invitations/{token}/accept"),
@@ -216,6 +217,12 @@ def _seed_org(client, db, headers, org_id, tag):
         headers=headers,
     )
     assert integration.status_code == 201, integration.text
+    # Invitation + api-key creation go through the step-up gate now
+    # (v1.6.x); give the seeding admin a live marker first.
+    stepup = client.post("/api/v1/auth/step-up",
+                         json={"password": "password123"},
+                         headers=headers)
+    assert stepup.status_code == 200, stepup.text
     invitation = client.post(
         "/api/v1/organizations/invitations",
         json={"email": f"{tag}-invite@example.com", "role": "viewer"},

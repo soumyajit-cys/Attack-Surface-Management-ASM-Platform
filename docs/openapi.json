@@ -1502,6 +1502,33 @@
         "title": "ScanRequest",
         "type": "object"
       },
+      "StepUpRequest": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "StepUpRequest",
+        "type": "object"
+      },
       "TokenBundle": {
         "properties": {
           "access_token": {
@@ -3053,6 +3080,48 @@
           }
         },
         "summary": "Reset Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/step-up": {
+      "post": {
+        "description": "Step-up re-authentication for the calling session on success.\n\nSame lockout counters and uniform failures as login; with 2FA enabled\na TOTP or recovery code is required. Plants a SHORT-LIVED server-side\nredis marker (auth.stepup, TTL 300 s) bound to the presenting access\njti so ``require_step_up_dep`` routes answer normally for this\nsession. No client-held token is issued.",
+        "operationId": "step_up_api_v1_auth_step_up_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Step Up",
         "tags": [
           "auth"
         ]
