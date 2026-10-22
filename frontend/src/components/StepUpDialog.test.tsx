@@ -81,16 +81,22 @@ describe('StepUpDialog', () => {
   })
 
   it('shows an error and only rejects when cancelled', async () => {
-    const { api } = await import('../lib/api')
-    const stepUp = vi.mocked(api.stepUp)
+    const mod = await import('../lib/api')
+    const stepUp = vi.mocked(mod.api.stepUp)
     stepUp.mockRejectedValueOnce(new Error('wrong password'))
+    vi.mocked(mod.getApiErrorMessage).mockReturnValue('Invalid credentials')
 
     render(<StepUpDialog />)
     let settled = false
     const pending = getStepUpRequiredHandler()!()
-    pending.finally(() => {
-      settled = true
-    })
+    // Attach handlers early so the later explicit cancel-rejection is
+    // not seen as unhandled.
+    pending
+      .finally(() => {
+        settled = true
+      })
+      .catch(() => undefined)
+    pending.catch(() => undefined)
     await screen.findByText("Confirm it's you")
 
     fireEvent.change(screen.getByLabelText('Current password'), {

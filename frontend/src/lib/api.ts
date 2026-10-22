@@ -180,6 +180,7 @@ class ApiClient {
         if (
           error.response?.status === 403 &&
           getApiErrorCode(error) === 'step_up_required' &&
+          originalRequest.url !== '/auth/step-up' &&
           !originalRequest._stepupRetried
         ) {
           const handler = stepUpRequiredHandler

@@ -111,13 +111,15 @@ describe('step-up retry integration', () => {
 
   it('only retries once: a second 403 surfaces to the caller', async () => {
     const calls: string[] = []
-    const state = withAdapter(
-      () => ({
+    const state = withAdapter((path) => {
+      if (path === '/auth/step-up') {
+        return { status: 200, data: { message: 'Step-up verified' } }
+      }
+      return {
         status: 403,
         data: { error: { code: 'step_up_required', message: 'no' } },
-      }),
-      calls,
-    )
+      }
+    }, calls)
     setStepUpRequiredHandler(async () => {
       await api.stepUp('password123')
     })
