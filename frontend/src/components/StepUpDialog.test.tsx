@@ -113,7 +113,7 @@ describe('StepUpDialog', () => {
     render(<StepUpDialog />)
     const handler = getStepUpRequiredHandler()!
     void handler()
-    expect(screen.getByText("Confirm it's you")).toBeInTheDocument()
+    await screen.findByText("Confirm it's you")
     // A second step-up demand reuses the same open dialog.
     expect(() => handler()).not.toThrow()
   })
