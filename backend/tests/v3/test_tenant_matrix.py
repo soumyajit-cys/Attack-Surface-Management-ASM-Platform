@@ -54,6 +54,7 @@ COVERED_ELSEWHERE = {
 }
 COVERED_ID_ROUTES = {
     ("GET", "/api/v1/scans/{scan_id}"),
+    ("GET", "/api/v1/scans/{scan_id}/events"),
     ("GET", "/api/v1/findings/{finding_id}"),
     ("GET", "/api/v1/assets/{asset_id}"),
     ("POST", "/api/v1/assets/{asset_id}/enrich"),
@@ -281,6 +282,7 @@ def test_route_table_complete():
 
 ID_CASES = [
     ("GET", "/api/v1/scans/{scan_id}", "scan"),
+    ("GET", "/api/v1/scans/{scan_id}/events", "scan"),
     ("GET", "/api/v1/findings/{finding_id}", "finding"),
     ("GET", "/api/v1/assets/{asset_id}", "asset"),
     ("POST", "/api/v1/assets/{asset_id}/enrich", "asset"),
