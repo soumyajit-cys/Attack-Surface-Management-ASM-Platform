@@ -497,15 +497,18 @@ async def stream_scan_events(
                     events = await r.xread({key: cursor}, block=250, count=50)
                 except Exception:  # redis hiccup: close; client reconnects
                     return
-                for entry_id, fields in events or []:
-                    cursor = entry_id
-                    kind = fields.get("kind") or "message"
-                    yield _sse_frame(
-                        kind, fields.get("data") or "{}", event_id=str(entry_id)
-                    )
-                    last_output = time.monotonic()
-                    if kind in TERMINAL_KINDS:
-                        return
+                for _stream_name, entries in events or []:
+                    for entry_id, fields in entries:
+                        cursor = entry_id
+                        kind = fields.get("kind") or "message"
+                        yield _sse_frame(
+                            kind,
+                            fields.get("data") or "{}",
+                            event_id=str(entry_id),
+                        )
+                        last_output = time.monotonic()
+                        if kind in TERMINAL_KINDS:
+                            return
         finally:
             # Shielded so a cancelled stream task (client disconnect) still
             # frees the concurrent-cap slot.
