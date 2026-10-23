@@ -107,6 +107,25 @@ class Settings(BaseSettings):
     # target. Anything else is rejected at save time and send time.
     webhook_allowed_ports: str = "443,8443"
 
+    # Live scan progress (SSE). Scan lifecycle transitions are published by
+    # the worker to the Redis Stream ``scan:{scan_id}:events`` and streamed
+    # to the browser via ``GET /api/v1/scans/{id}/events``
+    # (text/event-stream). See services/scan_events.py (publish side,
+    # failure-safe) and app/api/v1/scans.py (read side).
+    # Trimmed approximately (MAXLEN ~N); a 24 h TTL applies independently.
+    scan_events_stream_maxlen: int = 200
+    scan_events_expire_seconds: int = 86400
+    # Comment heartbeat cadence inside an open stream; heartbeats are bytes
+    # of the already-counted HTTP request and never rate-limit again.
+    scan_stream_heartbeat_seconds: float = 15
+    # Per-USER concurrent open streams; exceeding answers 429
+    # (stream_cap_reached). Slots are released in a finally block, including
+    # on client disconnect.
+    scan_stream_max_per_user: int = 5
+    # Maximum stream duration; after this the server closes and the client
+    # reconnects (its Last-Event-ID continues the stream without duplicates).
+    scan_stream_max_duration_seconds: float = 900
+
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
     # and the direct peer is used. Set behind nginx/traefik so the limiter,

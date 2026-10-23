@@ -49,6 +49,7 @@ from services.history.change_detector import (
     detect_changes,
     persist_alerts,
 )
+from services.scan_events import publish_scan_event
 from services.scanner.persistence import (
     persist_discovery_results,
     persist_port_results,
@@ -107,6 +108,16 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
         scope = scope_policy.normalize_scope(scope)
         scan.scope = scope
 
+        # ── Live progress: queued + static per-phase availability ────────
+        from app.scanning.registry import registry as scan_registry
+
+        publish_scan_event(scan_id, "queued")
+        for unavailable in scan_registry.unavailable_phases():
+            publish_scan_event(
+                scan_id, "phase_unavailable",
+                phase=unavailable, code="module_unavailable",
+            )
+
         # ── Phase 1 backstop ownership gate ─────────────────────────────
         # Dispatch sites (POST /scans, scheduler, run-now) already gate, but
         # anything enqueuing this task directly must not bypass verification.
@@ -144,6 +155,7 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
                 )
 
         _set_status(db, scan, "running")
+        publish_scan_event(scan_id, "running")
         ACTIVE_SCANS.labels(organization=org_label).inc()
         SCAN_COUNTER.labels(status="started", organization=org_label).inc()
 
@@ -151,6 +163,7 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
         domain_name = scan.target
 
         # ── Phase 1: Discovery ────────────────────────────────────────────
+        publish_scan_event(scan_id, "phase_started", phase="discovery")
         results = _with_retry(self, scan_id, "discovery", lambda: _run_async(lambda: _collect(domain_name)))
         resolved_ip = results["resolved"].get("ip")
 
@@ -161,22 +174,48 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
         pin_ip(domain_name, resolved_ip)
 
         persisted = _persist_discovery(db, scan, domain_name, results)
+        publish_scan_event(
+            scan_id, "phase_finished", phase="discovery",
+            counts={"subdomains_discovered": len(persisted["subdomains"])},
+        )
         _resolve_subdomain_ips(db, persisted["subdomains"])
 
         # ── Phase 2: Port / SSL / Header scanning ─────────────────────────
+        publish_scan_event(scan_id, "phase_started", phase="scanning")
         scan_summary = _with_retry(
             self, scan_id, "scanning",
             lambda: _scan_targets(db, scan, persisted, domain_name, resolved_ip, scope),
         )
+        publish_scan_event(
+            scan_id, "phase_finished", phase="scanning",
+            counts={
+                "ports_open": scan_summary["ports_open"],
+                "ports_total": scan_summary["ports_total"],
+                "ssl_scanned": scan_summary["ssl"]["scanned"],
+                "ssl_issues": scan_summary["ssl"]["issues"],
+                "header_scanned": scan_summary["headers"]["scanned"],
+                "header_issues": scan_summary["headers"]["issues"],
+            },
+        )
 
         # ── Phase 3: Finding synthesis + risk scoring ─────────────────────
         asset_id = persisted["asset_id"]
+        publish_scan_event(scan_id, "phase_started", phase="findings")
         new_findings = _generate_and_persist_findings(db, scan, asset_id, scan_summary)
+        publish_scan_event(
+            scan_id, "phase_finished", phase="findings",
+            counts={"findings": len(new_findings)},
+        )
         _persist_risk_score(db, asset_id)
 
         # ── Phase 4: Change detection + alerts ────────────────────────────
+        publish_scan_event(scan_id, "phase_started", phase="changes")
         create_asset_snapshot(db, asset_id)
         changes = detect_changes(db, asset_id)
+        publish_scan_event(
+            scan_id, "phase_finished", phase="changes",
+            counts={"changes": len(changes or [])},
+        )
         if changes:
             created_alerts = persist_alerts(db, changes, scan.organization_id)
             db.commit()
@@ -191,6 +230,9 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
         _dispatch_alerts_for_findings(db, new_findings, asset_id, scan.organization_id)
 
         _set_status(db, scan, "completed")
+        publish_scan_event(
+            scan_id, "completed", counts={"findings": len(new_findings)}
+        )
         _record_metrics(org_label, start, completed=True)
 
         logger.info("Scan %s completed for %s", scan_id, domain_name)
@@ -242,6 +284,8 @@ def _fail_scan(db: Session, scan: ScanHistory | None, org_label: str, error: str
         scan.error = error
         scan.completed_at = _now()
         db.commit()
+        # Short static code only: no raw error text is ever published.
+        publish_scan_event(scan.id, "failed", code="scan_failed")
         SCAN_COUNTER.labels(status="failed", organization=org_label).inc()
         SCAN_ERRORS.labels(
             organization=org_label,

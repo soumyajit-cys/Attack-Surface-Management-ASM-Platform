@@ -6,17 +6,28 @@ Replaces the legacy ``/scan`` routes with:
 - SSRF pin-on-submit (resolve + pin once, scanners reuse the pin).
 """
 
+import json
 import re
+import time
+import uuid
 
+import anyio
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
 
 from models.scan_history import ScanHistory
 from schemas.scan import ScanRequest
 
 from app.core.audit import record_audit
 from app.core.config import settings
-from app.core.errors import BadRequestError, ForbiddenError, NotFoundError
+from app.core.errors import (
+    BadRequestError,
+    ForbiddenError,
+    NotFoundError,
+    RateLimitedError,
+    ServiceUnavailableError,
+)
 from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
@@ -25,6 +36,8 @@ from services.verification import verification_service as verification
 from tasks.discovery_tasks import run_discovery
 from utils.rate_limiter import limiter
 from utils.ssrf_guard import validate_scan_target
+
+import redis as redis_lib
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
@@ -346,3 +359,164 @@ async def get_scan_status(
         "completed_at": scan.completed_at,
         "unavailable_phases": scanner_registry.unavailable_phases(),
     }
+
+
+# ── live scan progress (SSE) ─────────────────────────────────────────────────
+#
+# GET /scans/{id}/events streams the Redis Stream ``scan:{id}:events``
+# (published by tasks.discovery_tasks via services.scan_events) as
+# text/event-stream. Same permission and org scoping as reading the scan.
+#
+# Framing contract:
+# - an initial ``snapshot`` event carries the CURRENT DB state so a late
+#   client is never blind;
+# - stream entries replay in order with ``id:`` lines for Last-Event-ID
+#   resume (no duplicates);
+# - ``: heartbeat`` comments every ``scan_stream_heartbeat_seconds`` — they
+#   are bytes of the already-counted HTTP request, so the global rate limiter
+#   (default 60/min) sees exactly ONE request per opened stream;
+# - the stream closes right after a terminal event (completed|failed) and,
+#   if the DB status is already terminal, right after the snapshot;
+# - a per-user concurrent cap (``scan_stream_max_per_user``) answers 429
+#   (``stream_cap_reached``) and the slot is released in a finally block,
+#   including on client disconnect; the release is shielded so a cancelled
+#   stream task still frees its slot;
+# - the stream terminates after ``scan_stream_max_duration_seconds`` and the
+#   client reconnects (resuming from its Last-Event-ID).
+#
+# Reads use ``redis.asyncio`` (never a blocking call on the event loop), and
+# the generator checks ``request.is_disconnected()`` between reads.
+
+_CAP_KEY = "scan_streams:{user_id}"
+_LAST_EVENT_ID = re.compile(r"^\d+-\d+$")
+
+# Terminal scan statuses close the stream like a terminal event would
+# (snapshot + synthesized terminal frame), even when the Redis Stream holds
+# no further entries (e.g. publish outage, skipped scans).
+_TERMINAL_SCAN_STATUSES = frozenset({"completed", "failed", "skipped"})
+
+
+def _stream_redis_client():
+    import redis.asyncio as aioredis
+
+    return aioredis.from_url(settings.redis_url, decode_responses=True)
+
+
+def _sse_frame(kind: str, data_json: str, event_id: str | None = None) -> bytes:
+    lines = [f"event: {kind}"]
+    if event_id:
+        lines.append(f"id: {event_id}")
+    lines.append(f"data: {data_json}")
+    return ("\n".join(lines) + "\n\n").encode()
+
+
+def _iso(dt) -> str | None:
+    return dt.isoformat() if dt else None
+
+
+@router.get("/{scan_id}/events")
+async def stream_scan_events(
+    request: Request,
+    scan_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_READ_SCAN_DEP),
+):
+    scan = (
+        db.query(ScanHistory)
+        .filter(
+            ScanHistory.id == scan_id,
+            ScanHistory.organization_id == principal.organization_id,
+        )
+        .first()
+    )
+    if scan is None:
+        raise NotFoundError("Scan not found", code="scan_not_found")
+
+    # Never a token from the query string: only headers authenticate.
+    resume_id = request.headers.get("Last-Event-ID") or ""
+    if not _LAST_EVENT_ID.match(resume_id):
+        resume_id = "0"
+
+    snapshot = json.dumps({
+        "status": scan.status or "pending",
+        "started_at": _iso(scan.started_at),
+        "completed_at": _iso(scan.completed_at),
+    })
+    status = scan.status or "pending"
+    terminal_now = status in _TERMINAL_SCAN_STATUSES
+
+    key = f"scan:{scan.id}:events"
+    cap_key = _CAP_KEY.format(user_id=principal.user.id)
+    member = uuid.uuid4().hex
+
+    r = _stream_redis_client()
+    try:
+        await r.sadd(cap_key, member)
+        count = await r.scard(cap_key)
+    except redis_lib.exceptions.RedisError:
+        raise ServiceUnavailableError(
+            "Scan events unavailable", code="scan_events_unavailable",
+        )
+    if count > settings.scan_stream_max_per_user:
+        await r.srem(cap_key, member)
+        await r.aclose()
+        raise RateLimitedError(
+            "Too many concurrent scan streams", code="stream_cap_reached",
+        )
+
+    from services.scan_events import TERMINAL_KINDS
+
+    async def event_stream():
+        try:
+            # 1. snapshot so a late client is never blind
+            yield _sse_frame("snapshot", snapshot)
+            # 2. terminal in the DB: synthesize the terminal frame, close
+            if terminal_now:
+                yield _sse_frame(status, json.dumps({"status": status}))
+                return
+            # 3. ordered replay + live tail
+            cursor = resume_id
+            deadline = time.monotonic() + settings.scan_stream_max_duration_seconds
+            last_output = time.monotonic()
+            while True:
+                disconnected = False
+                try:
+                    disconnected = bool(await request.is_disconnected())
+                except Exception:  # transport quirks must not 500 a stream
+                    disconnected = False
+                if disconnected or time.monotonic() >= deadline:
+                    return
+                if (
+                    time.monotonic() - last_output
+                    >= settings.scan_stream_heartbeat_seconds
+                ):
+                    yield b": heartbeat\n\n"
+                    last_output = time.monotonic()
+                    continue
+                try:
+                    events = await r.xread({key: cursor}, block=250, count=50)
+                except Exception:  # redis hiccup: close; client reconnects
+                    return
+                for entry_id, fields in events or []:
+                    cursor = entry_id
+                    kind = fields.get("kind") or "message"
+                    yield _sse_frame(
+                        kind, fields.get("data") or "{}", event_id=str(entry_id)
+                    )
+                    last_output = time.monotonic()
+                    if kind in TERMINAL_KINDS:
+                        return
+        finally:
+            # Shielded so a cancelled stream task (client disconnect) still
+            # frees the concurrent-cap slot.
+            with anyio.CancelScope(shield=True):
+                try:
+                    await r.srem(cap_key, member)
+                finally:
+                    await r.aclose()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
