@@ -31,6 +31,25 @@ import pytest
 # ── seeded environment ───────────────────────────────────────────────────────
 
 
+@pytest.fixture(autouse=True)
+def _stream_limits_testable(monkeypatch):
+    """Make still-open streams TestClient-readable.
+
+    ``TestClient`` buffers whole responses, so a stream that never closes
+    would hang ``client.request``. Test-wide defaults give every stream a
+    short max duration (the client finishes reading when the server closes;
+    frames/ids assertions are unaffected) plus a fast heartbeat cadence.
+    Individual tests may override either knob again.
+    """
+    from config import settings
+
+    monkeypatch.setattr(
+        settings, "scan_stream_max_duration_seconds", 1.0, raising=False)
+    monkeypatch.setattr(
+        settings, "scan_stream_heartbeat_seconds", 0.2, raising=False)
+    yield
+
+
 @pytest.fixture()
 def env(client, db, org_factory, auth_headers):
     org, user = org_factory("SSE Org", "sseadmin", "sseadmin@example.com")
