@@ -273,7 +273,22 @@ gates sensitive org-admin writes (`403 step_up_required` otherwise; events
 the marker rides a token's `jti`, so if the access token is refreshed between
 verification and the retried call the dialog simply re-verifies again
 (bounded by `STEPUP_MAX_RETRIES` in the api client) — the token is never
-silently re-bound. Details and the accepted-risk list live in
+silently re-bound. **Live scan progress (SSE):** the worker publishes
+lifecycle transitions to the Redis Stream `scan:{id}:events` (a
+failure-safe publisher — a broken Redis can never fail a scan) and the
+browser follows `GET /api/v1/scans/{id}/events` (`text/event-stream`, same
+permission and org scoping as reading the scan, Authorization header only —
+a token in the query string is always ignored). Opening a stream counts as
+exactly ONE request against the global rate limiter; the `: heartbeat`
+comments are bytes of that same response and never rate-limit again.
+Per-user concurrent streams are capped (`SCAN_STREAM_MAX_PER_USER`, 429
+`stream_cap_reached`, slots released in a `finally` — including on client
+disconnect), and a stream terminates after
+`SCAN_STREAM_MAX_DURATION_SECONDS` (default 15 min; clients reconnect and
+resume from `Last-Event-ID` without duplicates). Events carry only data
+`GET /scans/{id}` already exposes — status, phase name, integer counts,
+short static codes and timestamps — with no error text, banners or other-org
+data. Details and the accepted-risk list live in
 [`docs/threat-model.md`](docs/threat-model.md); report vulnerabilities via
 the guidelines in [`SECURITY.md`](SECURITY.md) (never a public issue).
 Licensed under [MIT](LICENSE).
