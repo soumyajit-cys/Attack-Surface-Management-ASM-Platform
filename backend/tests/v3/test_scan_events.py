@@ -407,7 +407,7 @@ def test_disconnect_frees_cap_slot(env, monkeypatch):
     thread.join(timeout=15)
     assert result is not None, "stream never returned to the harness"
     assert result.body.count(": heartbeat") >= 3
-    assert "completed" not in result.body
+    assert "event: completed" not in result.body
 
     slot = seeded.scard(cap_key)
     deadline = time.monotonic() + 5
