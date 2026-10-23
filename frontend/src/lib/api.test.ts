@@ -109,25 +109,87 @@ describe('step-up retry integration', () => {
     state.restore()
   })
 
-  it('only retries once: a second 403 surfaces to the caller', async () => {
+  it('reopens the dialog when the access token rotates between step-up and the protected action', async () => {
+    // The step-up marker is server-side, bound to the access jti
+    // presented at grant time. When the api client refreshes the token
+    // (new jti) before the retry reaches the server, the backend answers
+    // 403 step_up_required again: the dialog REOPENS for a fresh
+    // re-verification instead of surfacing an opaque error. Bounded by
+    // STEPUP_MAX_RETRIES per original request so it can never loop.
     const calls: string[] = []
-    const state = withAdapter((path) => {
-      if (path === '/auth/step-up') {
-        return { status: 200, data: { message: 'Step-up verified' } }
-      }
-      return {
-        status: 403,
-        data: { error: { code: 'step_up_required', message: 'no' } },
-      }
-    }, calls)
+    let protectedCalls = 0
+    const state = withAdapter(
+      (path) => {
+        if (path === '/organizations/2fa-requirement') {
+          protectedCalls += 1
+          if (protectedCalls <= 2) {
+            return {
+              status: 403,
+              data: { error: { code: 'step_up_required', message: 'no' } },
+            }
+          }
+          return { status: 200, data: { require_2fa: true } }
+        }
+        if (path === '/auth/step-up') {
+          return { status: 200, data: { message: 'Step-up verified' } }
+        }
+        return { status: 200 }
+      },
+      calls,
+    )
+    let dialogOpens = 0
     setStepUpRequiredHandler(async () => {
+      dialogOpens += 1
+      await api.stepUp('password123')
+    })
+
+    const result = await api.setRequire2fa(true)
+
+    expect(result).toEqual({ require_2fa: true })
+    // 403 -> verify -> 403 (token rotated) -> verify again -> 200.
+    expect(dialogOpens).toBe(2)
+    expect(protectedCalls).toBe(3)
+    expect(calls).toEqual([
+      '/organizations/2fa-requirement',
+      '/auth/step-up',
+      '/organizations/2fa-requirement',
+      '/auth/step-up',
+      '/organizations/2fa-requirement',
+    ])
+    state.restore()
+  })
+
+  it('stops reopening the dialog after the retry bound and surfaces the error', async () => {
+    const calls: string[] = []
+    let protectedCalls = 0
+    const state = withAdapter(
+      (path) => {
+        if (path === '/organizations/2fa-requirement') {
+          protectedCalls += 1
+          return {
+            status: 403,
+            data: { error: { code: 'step_up_required', message: 'no' } },
+          }
+        }
+        if (path === '/auth/step-up') {
+          return { status: 200, data: { message: 'Step-up verified' } }
+        }
+        return { status: 200 }
+      },
+      calls,
+    )
+    let dialogOpens = 0
+    setStepUpRequiredHandler(async () => {
+      dialogOpens += 1
       await api.stepUp('password123')
     })
 
     await expect(api.setRequire2fa(true)).rejects.toMatchObject({
       response: { status: 403 },
     })
-    expect(calls.filter((path) => path === '/organizations/2fa-requirement').length).toBe(2)
+    // Initial + STEPUP_MAX_RETRIES(3) attempts, then the error surfaces.
+    expect(protectedCalls).toBe(4)
+    expect(dialogOpens).toBe(3)
     state.restore()
   })
 
