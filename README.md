@@ -264,7 +264,16 @@ encryption at rest for alert integrations; TOTP 2FA + recovery; login lockout
 and rate limiting on separate layers; Postgres RLS evaluated and **deferred**
 (`docs/rls-design.md`). Container posture: non-root UID 10001, read-only
 rootfs, `cap_drop: [ALL]`, no-new-privileges, read/write limited to `/tmp`
-(tmpfs) and the `kevdata` volume. Details and the accepted-risk list live in
+(tmpfs) and the `kevdata` volume. **Admin step-up re-authentication:** a
+fresh password (+ TOTP/recovery when 2FA is on) via `POST /auth/step-up`
+plants a server-side Redis marker (`stepup:{user}:{jti}`, TTL 300 s) that
+gates sensitive org-admin writes (`403 step_up_required` otherwise; events
+`auth.stepup_granted` / `auth.stepup_used` are audited). The frontend
+`StepUpDialog` opens on the first `step_up_required` and retries the request;
+the marker rides a token's `jti`, so if the access token is refreshed between
+verification and the retried call the dialog simply re-verifies again
+(bounded by `STEPUP_MAX_RETRIES` in the api client) — the token is never
+silently re-bound. Details and the accepted-risk list live in
 [`docs/threat-model.md`](docs/threat-model.md); report vulnerabilities via
 the guidelines in [`SECURITY.md`](SECURITY.md) (never a public issue).
 Licensed under [MIT](LICENSE).

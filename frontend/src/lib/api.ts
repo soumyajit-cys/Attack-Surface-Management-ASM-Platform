@@ -50,6 +50,15 @@ export type StepUpHandler = () => Promise<void>
 let stepUpRequiredHandler: StepUpHandler | null = null
 
 /**
+ * Upper bound on step-up re-verification attempts per original request.
+ * Each retry requires a successful verification (a dialog the user fills
+ * in), so the bound only exists to stop pathological loops; the realistic
+ * path is 1 attempt, plus 1 more when the access token rotates between
+ * verification and the retried call (marker is bound to the token's jti).
+ */
+const STEPUP_MAX_RETRIES = 3
+
+/**
  * Register the global handler invoked when any request is answered with a
  * `403 step_up_required` envelope. The handler should open a step-up
  * dialog and resolve once the backend marker is granted (or reject to
@@ -140,7 +149,7 @@ class ApiClient {
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & {
           _retry?: boolean
-          _stepupRetried?: boolean
+          _stepupRetries?: number
         }
 
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -180,17 +189,30 @@ class ApiClient {
         if (
           error.response?.status === 403 &&
           getApiErrorCode(error) === 'step_up_required' &&
-          originalRequest.url !== '/auth/step-up' &&
-          !originalRequest._stepupRetried
+          originalRequest.url !== '/auth/step-up'
         ) {
           const handler = stepUpRequiredHandler
-          if (handler) {
-            // Retry the original request exactly once, after the dialog
-            // reports a successful step-up. Any second failure surfaces
-            // to the caller.
-            originalRequest._stepupRetried = true
-            return handler().then(() => this.client(originalRequest))
+          if (!handler) {
+            return Promise.reject(error)
           }
+          const tried = originalRequest._stepupRetries ?? 0
+          if (tried >= STEPUP_MAX_RETRIES) {
+            return Promise.reject(error)
+          }
+          // Retry the original request after the dialog reports a
+          // successful step-up. The marker is granted for the access jti
+          // PRESENTED at grant time; the request interceptor re-attaches
+          // the CURRENT access token on every attempt. If the token was
+          // refreshed between verification and the retried call (new
+          // jti, marker bound to the old one), the backend answers
+          // 403 step_up_required again and the dialog REOPENS for a
+          // fresh verification (bounded, see STEPUP_MAX_RETRIES) rather
+          // than surfacing an opaque error. This "dialog reappears"
+          // behavior was chosen over silently re-binding the marker on
+          // token refresh, which would require user credentials on
+          // rotation; each step is still audited server-side.
+          originalRequest._stepupRetries = tried + 1
+          return handler().then(() => this.client(originalRequest))
         }
 
         return Promise.reject(error)

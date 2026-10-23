@@ -52,20 +52,21 @@ function withAdapter(script: (path: string) => Plan, calls: string[]): { restore
     const path = config.url ?? ''
     calls.push(path)
     const plan = script(path) ?? { status: 200, data: { ok: true } }
-  // NOTE: the AxiosError only carries a trimmed config ({url, method});
-  // axios embeds the resolved adapter + transform functions into the full
-  // internal config, and vitest transports raw task errors with a strict
-  // structured clone — functions in the payload kill the worker (DataCloneError).
-  const response = {
-    data: plan.data ?? {},
-    status: plan.status,
-    statusText: '',
-    headers: {},
-    config: { url: path, method: config.method },
-  } as AxiosResponse
-  if (plan.status >= 400) {
-    throw new AxiosError('failed', 'ERR_BAD_REQUEST', { url: path, method: config.method }, {}, response)
-  }
+    const response = {
+      data: plan.data ?? {},
+      status: plan.status,
+      statusText: '',
+      headers: {},
+      config,
+    } as AxiosResponse
+    if (plan.status >= 400) {
+      // The full internal config (with axios's transform/adapter
+      // functions) stays on the error so the retry chain keeps request
+      // identity; tests must catch raw AxiosErrors and assert via
+      // toMatchObject/expect(...).toBeNull() so function-carrying
+      // payloads never escape into vitest's strict-clone task transport.
+      throw new AxiosError('failed', 'ERR_BAD_REQUEST', config, {}, response)
+    }
     return response
   }) as AxiosAdapter
   return { restore: () => void (client.defaults.adapter = previous) }
@@ -122,33 +123,41 @@ describe('step-up retry integration', () => {
     // STEPUP_MAX_RETRIES per original request so it can never loop.
     const calls: string[] = []
     let protectedCalls = 0
-    const state = withAdapter(
-      (path) => {
-        if (path === '/organizations/2fa-requirement') {
-          protectedCalls += 1
-          if (protectedCalls <= 2) {
-            return {
-              status: 403,
-              data: { error: { code: 'step_up_required', message: 'no' } },
-            }
+    const state = withAdapter((path) => {
+      if (path === '/organizations/2fa-requirement') {
+        protectedCalls += 1
+        if (protectedCalls <= 2) {
+          return {
+            status: 403,
+            data: { error: { code: 'step_up_required', message: 'no' } },
           }
-          return { status: 200, data: { require_2fa: true } }
         }
-        if (path === '/auth/step-up') {
-          return { status: 200, data: { message: 'Step-up verified' } }
-        }
-        return { status: 200 }
-      },
-      calls,
-    )
+        return { status: 200, data: { require_2fa: true } }
+      }
+      if (path === '/auth/step-up') {
+        return { status: 200, data: { message: 'Step-up verified' } }
+      }
+      return { status: 200 }
+    }, calls)
     let dialogOpens = 0
     setStepUpRequiredHandler(async () => {
       dialogOpens += 1
       await api.stepUp('password123')
     })
 
-    const result = await api.setRequire2fa(true)
+    // Catch raw AxiosErrors at the boundary: their config carries axios
+    // functions, which vitest would try to structured-clone into the
+    // main thread inside a failing task update (DataCloneError). The
+    // assertions below then reduce the failure to a plain string.
+    let thrown: unknown = null
+    let result: unknown
+    try {
+      result = await api.setRequire2fa(true)
+    } catch (err) {
+      thrown = err
+    }
 
+    expect(thrown).toBeNull()
     expect(result).toEqual({ require_2fa: true })
     // 403 -> verify -> 403 (token rotated) -> verify again -> 200.
     expect(dialogOpens).toBe(2)
@@ -166,22 +175,19 @@ describe('step-up retry integration', () => {
   it('stops reopening the dialog after the retry bound and surfaces the error', async () => {
     const calls: string[] = []
     let protectedCalls = 0
-    const state = withAdapter(
-      (path) => {
-        if (path === '/organizations/2fa-requirement') {
-          protectedCalls += 1
-          return {
-            status: 403,
-            data: { error: { code: 'step_up_required', message: 'no' } },
-          }
+    const state = withAdapter((path) => {
+      if (path === '/organizations/2fa-requirement') {
+        protectedCalls += 1
+        return {
+          status: 403,
+          data: { error: { code: 'step_up_required', message: 'no' } },
         }
-        if (path === '/auth/step-up') {
-          return { status: 200, data: { message: 'Step-up verified' } }
-        }
-        return { status: 200 }
-      },
-      calls,
-    )
+      }
+      if (path === '/auth/step-up') {
+        return { status: 200, data: { message: 'Step-up verified' } }
+      }
+      return { status: 200 }
+    }, calls)
     let dialogOpens = 0
     setStepUpRequiredHandler(async () => {
       dialogOpens += 1
