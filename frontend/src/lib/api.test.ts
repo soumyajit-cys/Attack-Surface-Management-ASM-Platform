@@ -52,16 +52,20 @@ function withAdapter(script: (path: string) => Plan, calls: string[]): { restore
     const path = config.url ?? ''
     calls.push(path)
     const plan = script(path) ?? { status: 200, data: { ok: true } }
-    const response = {
-      data: plan.data ?? {},
-      status: plan.status,
-      statusText: '',
-      headers: {},
-      config,
-    } as AxiosResponse
-    if (plan.status >= 400) {
-      throw new AxiosError('failed', 'ERR_BAD_REQUEST', config, {}, response)
-    }
+  // NOTE: the AxiosError only carries a trimmed config ({url, method});
+  // axios embeds the resolved adapter + transform functions into the full
+  // internal config, and vitest transports raw task errors with a strict
+  // structured clone — functions in the payload kill the worker (DataCloneError).
+  const response = {
+    data: plan.data ?? {},
+    status: plan.status,
+    statusText: '',
+    headers: {},
+    config: { url: path, method: config.method },
+  } as AxiosResponse
+  if (plan.status >= 400) {
+    throw new AxiosError('failed', 'ERR_BAD_REQUEST', { url: path, method: config.method }, {}, response)
+  }
     return response
   }) as AxiosAdapter
   return { restore: () => void (client.defaults.adapter = previous) }
