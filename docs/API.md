@@ -74,6 +74,7 @@ or `X-API-Key: <key>`; `/auth/*` and `/health` need neither.
 | `/api/v1/scans/verify-ownership` | `POST` | Request Ownership Verification | jwt or X-API-Key |
 | `/api/v1/scans/verify-ownership/check` | `GET` | Check Ownership Verification | jwt or X-API-Key |
 | `/api/v1/scans/{scan_id}` | `GET` | Get Scan Status | jwt or X-API-Key |
+| `/api/v1/scans/{scan_id}/events` | `GET` | Stream Scan Events | jwt or X-API-Key |
 | `/health` | `GET` | Health | public |
 | `/metrics` | `GET` | Metrics | public |
 

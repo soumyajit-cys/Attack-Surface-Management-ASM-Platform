@@ -4453,6 +4453,46 @@
         ]
       }
     },
+    "/api/v1/scans/{scan_id}/events": {
+      "get": {
+        "operationId": "stream_scan_events_api_v1_scans__scan_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "title": "Scan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Scan Events",
+        "tags": [
+          "scans"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",
