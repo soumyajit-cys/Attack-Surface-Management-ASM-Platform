@@ -147,7 +147,7 @@ def _drive_with_disconnect(headers, scan_id, heartbeats, timeout=10.0):
         "path": f"/api/v1/scans/{scan_id}/events",
         "raw_path": b"",
         "query_string": b"",
-        "headers": [[b"authorization", f"Bearer ".encode() + auth[7:].encode()]],
+        "headers": [[b"authorization", b"Bearer " + auth[7:].encode()]],
         "client": ("testclient", 50000),
         "server": ("testserver", 80),
         "scheme": "http",
@@ -202,7 +202,7 @@ def _drive_open_stream(headers, scan_id, timeout=10.0):
         "path": f"/api/v1/scans/{scan_id}/events",
         "raw_path": b"",
         "query_string": b"",
-        "headers": [[b"authorization", f"Bearer ".encode() + auth[7:].encode()]],
+        "headers": [[b"authorization", b"Bearer " + auth[7:].encode()]],
         "client": ("testclient", 50000),
         "server": ("testserver", 80),
         "scheme": "http",
@@ -460,7 +460,7 @@ def test_heartbeat_is_comment_not_an_event(env, monkeypatch):
 def test_publish_failure_never_fails_and_logs_exception_type(db, env, monkeypatch, caplog):
     import logging
 
-    import services.scan_events as scan_events
+    from services import scan_events
     import tasks.discovery_tasks as dt
 
     def raise_publish(*a, **k):
@@ -539,7 +539,7 @@ def test_stream_maxlen_and_ttl(env, monkeypatch):
         def expire(self, key, ttl):
             calls.append(("expire", key, ttl))
 
-    import services.scan_events as scan_events
+    from services import scan_events
 
     monkeypatch.setattr(scan_events, "get_redis", lambda: RecordingRedis())
     for _ in range(3):
