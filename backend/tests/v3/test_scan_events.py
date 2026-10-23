@@ -158,20 +158,23 @@ def _drive_with_disconnect(headers, scan_id, heartbeats, timeout=10.0):
     capture: list = []
 
     async def run():
-        delivered = {"flag": False}
+        served_request = {"flag": False}
 
         async def receive():
-            if delivered["flag"]:
-                # after the disconnect was consumed once, no more reading
-                await asyncio.sleep(3600)
+            # First call: the GET request body. After that, a real server
+            # never emits another http.request — dispatch stays open until
+            # either the injectable disconnect resonates or forever.
+            if not served_request["flag"]:
+                served_request["flag"] = True
+                return {"type": "http.request", "body": b"", "more_body": False}
             while True:
-                beats = sum(
-                    1 for m in capture
-                    if m.get("body") == b": heartbeat\n\n"
-                )
-                if heartbeats is not None and beats >= heartbeats:
-                    delivered["flag"] = True
-                    return {"type": "http.disconnect"}
+                if heartbeats is not None:
+                    beats = sum(
+                        1 for m in capture
+                        if m.get("body") == b": heartbeat\n\n"
+                    )
+                    if beats >= heartbeats:
+                        return {"type": "http.disconnect"}
                 await asyncio.sleep(0.01)
 
         async def send(message):
@@ -210,8 +213,15 @@ def _drive_open_stream(headers, scan_id, timeout=10.0):
     capture: list = []
 
     async def run():
+        served_request = {"flag": False}
+
         async def receive():
-            return {"type": "http.request", "body": b"", "more_body": False}
+            # No client disconnect in this scenario: after the request body
+            # the channel stays silent, exactly like a healthy connection.
+            if not served_request["flag"]:
+                served_request["flag"] = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            await asyncio.sleep(3600)
 
         async def send(message):
             capture.append(message)
@@ -301,7 +311,7 @@ def test_snapshot_on_connect_and_ordered_replay(env):
     stream_frames = [f for f in frames if f.get("id")]
     assert [f["event"] for f in stream_frames] == [
         "queued", "running", "phase_started"]
-    ids = [int(f["id"].split("-")[0]) for f in stream_frames]
+    ids = [tuple(map(int, f["id"].split("-"))) for f in stream_frames]
     assert ids == sorted(ids) and len(ids) == len(set(ids))
     assert stream_frames[0]["data"]["status"] == "queued"
     assert stream_frames[2]["data"]["phase"] == "discovery"
@@ -514,13 +524,29 @@ def test_event_payload_whitelist(db, env):
 
 
 def test_stream_maxlen_and_ttl(env, monkeypatch):
+    """xadd carries MAXLEN (settings value, approximate) and the TTL is set."""
     from config import settings
     from utils.redis_client import get_redis
 
     monkeypatch.setattr(settings, "scan_events_stream_maxlen", 3, raising=False)
-    for i in range(6):
+    calls: list = []
+
+    class RecordingRedis:
+        def xadd(self, key, fields, maxlen=None, approximate=False):
+            calls.append(("xadd", key, maxlen, approximate))
+            return "id"
+
+        def expire(self, key, ttl):
+            calls.append(("expire", key, ttl))
+
+    import services.scan_events as scan_events
+
+    monkeypatch.setattr(scan_events, "get_redis", lambda: RecordingRedis())
+    for _ in range(3):
         _publish_sequence(env.scan.id, [{"kind": "running"}])
-    entries = get_redis().xrange(f"scan:{env.scan.id}:events", min="-", max="+")
-    assert len(entries) <= 3
-    ttl = get_redis().ttl(f"scan:{env.scan.id}:events")
-    assert 0 < ttl <= settings.scan_events_expire_seconds
+    assert calls[0][2] == 3  # maxlen == configured value
+    assert calls[0][3] is True  # approximate trimming
+    assert calls[0][1] == f"scan:{env.scan.id}:events"
+    # every publish refreshes the TTL
+    assert calls[-1][0] == "expire"
+    assert calls[-1][2] == settings.scan_events_expire_seconds
