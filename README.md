@@ -246,6 +246,11 @@ Settings field without documenting it fails `make check`.
 | `LOGIN_ATTEMPT_WINDOW_SECONDS` | `300` | No | Sliding window for counting failures |
 | `LOGIN_LOCKOUT_BASE_SECONDS` | `60` | No | First lock duration; doubles per engagement |
 | `LOGIN_LOCKOUT_MAX_SECONDS` | `900` | No | Cap on lock duration |
+| `SCAN_EVENTS_STREAM_MAXLEN` | `200` | No | Approximate MAXLEN of the `scan:{id}:events` Redis Stream (trimming is approximate and best-effort; the 24 h TTL below always applies) |
+| `SCAN_EVENTS_EXPIRE_SECONDS` | `86400` | No | TTL (24 h) refreshed on every published scan event |
+| `SCAN_STREAM_HEARTBEAT_SECONDS` | `15` | No | `: heartbeat` cadence inside an open stream; heartbeats are bytes of the already-counted request and never rate-limit again |
+| `SCAN_STREAM_MAX_PER_USER` | `5` | No | Per-user concurrent open scan streams; exceeding answers 429 `stream_cap_reached` (slot released in `finally`, including on client disconnect) |
+| `SCAN_STREAM_MAX_DURATION_SECONDS` | `900` | No | Maximum stream duration (15 min); after it the server closes and the client reconnects, resuming via `Last-Event-ID` |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
