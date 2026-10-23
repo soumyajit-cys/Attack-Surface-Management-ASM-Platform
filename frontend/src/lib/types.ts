@@ -32,6 +32,17 @@ export interface Scan {
   updated_at?: string
 }
 
+/** Shape of `GET /scans/{id}` (single scan status, used for SSE fallback). */
+export interface ScanStatusResponse {
+  scan_id: number
+  target: string
+  status: string
+  error: string | null
+  started_at: string | null
+  completed_at: string | null
+  unavailable_phases?: string[]
+}
+
 export interface VerifiedDomain {
   domain: string
   method: string

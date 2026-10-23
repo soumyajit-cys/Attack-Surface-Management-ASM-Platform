@@ -14,6 +14,7 @@ import type {
   DigestConfig,
   PaginatedResponse,
   ScansListResponse,
+  ScanStatusResponse,
   AuditLogEntry,
   DashboardData,
   AssetDetailData,
@@ -220,6 +221,29 @@ class ApiClient {
     )
   }
 
+  /**
+   * One-shot token refresh usable outside the axios interceptor (e.g. the
+   * SSE scan-event stream, which cannot use an interceptor): exchanges the
+   * current refresh token for a fresh pair. Throws when there is no refresh
+   * token or the endpoint rejects (rotation).
+   */
+  async refreshTokens(): Promise<void> {
+    const refresh = this.refreshToken ?? localStorage.getItem('refresh_token')
+    if (!refresh) {
+      throw new Error('no refresh token available')
+    }
+    const response = await axios.post(`${API_PREFIX}/auth/refresh`, {
+      refresh_token: refresh,
+    })
+    const { access_token, refresh_token } = response.data
+    this.setTokens(access_token, refresh_token)
+  }
+
+  /** Current access token for non-axios transports (e.g. the SSE stream). */
+  getAccessToken(): string | null {
+    return this.accessToken ?? localStorage.getItem('access_token')
+  }
+
   setTokens(access: string, refresh: string) {
     this.accessToken = access
     this.refreshToken = refresh
@@ -317,6 +341,16 @@ class ApiClient {
     return this.post('/organizations/2fa-requirement', { enabled })
   }
 
+  /**
+   * Refresh tokens once from anywhere (step-up dialog precheck, SSE stream
+   * re-auth). See `refreshTokens()` for the implementation.
+   * Kept as a tiny alias for clarity at call sites that hand `refresh`
+   * into `subscribeScanEvents`.
+   */
+  refreshTokenOnce(): Promise<void> {
+    return this.refreshTokens()
+  }
+
   async adminReset2fa(username: string) {
     return this.post('/auth/admin/reset-2fa', { username })
   }
@@ -399,6 +433,10 @@ class ApiClient {
   // ── scans ──────────────────────────────────────────────────────────────────
   async startScan(domain: string) {
     return this.post('/scans', { domain })
+  }
+
+  async getScan(scanId: number): Promise<ScanStatusResponse> {
+    return this.get<ScanStatusResponse>(`/scans/${scanId}`)
   }
 
   async getScans(params?: {

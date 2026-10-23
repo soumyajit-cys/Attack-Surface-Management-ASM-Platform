@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '../components/ui/Toaster'
 import { api, getApiErrorMessage } from '../lib/api'
+import { ScanProgress } from '../components/ScanProgress'
 import { scanStatusBadgeClass, verificationBadgeClass } from '../lib/statusBadges'
 import type { Scan, VerificationChallenge, VerifiedDomain } from '../lib/types'
 import {
@@ -17,6 +18,10 @@ import {
 } from 'lucide-react'
 
 const PAGE_SIZE = 50
+
+// Scan rows whose phase progress is streamed live via SSE
+// (GET /scans/{id}/events); terminal rows show no live progress.
+const LIVE_SCAN_STATUSES = new Set(['pending', 'queued', 'running', 'retrying'])
 
 export function Scans() {
   const { addToast } = useToast()
@@ -286,6 +291,9 @@ export function Scans() {
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Progress
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Started
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -302,14 +310,14 @@ export function Scans() {
             <tbody className="divide-y divide-gray-200">
               {loading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                     <Loader2 className="w-6 h-6 animate-spin inline-block text-primary-600" />
                   </td>
                 </tr>
               )}
               {!loading && scans.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                     No scans found. Start a scan to begin.
                   </td>
                 </tr>
@@ -324,6 +332,17 @@ export function Scans() {
                       {getStatusIcon(scan.status)}
                       {scan.status.charAt(0).toUpperCase() + scan.status.slice(1)}
                     </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    {LIVE_SCAN_STATUSES.has(scan.status) ? (
+                      <ScanProgress
+                        scanId={scan.id}
+                        initialStatus={scan.status}
+                        onTerminal={fetchScans}
+                      />
+                    ) : (
+                      <span className="text-gray-400 text-xs">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-gray-500">
                     {new Date(scan.started_at).toLocaleString()}
