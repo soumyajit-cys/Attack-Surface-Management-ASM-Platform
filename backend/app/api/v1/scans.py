@@ -390,6 +390,14 @@ async def get_scan_status(
 _CAP_KEY = "scan_streams:{user_id}"
 _LAST_EVENT_ID = re.compile(r"^\d+-\d+$")
 
+# Cap-set members are scored by their own expiry so a slot whose process
+# died before the finally block ran cannot occupy the cap forever: score =
+# open time + max duration + margin (≈ 2× heartbeat + clock-skew headroom),
+# and every open prunes members whose score has passed. Margin is a module
+# constant: it only needs to outlast the worst-case in-flight stream, which
+# is already bounded by the max duration.
+_SLOT_MARGIN_SECONDS = 30.0
+
 # Terminal scan statuses close the stream like a terminal event would
 # (snapshot + synthesized terminal frame), even when the Redis Stream holds
 # no further entries (e.g. publish outage, skipped scans).
@@ -451,14 +459,26 @@ async def stream_scan_events(
 
     r = _stream_redis_client()
     try:
-        await r.sadd(cap_key, member)
-        count = await r.scard(cap_key)
+        # Stale-slot prune: a member a killed process never released
+        # carries score = open + max duration + margin; anything whose
+        # score has passed is reaped here, so the cap self-heals.
+        now = time.time()
+        await r.zremrangebyscore(cap_key, "-inf", now)
+        await r.zadd(
+            cap_key,
+            {
+                member: now
+                + settings.scan_stream_max_duration_seconds
+                + _SLOT_MARGIN_SECONDS
+            },
+        )
+        count = await r.zcard(cap_key)
     except redis_lib.exceptions.RedisError:
         raise ServiceUnavailableError(
             "Scan events unavailable", code="scan_events_unavailable",
         )
     if count > settings.scan_stream_max_per_user:
-        await r.srem(cap_key, member)
+        await r.zrem(cap_key, member)
         await r.aclose()
         raise RateLimitedError(
             "Too many concurrent scan streams", code="stream_cap_reached",
@@ -511,10 +531,11 @@ async def stream_scan_events(
                             return
         finally:
             # Shielded so a cancelled stream task (client disconnect) still
-            # frees the concurrent-cap slot.
+            # frees the concurrent-cap slot. (Members additionally carry
+            # their own expiry score, so a killed process self-heals too.)
             with anyio.CancelScope(shield=True):
                 try:
-                    await r.srem(cap_key, member)
+                    await r.zrem(cap_key, member)
                 finally:
                     await r.aclose()
 

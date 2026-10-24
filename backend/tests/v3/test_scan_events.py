@@ -369,6 +369,36 @@ def test_terminal_status_closes_immediately(env):
 # ── stream cap, disconnect release, duration, rate limit ─────────────────────
 
 
+def test_crashed_process_slot_self_heals(env, monkeypatch):
+    """Per-slot expiry: every cap-set member carries score = open time +
+    MAX DURATION + margin. If the API process is killed mid-stream the
+    release/finally never runs, but the next open prunes members whose
+    score has passed — a killed process cannot leak the cap forever.
+    (Simulated crash = a seeded member that no finally ever released with
+    an expired score, i.e. exactly the ZSET state a SIGKILL leaves behind.)
+    """
+    from config import settings
+    from utils.redis_client import get_redis
+
+    monkeypatch.setattr(settings, "scan_stream_max_per_user", 2, raising=False)
+    monkeypatch.setattr(
+        settings, "scan_stream_max_duration_seconds", 15.0, raising=False
+    )
+    cap_key = f"scan_streams:{env.user.id}"
+    r = get_redis()
+    now = time.time()
+    r.zadd(cap_key, {"crashed-member": now - 5})  # release never ran, expired
+    r.zadd(cap_key, {"live-member": now + 3600})  # a healthy other session
+
+    response = env.client.get(
+        _url(env, env.scan_completed.id), headers=env.headers
+    )
+    assert response.status_code == 200, response.text
+    members = r.zrange(cap_key, 0, -1)
+    assert "crashed-member" not in members  # stale slot reaped on open
+    assert "live-member" in members  # live slot survives the prune
+
+
 def test_stream_cap_429_and_slot_freed(env, monkeypatch):
     from config import settings
     from utils.redis_client import get_redis
@@ -376,13 +406,13 @@ def test_stream_cap_429_and_slot_freed(env, monkeypatch):
     monkeypatch.setattr(settings, "scan_stream_max_per_user", 2, raising=False)
     cap_key = f"scan_streams:{env.user.id}"
     seeded = get_redis()
-    seeded.sadd(cap_key, "a")
-    seeded.sadd(cap_key, "b")
+    seeded.zadd(cap_key, {"a": time.time() + 3600})
+    seeded.zadd(cap_key, {"b": time.time() + 3600})
 
     response = env.client.get(_url(env, env.scan.id), headers=env.headers)
     assert response.status_code == 429, response.text
     assert response.json()["error"]["code"] == "stream_cap_reached"
-    assert seeded.scard(cap_key) == 2  # refused attempt left nothing behind
+    assert seeded.zcard(cap_key) == 2  # refused attempt left nothing behind
 
 
 def test_disconnect_frees_cap_slot(env, monkeypatch):
@@ -394,7 +424,7 @@ def test_disconnect_frees_cap_slot(env, monkeypatch):
     monkeypatch.setattr(settings, "scan_stream_max_duration_seconds", 30.0, raising=False)
     cap_key = f"scan_streams:{env.user.id}"
     seeded = get_redis()
-    seeded.sadd(cap_key, "other-session")
+    seeded.zadd(cap_key, {"other-session": time.time() + 3600})
 
     result = None
 
@@ -409,11 +439,11 @@ def test_disconnect_frees_cap_slot(env, monkeypatch):
     assert result.body.count(": heartbeat") >= 3
     assert "event: completed" not in result.body
 
-    slot = seeded.scard(cap_key)
+    slot = seeded.zcard(cap_key)
     deadline = time.monotonic() + 5
     while slot != 1 and time.monotonic() < deadline:
         time.sleep(0.1)
-        slot = seeded.scard(cap_key)
+        slot = seeded.zcard(cap_key)
     assert slot == 1, f"cap slot leaked after disconnect: {slot}"
 
 

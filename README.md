@@ -249,7 +249,7 @@ Settings field without documenting it fails `make check`.
 | `SCAN_EVENTS_STREAM_MAXLEN` | `200` | No | Approximate MAXLEN of the `scan:{id}:events` Redis Stream (trimming is approximate and best-effort; the 24 h TTL below always applies) |
 | `SCAN_EVENTS_EXPIRE_SECONDS` | `86400` | No | TTL (24 h) refreshed on every published scan event |
 | `SCAN_STREAM_HEARTBEAT_SECONDS` | `15` | No | `: heartbeat` cadence inside an open stream; heartbeats are bytes of the already-counted request and never rate-limit again |
-| `SCAN_STREAM_MAX_PER_USER` | `5` | No | Per-user concurrent open scan streams; exceeding answers 429 `stream_cap_reached` (slot released in `finally`, including on client disconnect) |
+| `SCAN_STREAM_MAX_PER_USER` | `5` | No | Per-user concurrent open scan streams; exceeding answers 429 `stream_cap_reached` (slot released in `finally` including on client disconnect; each slot carries its own expiry score = open + max duration + margin, pruned on every open, so a killed API process cannot leak the cap) |
 | `SCAN_STREAM_MAX_DURATION_SECONDS` | `900` | No | Maximum stream duration (15 min); after it the server closes and the client reconnects, resuming via `Last-Event-ID` |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
@@ -288,7 +288,10 @@ exactly ONE request against the global rate limiter; the `: heartbeat`
 comments are bytes of that same response and never rate-limit again.
 Per-user concurrent streams are capped (`SCAN_STREAM_MAX_PER_USER`, 429
 `stream_cap_reached`, slots released in a `finally` — including on client
-disconnect), and a stream terminates after
+disconnect — and every slot carries its own expiry score of open-time plus
+max duration plus a small margin, with stale slots pruned on every open, so
+a killed API process cannot leak the cap permanently), and a stream
+terminates after
 `SCAN_STREAM_MAX_DURATION_SECONDS` (default 15 min; clients reconnect and
 resume from `Last-Event-ID` without duplicates). Events carry only data
 `GET /scans/{id}` already exposes — status, phase name, integer counts,
