@@ -428,6 +428,11 @@ def test_disconnect_frees_cap_slot(env, monkeypatch):
 
     result = None
 
+    # A client abort must be noticed within a few seconds, NOT after the
+    # (monkeypatched 30 s) max duration: XREAD gaps are 250 ms, so the
+    # generator checks request.is_disconnected() twice a second.
+    started = time.monotonic()
+
     def runner():
         nonlocal result
         result = _drive_with_disconnect(env.headers, env.scan.id, heartbeats=3)
@@ -436,6 +441,8 @@ def test_disconnect_frees_cap_slot(env, monkeypatch):
     thread.start()
     thread.join(timeout=15)
     assert result is not None, "stream never returned to the harness"
+    elapsed = time.monotonic() - started
+    assert elapsed < 5.0, f"disconnect took {elapsed:.1f}s to be noticed"
     assert result.body.count(": heartbeat") >= 3
     assert "event: completed" not in result.body
 

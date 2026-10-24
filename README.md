@@ -285,7 +285,9 @@ browser follows `GET /api/v1/scans/{id}/events` (`text/event-stream`, same
 permission and org scoping as reading the scan, Authorization header only —
 a token in the query string is always ignored). Opening a stream counts as
 exactly ONE request against the global rate limiter; the `: heartbeat`
-comments are bytes of that same response and never rate-limit again.
+comments are bytes of that same response and never rate-limit again. Reads
+wait 250 ms per XREAD block (1/60 of the heartbeat window), so a client
+disconnect is noticed within seconds and frees its cap slot immediately.
 Per-user concurrent streams are capped (`SCAN_STREAM_MAX_PER_USER`, 429
 `stream_cap_reached`, slots released in a `finally` — including on client
 disconnect — and every slot carries its own expiry score of open-time plus

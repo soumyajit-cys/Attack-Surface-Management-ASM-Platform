@@ -514,6 +514,11 @@ async def stream_scan_events(
                     last_output = time.monotonic()
                     continue
                 try:
+                    # block=250 ms: 1/60th of the 15 s heartbeat window, so
+                    # heartbeats stay accurate to ~250 ms and the loop top
+                    # polls request.is_disconnected() twice a second (the
+                    # ASGI layer's own disconnect listener fires even
+                    # faster) — a client abort is noticed within seconds.
                     events = await r.xread({key: cursor}, block=250, count=50)
                 except Exception:  # redis hiccup: close; client reconnects
                     return
