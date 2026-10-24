@@ -491,6 +491,52 @@ def test_heartbeat_is_comment_not_an_event(env, monkeypatch):
     assert events[0]["id"] is None
 
 
+def test_revoked_access_token_cannot_open_stream(env):
+    """A revoked access token (what POST /auth/logout does with the
+    presented access token) is refused like any other read."""
+    from auth import jwt as token_service
+    from auth.token_store import token_store
+
+    token = token_service.create_access_token(env.user.id)
+    headers = {"Authorization": f"Bearer {token}"}
+    ok = env.client.get(_url(env, env.scan_completed.id), headers=headers)
+    assert ok.status_code == 200, ok.text
+    token_store.revoke(token)
+    response = env.client.get(_url(env, env.scan_completed.id), headers=headers)
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "unauthenticated"
+
+
+def test_expired_access_token_cannot_open_stream(env, monkeypatch):
+    from auth import jwt as token_service
+    from config import settings
+
+    monkeypatch.setattr(settings, "access_token_expire_minutes", -1, raising=False)
+    token = token_service.create_access_token(env.user.id)
+    response = env.client.get(
+        _url(env, env.scan_completed.id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401, response.text
+    assert response.json()["error"]["code"] == "unauthenticated"
+
+
+def test_deactivated_user_cannot_open_stream(env, db):
+    """The principal loader filters on is_active: deactivation closes the
+    stream door even with a still-valid token."""
+    from auth import jwt as token_service
+
+    token = token_service.create_access_token(env.user.id)
+    headers = {"Authorization": f"Bearer {token}"}
+    ok = env.client.get(_url(env, env.scan_completed.id), headers=headers)
+    assert ok.status_code == 200, ok.text
+
+    env.user.is_active = False
+    db.commit()
+    response = env.client.get(_url(env, env.scan_completed.id), headers=headers)
+    assert response.status_code == 401, response.text
+
+
 # ── publishing isolation & hygiene ───────────────────────────────────────────
 
 

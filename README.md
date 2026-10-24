@@ -295,7 +295,13 @@ max duration plus a small margin, with stale slots pruned on every open, so
 a killed API process cannot leak the cap permanently), and a stream
 terminates after
 `SCAN_STREAM_MAX_DURATION_SECONDS` (default 15 min; clients reconnect and
-resume from `Last-Event-ID` without duplicates). Events carry only data
+resume from `Last-Event-ID` without duplicates). An already-open stream
+outlives token expiry up to that max duration — acceptable because the
+connection was authorized at open and only replays data authorized for the
+calling org (no new resource, no credential in the URL), while every
+reconnect — including the duration rollover — re-authenticates with a live
+token, so exposure is bounded and identical to any open HTTP response body.
+Events carry only data
 `GET /scans/{id}` already exposes — status, phase name, integer counts,
 short static codes and timestamps — with no error text, banners or other-org
 data. Details and the accepted-risk list live in
