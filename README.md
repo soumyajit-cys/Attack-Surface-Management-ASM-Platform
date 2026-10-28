@@ -83,6 +83,7 @@ flowchart TD
 | Reports (5 CSV + 2 PDF) | ✅ works | fpdf2; graceful error if missing |
 | Asset graph (d3) | ✅ works | `/assets/{id}/graph` |
 | Prometheus `/metrics` | ✅ works | Deny-by-default (token or CIDR); nginx 404s at edge |
+| Edge security headers | ✅ works | CSP + `frame-ancestors 'none'` + X-Frame-Options on the SPA; nosniff + Referrer-Policy everywhere; HSTS in the TLS block; `server_tokens off` |
 | API keys (scoped, hashed, expiry) | ✅ works | Intersect-only, never expand role |
 | Audit log of privileged actions | ✅ works | Written on sensitive endpoints |
 | Real-time scan progress (WebSocket) | 🔜 planned | Polling today (`GET /scans/{id}`) |

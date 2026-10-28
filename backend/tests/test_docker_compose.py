@@ -78,6 +78,49 @@ def test_nginx_tls_ready():
     assert "ssl_certificate" in text
 
 
+# ── security headers (Phase-1 audit) ─────────────────────────────────────────
+# nginx inherits add_header directives only into locations that define none of
+# their own — so every header that must cover ALL responses (nosniff,
+# referrer) appears in each server block, in the SPA location AND again in the
+# SSE location (which carries X-Accel-Buffering and therefore loses
+# inheritance). CSP/X-Frame-Options are response-rendering concerns: SPA
+# location only, never API JSON. HSTS is TLS-only. server_tokens off hides
+# the nginx version from the Server header.
+
+_SPA_ONLY_HEADERS = ("Content-Security-Policy", "X-Frame-Options")
+_EVERYWHERE_HEADERS = ("X-Content-Type-Options", "Referrer-Policy")
+
+
+def test_nginx_security_headers_present():
+    text = NGINX_CONF.read_text()
+    for header in _EVERYWHERE_HEADERS:
+        # 2 server blocks × (server level + SPA location + SSE location)
+        assert text.count(f"add_header {header}") >= 4, header
+    for header in _SPA_ONLY_HEADERS:
+        assert text.count(f"add_header {header}") == 2, header
+    assert "server_tokens off;" in text
+
+
+def test_nginx_csp_pinned_to_app_needs():
+    text = NGINX_CONF.read_text()
+    assert "frame-ancestors 'none'" in text
+    assert "default-src 'none'" in text
+    assert "script-src 'self'" in text
+    # Google Fonts (index.html <link> + font files) without opening up to
+    # arbitrary remote origins; 'unsafe-inline' on styles only, because
+    # React/Tailwind emit inline style attributes.
+    assert "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com" in text
+    assert "font-src 'self' https://fonts.gstatic.com" in text
+    assert "connect-src 'self'" in text
+
+
+def test_nginx_hsts_on_tls_server_only():
+    text = NGINX_CONF.read_text()
+    assert "Strict-Transport-Security" in text
+    http_part = text.split("# --- TLS")[0]
+    assert "Strict-Transport-Security" not in http_part
+
+
 def test_env_example_documents_required_vars():
     assert ENV_EXAMPLE.exists(), ".env.example is missing at repo root"
     text = ENV_EXAMPLE.read_text()
