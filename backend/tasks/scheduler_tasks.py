@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from models import (
@@ -103,6 +104,33 @@ def _croniter_next(
 
 # ── Scan-policy scheduler ─────────────────────────────────────────────────────
 
+def _claim_policy(
+    db: Session, policy_id: int, now: datetime, next_run_at: datetime,
+) -> bool:
+    """Atomically claim one due policy (single-flight across beat ticks).
+
+    The conditional UPDATE re-checks due-ness and flips ``next_run_at`` in
+    one statement: a second tick that read the same stale due row loses the
+    race (0 rows updated) instead of double-dispatching the scan. Returns
+    True when this caller owns the dispatch.
+    """
+    claimed = (
+        db.query(ScanPolicy)
+        .filter(
+            ScanPolicy.id == policy_id,
+            or_(
+                ScanPolicy.next_run_at.is_(None),
+                ScanPolicy.next_run_at <= now,
+            ),
+        )
+        .update(
+            {"last_run_at": now, "next_run_at": next_run_at},
+            synchronize_session=False,
+        )
+    )
+    return claimed == 1
+
+
 @celery.task(name="tasks.scheduler.process_due_scan_policies")
 def process_due_scan_policies() -> dict:
     """Dispatch scans for all due, active scan policies."""
@@ -133,6 +161,21 @@ def process_due_scan_policies() -> dict:
                 )
                 continue
 
+            next_at = compute_next_run(
+                policy.frequency, policy.cron_expression, now,
+            )
+
+            # ── Single-flight claim: due-ness is re-checked atomically, so
+            # only one tick can dispatch this policy even if two beat
+            # instances or overlapping ticks read the same stale due row.
+            if not _claim_policy(db, policy.id, now, next_at):
+                skipped += 1
+                logger.info(
+                    "Policy %s already claimed by a concurrent tick", policy.id,
+                )
+                continue
+            db.commit()  # claim is durable before any scan side effects
+
             scan = ScanHistory(
                 organization_id=policy.organization_id,
                 asset_id=asset.id,
@@ -151,12 +194,9 @@ def process_due_scan_policies() -> dict:
                     scan.status = "skipped"
                     scan.error = f"domain_not_verified: {mode_or_reason}"
                     scan.completed_at = now
-                    policy.last_run_at = now
-                    policy.next_run_at = compute_next_run(
-                        policy.frequency,
-                        policy.cron_expression,
-                        now,
-                    )
+                    # next_run_at was already advanced by the claim: a
+                    # still-unverified domain is retried at its next
+                    # scheduled slot, not on every beat tick.
                     skipped += 1
                     logger.warning(
                         "Skipping scheduled scan for policy %s (%s): %s",
@@ -166,6 +206,7 @@ def process_due_scan_policies() -> dict:
                         db, policy.organization_id, asset.id, target,
                         mode_or_reason,
                     )
+                    db.commit()
                     continue
                 if (
                     mode_or_reason == verification.STATUS_GRANDFATHERED
@@ -179,8 +220,14 @@ def process_due_scan_policies() -> dict:
                         db, policy.organization_id, asset.id, covering
                     )
 
+            # ── Persist BEFORE publishing: the worker reads the row in its
+            # own transaction; an uncommitted row reads as not_found and
+            # the scan is silently lost.
+            db.commit()
+
             try:
                 from tasks.discovery_tasks import run_discovery
+
                 run_discovery.delay(
                     scan_id=scan.id,
                     scope=scope_policy.normalize_scope(policy.scope),
@@ -191,14 +238,15 @@ def process_due_scan_policies() -> dict:
                     policy.id, exc,
                 )
                 failed += 1
+                # Broker hiccup: never leave the row pending forever. The
+                # schedule was already advanced by the claim, so the next
+                # attempt happens at the next scheduled slot.
+                scan.status = "failed"
+                scan.error = "dispatch_failed"
+                scan.completed_at = now
+                db.commit()
                 continue
 
-            policy.last_run_at = now
-            policy.next_run_at = compute_next_run(
-                policy.frequency,
-                policy.cron_expression,
-                now,
-            )
             dispatched += 1
 
         db.commit()

@@ -96,6 +96,7 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
     db: Session = SessionLocal()
     scan: ScanHistory | None = None
     org_label = "unknown"
+    gauge_started = False
 
     try:
         scan = db.query(ScanHistory).filter(ScanHistory.id == scan_id).first()
@@ -117,6 +118,41 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
                 scan_id, "phase_unavailable",
                 phase=unavailable, code="module_unavailable",
             )
+
+        # ── Idempotent execution claim (at-least-once delivery) ──────────
+        # acks_late + reject_on_worker_lost can deliver this task twice,
+        # and a late delivery can arrive after the scan already finished.
+        # The conditional UPDATE is the lock: exactly one delivery flips a
+        # pending/retrying row to running (and stamps started_at); every
+        # other delivery observes 0 rows and exits without re-running the
+        # pipeline or touching terminal state.
+        claimed = (
+            db.query(ScanHistory)
+            .filter(
+                ScanHistory.id == scan_id,
+                ScanHistory.status.in_(("pending", "retrying")),
+            )
+            .update(
+                {"status": "running", "error": None, "started_at": _now()},
+                synchronize_session=False,
+            )
+        )
+        db.commit()
+        if claimed != 1:
+            current = (
+                db.query(ScanHistory.status)
+                .filter(ScanHistory.id == scan_id)
+                .scalar()
+            )
+            logger.warning(
+                "Scan %s delivery skipped: status=%s (duplicate/stale task)",
+                scan_id, current,
+            )
+            SCAN_COUNTER.labels(
+                status="duplicate_skipped", organization=org_label,
+            ).inc()
+            return {"scan_id": scan_id, "status": current or "unknown"}
+        scan.status = "running"  # keep the ORM object coherent
 
         # ── Phase 1 backstop ownership gate ─────────────────────────────
         # Dispatch sites (POST /scans, scheduler, run-now) already gate, but
@@ -154,9 +190,9 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
                     db, scan.organization_id, scan.asset_id, covering
                 )
 
-        _set_status(db, scan, "running")
         publish_scan_event(scan_id, "running")
         ACTIVE_SCANS.labels(organization=org_label).inc()
+        gauge_started = True
         SCAN_COUNTER.labels(status="started", organization=org_label).inc()
 
         start = time.perf_counter()
@@ -256,7 +292,8 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
         raise
 
     finally:
-        ACTIVE_SCANS.labels(organization=org_label).dec()
+        if gauge_started:
+            ACTIVE_SCANS.labels(organization=org_label).dec()
         db.close()
         clear_correlation_id()
 

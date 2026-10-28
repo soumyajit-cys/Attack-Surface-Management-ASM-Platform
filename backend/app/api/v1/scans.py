@@ -10,6 +10,7 @@ import json
 import re
 import time
 import uuid
+from datetime import datetime, timezone
 
 import anyio
 from fastapi import APIRouter, Depends, Query, Request
@@ -110,7 +111,22 @@ async def start_scan(
     db.commit()
     db.refresh(scan)
 
-    run_discovery.delay(scan_id=scan.id, scope=scope)
+    try:
+        run_discovery.delay(scan_id=scan.id, scope=scope)
+    except Exception as exc:
+        # Broker down: never leave the committed scan pending forever —
+        # mark it failed with a stable code and surface a retryable 503.
+        from utils.logger import logger
+
+        logger.error("Scan dispatch failed for scan %s: %s", scan.id, exc)
+        scan.status = "failed"
+        scan.error = "dispatch_failed"
+        scan.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        raise ServiceUnavailableError(
+            "Scan dispatch temporarily unavailable",
+            code="scan_dispatch_failed",
+        )
 
     record_audit(
         db,
