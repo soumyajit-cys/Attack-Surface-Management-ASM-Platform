@@ -209,11 +209,7 @@ async function runWebSocket({
       }
     }
     ws.onerror = () => {
-      // A transport error counts as a failed attempt.
-      failures += 1
-      if (failures >= maxFailedConnects) {
-        finish('polling')
-      }
+      // Transport errors are counted via onclose, which always fires next.
     }
     ws.onclose = () => {
       if (outcome !== null || aborted) return
