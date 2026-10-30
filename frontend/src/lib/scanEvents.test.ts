@@ -216,3 +216,149 @@ describe('subscribeScanEvents — fetch + ReadableStream (never EventSource)', (
     conn.abort()
   })
 })
+
+// ── WebSocket transport (jsdom has no WebSocket, so we inject a fake) ──────
+
+interface MessageEventLike {
+  data: string
+}
+
+class FakeSocket {
+  url: string
+  readyState = 1 // OPEN
+  onopen: (() => void) | null = null
+  onmessage: ((e: MessageEventLike) => void) | null = null
+  onclose: (() => void) | null = null
+  constructor(url: string) {
+    this.url = url
+  }
+  close() {
+    this.readyState = 3 // CLOSED
+    if (this.onclose) this.onclose()
+  }
+}
+
+function wsBase() {
+  return {
+    ...base,
+    maxFailedConnects: 2,
+    initialBackoffMs: 1,
+    maxBackoffMs: 2,
+  }
+}
+
+describe('subscribeScanEvents — WebSocket transport', () => {
+  afterEach(() => {
+    base.refresh.mockClear()
+    base.onEvent.mockClear()
+    base.onStatus.mockClear()
+  })
+
+  it('connects with the token, delivers events, ignores heartbeat comments, and ends on done', async () => {
+    const sockets: FakeSocket[] = []
+    const FakeSocketImpl = vi.fn((url: string) => {
+      const socket = new FakeSocket(url)
+      sockets.push(socket)
+      return socket
+    })
+    const events: Array<[string, unknown]> = []
+    const statuses: ScanEventConnectionStatus[] = []
+    subscribeScanEvents({
+      ...wsBase(),
+      WebSocketImpl: FakeSocketImpl as unknown as typeof WebSocket,
+      onEvent: (e: ScanEvent) => events.push([e.event, e.data]),
+      onStatus: (s: ScanEventConnectionStatus) => statuses.push(s),
+    })
+    await flush(4)
+    expect(sockets).toHaveLength(1)
+    expect(sockets[0].url).toContain('/scans/42/ws')
+    expect(sockets[0].url).toContain('token=token-1')
+    expect(sockets[0].url).not.toContain('lastEventId')
+    // the socket is open
+    sockets[0].onopen!()
+    await flush(4)
+    expect(statuses).toContain('open')
+    // a heartbeat comment carries no event
+    if (sockets[0].onmessage) sockets[0].onmessage({ data: ': heartbeat\n\n' })
+    await flush(4)
+    expect(events).toHaveLength(0)
+    // real events are delivered
+    if (sockets[0].onmessage)
+      sockets[0].onmessage({
+        data: 'event: snapshot\ndata: {"status":"queued"}\n\n',
+      })
+    await flush(4)
+    if (sockets[0].onmessage)
+      sockets[0].onmessage({
+        data: 'id: 1718-1\nevent: queued\ndata: {"status":"queued"}\n\n',
+      })
+    await flush(4)
+    expect(events.map(([e]) => e)).toEqual(['snapshot', 'queued'])
+    // a terminal event ends the stream with `done`
+    if (sockets[0].onmessage)
+      sockets[0].onmessage({
+        data: 'event: completed\ndata: {"status":"completed"}\n\n',
+      })
+    await flush(4)
+    expect(statuses).toContain('done')
+    expect(events.map(([e]) => e).includes('completed')).toBe(true)
+  })
+
+  it('a terminal event stops delivery and reports done (no further events)', async () => {
+    const sockets: FakeSocket[] = []
+    const FakeSocketImpl = vi.fn((url: string) => {
+      const socket = new FakeSocket(url)
+      sockets.push(socket)
+      return socket
+    })
+    const events: ScanEvent[] = []
+    const statuses: ScanEventConnectionStatus[] = []
+    subscribeScanEvents({
+      ...wsBase(),
+      WebSocketImpl: FakeSocketImpl as unknown as typeof WebSocket,
+      onEvent: (e) => events.push(e),
+      onStatus: (s) => statuses.push(s),
+    })
+    await flush(4)
+    sockets[0].onopen!()
+    await flush(4)
+    if (sockets[0].onmessage)
+      sockets[0].onmessage({
+        data: 'event: failed\ndata: {"status":"failed"}\n\n',
+      })
+    await flush(4)
+    expect(statuses).toContain('done')
+    // nothing after terminal
+    expect(events.map((e) => e.event)).toEqual(['failed'])
+  })
+
+  it('websocket failure falls through to SSE, then to polling when both fail', async () => {
+    const sockets: FakeSocket[] = []
+    const FakeSocketImpl = vi.fn((url: string) => {
+      const socket = new FakeSocket(url)
+      sockets.push(socket)
+      return socket
+    })
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('down')
+    })
+    const statuses: ScanEventConnectionStatus[] = []
+    subscribeScanEvents({
+      ...wsBase(),
+      maxFailedConnects: 1,
+      WebSocketImpl: FakeSocketImpl as unknown as typeof WebSocket,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      onEvent: vi.fn(),
+      onStatus: (s: ScanEventConnectionStatus) => statuses.push(s),
+    })
+    await flush(4)
+    expect(sockets).toHaveLength(1)
+    // the websocket transport gives up immediately
+    sockets[0].close()
+    await flush(20)
+    // both real-time transports failed → polling
+    expect(statuses).toContain('polling')
+    // SSE was attempted after websocket gave up
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+})
