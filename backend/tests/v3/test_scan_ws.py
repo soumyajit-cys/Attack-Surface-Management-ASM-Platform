@@ -102,8 +102,8 @@ def _connect(client, scan_id, headers=None, query_params=None):
 
 def test_ws_requires_auth(env):
     try:
-        with _connect(env.client, env.scan.id):
-            pass
+        with _connect(env.client, env.scan.id) as ws:
+            ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4001, exc.code
         return
@@ -115,8 +115,8 @@ def test_ws_rejects_bad_token(env):
         with _connect(
             env.client, env.scan.id,
             headers={"Authorization": "Bearer not-a-real-token"},
-        ):
-            pass
+        ) as ws:
+            ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4001, exc.code
         return
@@ -213,8 +213,8 @@ def other_org_scan(db, org_factory):
 def test_ws_cross_org_scan_refused(env, other_org_scan):
     """A user must not open a stream on another org's scan."""
     try:
-        with _connect(env.client, other_org_scan.id, headers=env.headers):
-            pass
+        with _connect(env.client, other_org_scan.id, headers=env.headers) as ws:
+            ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4004, exc.code
         return
@@ -223,8 +223,8 @@ def test_ws_cross_org_scan_refused(env, other_org_scan):
 
 def test_ws_unknown_scan_refused(env):
     try:
-        with _connect(env.client, 999999, headers=env.headers):
-            pass
+        with _connect(env.client, 999999, headers=env.headers) as ws:
+            ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4004, exc.code
         return
@@ -344,8 +344,8 @@ def test_ws_cap_429_and_slot_freed(env, monkeypatch):
     seeded.zadd(cap_key, {"existing-session": time.time() + 3600})
 
     try:
-        with _connect(env.client, env.scan_completed.id, headers=env.headers):
-            pass
+        with _connect(env.client, env.scan_completed.id, headers=env.headers) as ws:
+            ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4003, exc.code
     assert seeded.zcard(cap_key) == 1  # refused attempt left nothing behind
