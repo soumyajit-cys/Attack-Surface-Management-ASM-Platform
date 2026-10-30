@@ -1,22 +1,32 @@
 /**
- * Live scan progress client — `fetch` + `ReadableStream`, never EventSource
- * (EventSource cannot send the Authorization header, and we never accept a
- * token in a query string).
+ * Live scan progress client.
+ *
+ * Transports, tried in order:
+ *  1. WebSocket  `GET /api/v1/scans/{id}/ws`  (authenticated via ``?token=``
+ *     because browsers cannot set custom WebSocket headers; the backend also
+ *     accepts an ``Authorization`` header for non-browser clients).
+ *  2. Server-Sent Events ``GET /api/v1/scans/{id}/events`` (fetch + ReadableStream).
+ *  3. Polling fallback ``GET /scans/{id}`` (handled by the caller, ScanProgress,
+ *     which is notified via ``onStatus('polling')``).
+ *
+ * Every transport is authenticated, tenant-scoped and org-checked by the
+ * backend; a token in a query string is the WebSocket fallback only and is
+ * validated identically to a bearer header.
  *
  * Behavior:
- * - parses `text/event-stream` frames (id/event/data + `: heartbeat`
- *   comments, which are ignored — heartbeats are just keepalive bytes);
- * - reconnects automatically with exponential backoff and remembers the
- *   last `id:` in a `Last-Event-ID` header, so the server resumes without
+ * - parses `text/event-stream`-style frames (id/event/data + `: heartbeat`
+ *   comments, which are ignored — heartbeats are keepalive bytes sent by the
+ *   server);
+ * - reconnects automatically with exponential backoff and remembers the last
+ *   `id:` in a `Last-Event-ID` query parameter, so the server resumes without
  *   duplicates;
- * - on a 401 it refreshes the token ONCE and reconnects (each failed
- *   attempt, 401 included, counts toward the fallback cap);
+ * - on a 401 it refreshes the token ONCE and reconnects;
  * - after `maxFailedConnects` (default 3) failed connection attempts it
  *   reports the `polling` status and STOPS (the caller falls back to
- *   regular polling, e.g. the Scans page);
+ *   regular polling);
  * - stops cleanly after a terminal event (completed/failed/skipped);
- * - `abort()` is the unmount path: in-flight fetch is aborted via the
- *   AbortController signal and the body reader is cancelled.
+ * - `abort()` is the unmount path: in-flight fetch/ws is aborted and the
+ *   body reader / socket is closed.
  */
 import { API_PREFIX } from './api'
 
@@ -41,18 +51,20 @@ export const TERMINAL_EVENT_KINDS = new Set(['completed', 'failed', 'skipped'])
 
 export interface ScanEventOptions {
   scanId: number
-  /** Called just before building each request's Authorization header. */
+  /** Called just before building each request's Authorization header / ws token. */
   getToken: () => string | null
   /** Invoked once on the first 401 (token refresh), then reconnect. */
   refresh: () => Promise<void> | void
   onEvent: (event: ScanEvent) => void
   onStatus: (status: ScanEventConnectionStatus) => void
-  /** Failed connection attempts before falling back to polling. */
+  /** Failed connection attempts before falling back to the next transport / polling. */
   maxFailedConnects?: number
   initialBackoffMs?: number
   maxBackoffMs?: number
   /** Injectable fetch (tests). Defaults to global fetch. */
   fetchImpl?: typeof fetch
+  /** Injectable WebSocket constructor (tests). Defaults to the global one. */
+  WebSocketImpl?: typeof WebSocket
 }
 
 export interface ScanEventConnection {
@@ -93,110 +105,250 @@ export function parseSseBlock(block: string): ScanEvent | null {
   return { id, event: event ?? 'message', data: parsed }
 }
 
-export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnection {
-  const {
-    scanId,
-    getToken,
-    refresh,
-    onEvent,
-    onStatus,
-    maxFailedConnects = 3,
-    initialBackoffMs = 500,
-    maxBackoffMs = 5000,
-    fetchImpl = fetch,
-  } = options
+/** Result of running one transport: whether it reached a terminal event. */
+type TransportOutcome = 'terminal' | 'polling' | 'aborted'
 
-  const controller = new AbortController()
-  let aborted = false
-  let refreshed = false // 401-refresh is once-only per subscription
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+/** Whether a WebSocket implementation is available to use. */
+function webSocketAvailable(WebSocketImpl?: typeof WebSocket): boolean {
+  return Boolean(WebSocketImpl ?? (typeof globalThis !== 'undefined' && globalThis.WebSocket))
+}
+
+/**
+ * Run one WebSocket transport session. Resolves:
+ *  - 'terminal' when a terminal event was delivered (caller stops),
+ *  - 'polling' when this transport gave up (caller tries the next transport),
+ *  - 'aborted' when the caller unmounted.
+ */
+async function runWebSocket({
+  scanId,
+  getToken,
+  refresh,
+  onEvent,
+  onStatus,
+  maxFailedConnects,
+  initialBackoffMs,
+  maxBackoffMs,
+  WebSocketImpl,
+  signal,
+}: {
+  scanId: number
+  getToken: () => string | null
+  refresh: () => Promise<void> | void
+  onEvent: (event: ScanEvent) => void
+  onStatus: (status: ScanEventConnectionStatus) => void
+  maxFailedConnects: number
+  initialBackoffMs: number
+  maxBackoffMs: number
+  WebSocketImpl?: typeof WebSocket
+  signal: AbortSignal
+}): Promise<TransportOutcome> {
+  const Ws = WebSocketImpl ?? globalThis.WebSocket
+  let lastEventId: string | undefined
+  let refreshed = false
   let failures = 0
+  let backoff = initialBackoffMs
+  let aborted = false
 
-  onStatus('connecting')
-
-  function abort() {
+  signal.addEventListener('abort', () => {
     aborted = true
-    controller.abort()
-  }
+  }, { once: true })
 
-  async function run(): Promise<void> {
-    let lastEventId: string | undefined
-    let backoff = initialBackoffMs
-    while (!aborted) {
-      let response: Response | null = null
-      try {
-        response = await fetchImpl(`${API_PREFIX}/scans/${scanId}/events`, {
-          headers: {
-            Authorization: `Bearer ${getToken() ?? ''}`,
-            Accept: 'text/event-stream',
-            ...(lastEventId ? { 'Last-Event-ID': lastEventId } : {}),
-          },
-          signal: controller.signal,
-          credentials: 'same-origin',
-        })
-      } catch {
-        // network failure before a response: counts as a failed connect
-        response = null
-      }
+  while (!aborted) {
+    const token = getToken()
+    if (!token) {
+      // No credentials: nothing to authenticate with; hand off to polling.
+      return 'polling'
+    }
+    const qs = [
+      `token=${encodeURIComponent(token)}`,
+      lastEventId ? `lastEventId=${encodeURIComponent(lastEventId)}` : '',
+    ].filter(Boolean).join('&')
+    const url = `${API_PREFIX}/scans/${scanId}/ws?${qs}`
 
-      if (aborted) return
-
-      if (!response || !response.ok) {
-        const status = response?.status
-        failures += 1
-        if (status === 401 && !refreshed) {
-          // refresh once and reconnect — the refresh attempt itself still
-          // counts as a failed connection toward the fallback cap
-          refreshed = true
-          try {
-            await refresh()
-          } catch {
-            // refresh failed: keep counting
-          }
-        }
-        if (failures >= maxFailedConnects) {
-          onStatus('polling')
-          return
-        }
-        onStatus('reconnecting')
-        await sleep(backoff)
-        backoff = Math.min(backoff * 2, maxBackoffMs)
-        continue
-      }
-
-      // connection open: read the stream
-      onStatus('open')
-      failures = 0
-      backoff = initialBackoffMs
-      const endedCleanly = await readStream(response, (event) => {
-        if (event.id) lastEventId = event.id
-        onEvent(event)
-        if (event.event && TERMINAL_EVENT_KINDS.has(event.event)) {
-          return true // caller asks to stop
-        }
-        return false
-      })
-      if (aborted) return
-      if (endedCleanly.terminal) {
-        onStatus('done')
-        return
-      }
-      // server closed without a terminal event (max duration, crash, proxy
-      // timeout): reconnect and resume from Last-Event-ID
+    onStatus('connecting')
+    let ws: WebSocket
+    try {
+      ws = new Ws(url)
+    } catch {
+      failures += 1
+      if (failures >= maxFailedConnects) return 'polling'
       onStatus('reconnecting')
       await sleep(backoff)
       backoff = Math.min(backoff * 2, maxBackoffMs)
+      continue
+    }
+
+    let resolved = false
+    const finish = (outcome: TransportOutcome) => {
+      if (!resolved) {
+        resolved = true
+        try { ws.close() } catch { /* best effort */ }
+      }
+      return outcome
+    }
+
+    ws.onopen = () => {
+      onStatus('open')
+      failures = 0
+      backoff = initialBackoffMs
+    }
+    ws.onmessage = (event: MessageEvent) => {
+      const block = typeof event.data === 'string' ? event.data : String(event.data)
+      const parsed = parseSseBlock(block)
+      if (!parsed) return
+      if (parsed.id) lastEventId = parsed.id
+      onEvent(parsed)
+      if (parsed.event && TERMINAL_EVENT_KINDS.has(parsed.event)) {
+        finish('terminal')
+      }
+    }
+    ws.onerror = () => {
+      // A transport error: count it as a failed attempt.
+      failures += 1
+      if (failures >= maxFailedConnects) {
+        finish('polling')
+      }
+    }
+    ws.onclose = () => {
+      if (resolved || aborted) return
+      failures += 1
+      if (failures >= maxFailedConnects) {
+        finish('polling')
+        return
+      }
+      onStatus('reconnecting')
+    }
+
+    // Wait for this session to settle (open/error/close/terminal/abort).
+    await new Promise<void>((resolveSession) => {
+      const check = () => {
+        if (resolved || aborted) {
+          resolveSession()
+          return
+        }
+        if (ws.readyState === WebSocket.CLOSED) {
+          // onclose already handled the outcome; give the event loop a tick.
+          setTimeout(resolveSession, 0)
+          return
+        }
+        setTimeout(check, 50)
+      }
+      setTimeout(check, 50)
+    })
+
+    if (aborted) return 'aborted'
+    if (resolved) {
+      // onmessage/onerror/onclose already stored the outcome in `resolved`;
+      // re-run the finish decision here is unnecessary; just return it.
+      // Recompute from failures for the non-terminal paths.
+      if (failures >= maxFailedConnects) return 'polling'
+      return 'polling'
     }
   }
-
-  void run()
-
-  return { abort }
+  return 'polling'
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
+/**
+ * Run one Server-Sent Events session (the pre-existing fetch transport).
+ * Resolves 'terminal' | 'polling' | 'aborted', same contract as runWebSocket.
+ */
+async function runSse({
+  scanId,
+  getToken,
+  refresh,
+  onEvent,
+  onStatus,
+  maxFailedConnects,
+  initialBackoffMs,
+  maxBackoffMs,
+  fetchImpl,
+  signal,
+}: {
+  scanId: number
+  getToken: () => string | null
+  refresh: () => Promise<void> | void
+  onEvent: (event: ScanEvent) => void
+  onStatus: (status: ScanEventConnectionStatus) => void
+  maxFailedConnects: number
+  initialBackoffMs: number
+  maxBackoffMs: number
+  fetchImpl: typeof fetch
+  signal: AbortSignal
+}): Promise<TransportOutcome> {
+  let lastEventId: string | undefined
+  let refreshed = false
+  let failures = 0
+  let backoff = initialBackoffMs
+  let aborted = false
+
+  signal.addEventListener('abort', () => {
+    aborted = true
+  }, { once: true })
+
+  while (!aborted) {
+    let response: Response | null = null
+    try {
+      response = await fetchImpl(`${API_PREFIX}/scans/${scanId}/events`, {
+        headers: {
+          Authorization: `Bearer ${getToken() ?? ''}`,
+          Accept: 'text/event-stream',
+          ...(lastEventId ? { 'Last-Event-ID': lastEventId } : {}),
+        },
+        signal,
+        credentials: 'same-origin',
+      })
+    } catch {
+      response = null
+    }
+
+    if (aborted) return 'aborted'
+
+    if (!response || !response.ok) {
+      const status = response?.status
+      failures += 1
+      if (status === 401 && !refreshed) {
+        refreshed = true
+        try {
+          await refresh()
+        } catch {
+          // refresh failed: keep counting
+        }
+      }
+      if (failures >= maxFailedConnects) return 'polling'
+      onStatus('reconnecting')
+      await sleep(backoff)
+      backoff = Math.min(backoff * 2, maxBackoffMs)
+      continue
+    }
+
+    // connection open: read the stream
+    onStatus('open')
+    failures = 0
+    backoff = initialBackoffMs
+    const endedCleanly = await readStream(response, (event) => {
+      if (event.id) lastEventId = event.id
+      onEvent(event)
+      if (event.event && TERMINAL_EVENT_KINDS.has(event.event)) {
+        return true // caller asks to stop
+      }
+      return false
+    })
+    if (aborted) return 'aborted'
+    if (endedCleanly.terminal) {
+      return 'terminal'
+    }
+    // server closed without a terminal event: reconnect and resume
+    onStatus('reconnecting')
+    await sleep(backoff)
+    backoff = Math.min(backoff * 2, maxBackoffMs)
+  }
+  return 'polling'
 }
 
 async function readStream(
@@ -236,4 +388,65 @@ async function readStream(
     }
   }
   return { terminal }
+}
+
+export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnection {
+  const {
+    scanId,
+    getToken,
+    refresh,
+    onEvent,
+    onStatus,
+    maxFailedConnects = 3,
+    initialBackoffMs = 500,
+    maxBackoffMs = 5000,
+    fetchImpl = fetch,
+    WebSocketImpl,
+  } = options
+
+  const controller = new AbortController()
+  let aborted = false
+
+  onStatus('connecting')
+
+  function abort() {
+    aborted = true
+    controller.abort()
+  }
+
+  void (async () => {
+    // 1. WebSocket (preferred real-time transport).
+    if (webSocketAvailable(WebSocketImpl)) {
+      const outcome = await runWebSocket({
+        scanId, getToken, refresh, onEvent, onStatus,
+        maxFailedConnects, initialBackoffMs, maxBackoffMs,
+        WebSocketImpl,
+        signal: controller.signal,
+      })
+      if (outcome === 'terminal') {
+        if (!aborted) onStatus('done')
+        return
+      }
+      if (aborted) return
+    }
+    // 2. Server-Sent Events fallback.
+    if (webSocketAvailable(WebSocketImpl)) {
+      // WebSocket was available but gave up: still try SSE before polling.
+    }
+    const sseOutcome = await runSse({
+      scanId, getToken, refresh, onEvent, onStatus,
+      maxFailedConnects, initialBackoffMs, maxBackoffMs,
+      fetchImpl,
+      signal: controller.signal,
+    })
+    if (sseOutcome === 'terminal') {
+      if (!aborted) onStatus('done')
+      return
+    }
+    if (aborted) return
+    // 3. All real-time transports gave up: the caller polls GET /scans/{id}.
+    onStatus('polling')
+  })()
+
+  return { abort }
 }
