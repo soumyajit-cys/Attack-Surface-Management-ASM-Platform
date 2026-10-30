@@ -152,11 +152,16 @@ async function runWebSocket({
   let backoff = initialBackoffMs
   let aborted = false
   let outcome: TransportOutcome | null = null
+  let settle!: () => void
+  const settled = new Promise<void>((resolve) => {
+    settle = resolve
+  })
 
   signal.addEventListener(
     'abort',
     () => {
       aborted = true
+      settle()
     },
     { once: true },
   )
@@ -164,6 +169,7 @@ async function runWebSocket({
   const finish = (next: TransportOutcome) => {
     if (outcome === null) {
       outcome = next
+      settle()
     }
     return outcome
   }
@@ -215,37 +221,18 @@ async function runWebSocket({
     ws.onerror = () => {
       // Transport errors are counted via onclose, which always fires next.
     }
-    let settle!: () => void
-    const settled = new Promise<void>((resolve) => {
-      settle = resolve
-    })
     ws.onclose = () => {
-      if (aborted) {
-        settle()
-        return
-      }
-      if (outcome !== null) {
-        // Terminal (or already-finalized): settled, do not reconnect.
-        settle()
+      if (aborted || outcome !== null) {
+        // Already finalized (terminal / aborted); nothing more to do.
         return
       }
       failures += 1
       if (failures >= maxFailedConnects) {
         finish('polling')
-        settle()
         return
       }
-      onStatus('reconnecting')
-      settle() // let the loop recreate the socket
+      onStatus('reconnecting') // let the loop recreate the socket
     }
-    signal.addEventListener(
-      'abort',
-      () => {
-        aborted = true
-        settle()
-      },
-      { once: true },
-    )
 
     // Wait for this session to settle (terminal, transport failure, or abort).
     await settled
