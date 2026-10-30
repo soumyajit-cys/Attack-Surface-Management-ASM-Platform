@@ -37,6 +37,7 @@ from app.scanning import scope as scope_policy
 from services.scan_events import TERMINAL_KINDS
 from services.verification import verification_service as verification
 from tasks.discovery_tasks import run_discovery
+from utils.redis_client import get_redis
 from utils.rate_limiter import limiter
 from utils.ssrf_guard import validate_scan_target
 
