@@ -775,6 +775,7 @@ async def stream_scan_events_ws(
     token = auth[7:] if auth.startswith("Bearer ") else None
     ticket = websocket.query_params.get("ticket")
     principal: Principal | None = None
+    ws_token: str | None = token  # only the header path carries a re-checkable JWT
     if token:
         principal = _authenticate_ws_token(token, db)
     elif ticket:
@@ -865,6 +866,23 @@ async def stream_scan_events_ws(
         last_validated = time.monotonic()
         while True:
             now_mono = time.monotonic()
+            # Periodic token re-validation: a revoked token or deactivated
+            # user closes an already-open stream (fail-closed).
+            if now_mono - last_validated >= _WS_REVALIDATE_INTERVAL_SECONDS:
+                last_validated = now_mono
+                if ws_token is not None:
+                    revoked = False
+                    try:
+                        revoked = token_store.is_revoked(ws_token)
+                    except Exception:  # Redis down: fail closed
+                        revoked = True
+                    user = db.get(User, principal.user.id)
+                    if revoked or user is None or not user.is_active:
+                        try:
+                            await websocket.close(code=_WS_CLOSE_AUTH)
+                        except Exception:
+                            pass
+                        return
             # heartbeat cadence
             if now_mono - last_output >= settings.scan_stream_heartbeat_seconds:
                 try:
