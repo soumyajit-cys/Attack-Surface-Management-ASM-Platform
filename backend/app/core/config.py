@@ -126,6 +126,13 @@ class Settings(BaseSettings):
     # reconnects (its Last-Event-ID continues the stream without duplicates).
     scan_stream_max_duration_seconds: float = 900
 
+    # WebSocket live-scan progress ticket (Phase 1.1). Browsers cannot set
+    # custom WebSocket headers, so a short-lived single-use ticket obtained
+    # via POST /api/v1/scans/{id}/ws-ticket authenticates the WS fallback.
+    # Tickets are scoped to user + scan + org, stored in Redis, and expire
+    # after this many seconds (default 30 s).
+    ws_ticket_ttl_seconds: int = 30
+
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
     # and the direct peer is used. Set behind nginx/traefik so the limiter,
