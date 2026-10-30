@@ -173,8 +173,8 @@ def test_ws_revoked_token_refused(env, db):
         ws.receive_text()  # snapshot succeeds while token valid
     token_store.revoke(token)
     try:
-        with _connect(env.client, env.scan_completed.id, headers=headers):
-            pass
+        with _connect(env.client, env.scan_completed.id, headers=headers) as ws:
+            ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4001, exc.code
         return
@@ -192,8 +192,8 @@ def test_ws_deactivated_user_refused(env, db):
     env.user.is_active = False
     db.commit()
     try:
-        with _connect(env.client, env.scan_completed.id, headers=headers):
-            pass
+        with _connect(env.client, env.scan_completed.id, headers=headers) as ws:
+            ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4001, exc.code
         return
