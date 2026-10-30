@@ -2,7 +2,11 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { subscribeScanEvents, type ScanEvent } from './scanEvents'
+import {
+  subscribeScanEvents,
+  type ScanEvent,
+  type ScanEventConnectionStatus,
+} from './scanEvents'
 
 // ── scripted fake fetch: a ReadableStream we control from the test ─────────
 
