@@ -39,6 +39,12 @@ from utils.rate_limiter import limiter
 from utils.ssrf_guard import validate_scan_target
 
 import redis as redis_lib
+from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
+
+from auth import jwt as token_service
+from auth.token_store import token_store
+from models import User
+from app.core.permissions import effective_permissions
 
 router = APIRouter(prefix="/scans", tags=["scans"])
 
