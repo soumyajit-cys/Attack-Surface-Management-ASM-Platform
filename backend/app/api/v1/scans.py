@@ -709,6 +709,56 @@ def _authenticate_ws_token(token: str, db: Session) -> Principal | None:
     )
 
 
+def _authenticate_ws_ticket(ticket: str, db: Session) -> Principal | None:
+    """Validate a single-use WebSocket ticket from Redis.
+
+    Returns a :class:`Principal` or ``None``.  The ticket is deleted on first
+    successful use (single-use) and is never logged.
+    """
+    if not ticket:
+        return None
+    r = get_redis()
+    raw = r.get(f"{_WS_TICKET_PREFIX}{ticket}")
+    if raw is None:
+        # Missing, expired, or already consumed (single-use).
+        return None
+    try:
+        payload = json.loads(raw)
+    except (ValueError, TypeError):
+        r.delete(f"{_WS_TICKET_PREFIX}{ticket}")
+        return None
+    try:
+        user_id = int(payload["user_id"])
+        scan_id = int(payload["scan_id"])
+        org_id = int(payload["organization_id"])
+    except (KeyError, TypeError, ValueError):
+        r.delete(f"{_WS_TICKET_PREFIX}{ticket}")
+        return None
+
+    # Single-use: consume the ticket now so it cannot be reused.
+    r.delete(f"{_WS_TICKET_PREFIX}{ticket}")
+
+    scan = (
+        db.query(ScanHistory)
+        .filter(ScanHistory.id == scan_id)
+        .first()
+    )
+    if scan is None or scan.organization_id != org_id:
+        return None
+    user = (
+        db.query(User)
+        .filter(User.id == user_id, User.is_active.is_(True))
+        .first()
+    )
+    if user is None or user.organization_id != org_id:
+        return None
+    return Principal(
+        user=user,
+        via="ticket",
+        permissions=effective_permissions(user.role),
+    )
+
+
 @router.websocket("/{scan_id}/ws")
 async def stream_scan_events_ws(
     websocket: WebSocket,
