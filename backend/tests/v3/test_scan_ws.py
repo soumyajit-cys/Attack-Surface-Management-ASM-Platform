@@ -1,13 +1,26 @@
-"""Live scan progress over WebSocket (Phase 1).
+"""Live scan progress over WebSocket (Phase 1.1).
 
 ``GET /api/v1/scans/{id}/ws`` streams the same Redis Stream
 ``scan:{id}:events`` as the SSE endpoint, framed as SSE text blocks over a
-WebSocket text channel. Auth: ``Authorization: Bearer`` header, plus a
-``?token=`` query fallback because browsers cannot set custom WebSocket
-headers. Same org scoping and per-user concurrent cap as SSE.
+WebSocket text channel.
+
+Auth:
+- ``Authorization: Bearer <jwt>`` header (primary, non-browser clients).
+- ``?ticket=`` query parameter (browser fallback): a single-use, short-lived
+  ticket obtained from ``POST /api/v1/scans/{id}/ws-ticket``.  The raw JWT is
+  never sent in a query string.
+
+A ticket is scoped to user + scan + org, stored in Redis with TTL
+``ws_ticket_ttl_seconds`` (default 30 s), and deleted on first use.
+
+An ``Origin`` allowlist (from ``CORS_ORIGINS`` + ``FRONTEND_URL``) protects
+against cross-site WebSocket hijacking; missing or foreign origins are refused.
+
+The presenting bearer token is re-validated periodically while the socket is
+open, so revocation or deactivation mid-stream closes the connection.
 
 TestClient buffers nothing for a connected socket, so frames are read with
-``receive_text()`` directly. A server-initiated close surfaces as
+``receive_text()`` directly.  A server-initiated close surfaces as
 ``WebSocketDisconnect`` carrying the close code.
 """
 
@@ -19,6 +32,12 @@ import pytest
 from starlette.websockets import WebSocketDisconnect
 
 from services.scan_events import publish_scan_event
+
+
+# An origin present in the default CORS_ORIGINS / FRONTEND_URL, used for the
+# allowed-Origin cases.  Foreign-origin tests use a different origin.
+_ALLOWED_ORIGIN = "http://localhost:5173"
+_FOREIGN_ORIGIN = "http://evil.example.com"
 
 
 @pytest.fixture(autouse=True)
@@ -57,8 +76,12 @@ def _make_scan(db, org_id, status="running", target="wsevents.example.com"):
     return scan
 
 
-def _url(scan_like):
-    return f"/api/v1/scans/{scan_like}/ws"
+def _url(scan_id):
+    return f"/api/v1/scans/{scan_id}/ws"
+
+
+def _ticket_url(scan_id):
+    return f"/api/v1/scans/{scan_id}/ws-ticket"
 
 
 def _parse_ws_block(block: str) -> dict:
@@ -89,12 +112,21 @@ def _publish_sequence(scan_id, items):
         )
 
 
-def _connect(client, scan_id, headers=None, query_params=None):
+def _connect(client, scan_id, *, headers=None, query_params=None, origin=None):
+    h = dict(headers or {})
+    if origin is not None:
+        h["origin"] = origin
     url = _url(scan_id)
     if query_params:
         qs = "&".join(f"{k}={v}" for k, v in query_params.items())
         url = f"{url}?{qs}"
-    return client.websocket_connect(url, headers=headers or {})
+    return client.websocket_connect(url, headers=h)
+
+
+def _issue_ticket(client, scan_id, headers):
+    response = client.post(_ticket_url(scan_id), headers=headers)
+    assert response.status_code == 201, response.text
+    return response.json()["ticket"]
 
 
 # ── auth ─────────────────────────────────────────────────────────────────────
@@ -102,7 +134,7 @@ def _connect(client, scan_id, headers=None, query_params=None):
 
 def test_ws_requires_auth(env):
     try:
-        with _connect(env.client, env.scan.id) as ws:
+        with _connect(env.client, env.scan.id, origin=_ALLOWED_ORIGIN) as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4001, exc.code
@@ -115,6 +147,7 @@ def test_ws_rejects_bad_token(env):
         with _connect(
             env.client, env.scan.id,
             headers={"Authorization": "Bearer not-a-real-token"},
+            origin=_ALLOWED_ORIGIN,
         ) as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
@@ -128,6 +161,7 @@ def test_ws_header_token_connects(env):
     with _connect(
         env.client, env.scan_completed.id,
         headers=env.headers,
+        origin=_ALLOWED_ORIGIN,
     ) as ws:
         frames = []
         while True:
@@ -142,14 +176,13 @@ def test_ws_header_token_connects(env):
     assert any(f["event"] == "completed" for f in frames), frames
 
 
-def test_ws_query_token_fallback_connects(env):
-    from auth import jwt as token_service
-
-    token = token_service.create_access_token(env.user.id)
+def test_ws_ticket_connects(env):
     _publish_sequence(env.scan_completed.id, [{"kind": "completed"}])
+    ticket = _issue_ticket(env.client, env.scan_completed.id, env.headers)
     with _connect(
         env.client, env.scan_completed.id,
-        query_params={"token": token},
+        query_params={"ticket": ticket},
+        origin=_ALLOWED_ORIGIN,
     ) as ws:
         frames = []
         while True:
@@ -163,17 +196,41 @@ def test_ws_query_token_fallback_connects(env):
     assert any(f["event"] == "snapshot" for f in frames), frames
 
 
+def test_ws_ticket_is_single_use(env):
+    """A ticket may be used for exactly one connection."""
+    ticket = _issue_ticket(env.client, env.scan_completed.id, env.headers)
+    # First use succeeds.
+    with _connect(
+        env.client, env.scan_completed.id,
+        query_params={"ticket": ticket},
+        origin=_ALLOWED_ORIGIN,
+    ) as ws:
+        ws.receive_text()  # snapshot
+    # Second use is refused (ticket consumed).
+    try:
+        with _connect(
+            env.client, env.scan_completed.id,
+            query_params={"ticket": ticket},
+            origin=_ALLOWED_ORIGIN,
+        ) as ws:
+            ws.receive_text()
+    except WebSocketDisconnect as exc:
+        assert exc.code == 4001, exc.code
+        return
+    raise AssertionError("expected a consumed ticket to be refused")
+
+
 def test_ws_revoked_token_refused(env, db):
     from auth import jwt as token_service
     from auth.token_store import token_store
 
     token = token_service.create_access_token(env.user.id)
     headers = {"Authorization": f"Bearer {token}"}
-    with _connect(env.client, env.scan_completed.id, headers=headers) as ws:
+    with _connect(env.client, env.scan_completed.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
         ws.receive_text()  # snapshot succeeds while token valid
     token_store.revoke(token)
     try:
-        with _connect(env.client, env.scan_completed.id, headers=headers) as ws:
+        with _connect(env.client, env.scan_completed.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4001, exc.code
@@ -186,13 +243,13 @@ def test_ws_deactivated_user_refused(env, db):
 
     token = token_service.create_access_token(env.user.id)
     headers = {"Authorization": f"Bearer {token}"}
-    with _connect(env.client, env.scan_completed.id, headers=headers) as ws:
+    with _connect(env.client, env.scan_completed.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
         ws.receive_text()
 
     env.user.is_active = False
     db.commit()
     try:
-        with _connect(env.client, env.scan_completed.id, headers=headers) as ws:
+        with _connect(env.client, env.scan_completed.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4001, exc.code
@@ -213,7 +270,7 @@ def other_org_scan(db, org_factory):
 def test_ws_cross_org_scan_refused(env, other_org_scan):
     """A user must not open a stream on another org's scan."""
     try:
-        with _connect(env.client, other_org_scan.id, headers=env.headers) as ws:
+        with _connect(env.client, other_org_scan.id, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4004, exc.code
@@ -223,12 +280,54 @@ def test_ws_cross_org_scan_refused(env, other_org_scan):
 
 def test_ws_unknown_scan_refused(env):
     try:
-        with _connect(env.client, 999999, headers=env.headers) as ws:
+        with _connect(env.client, 999999, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4004, exc.code
         return
     raise AssertionError("expected an unknown scan to be refused")
+
+
+# ── Origin allowlist ─────────────────────────────────────────────────────────
+
+
+def test_ws_allowed_origin_connects(env):
+    _publish_sequence(env.scan_completed.id, [{"kind": "completed"}])
+    with _connect(
+        env.client, env.scan_completed.id,
+        headers=env.headers,
+        origin=_ALLOWED_ORIGIN,
+    ) as ws:
+        frames = []
+        while True:
+            try:
+                block = ws.receive_text()
+            except WebSocketDisconnect:
+                break
+            frames.append(_parse_ws_block(block))
+            if frames[-1]["event"] in ("completed",):
+                break
+    assert any(f["event"] == "snapshot" for f in frames), frames
+
+
+def test_ws_missing_origin_refused(env):
+    try:
+        with _connect(env.client, env.scan_completed.id, headers=env.headers) as ws:
+            ws.receive_text()
+    except WebSocketDisconnect as exc:
+        assert exc.code == 4003, exc.code
+        return
+    raise AssertionError("expected a missing Origin to be refused")
+
+
+def test_ws_foreign_origin_refused(env):
+    try:
+        with _connect(env.client, env.scan_completed.id, headers=env.headers, origin=_FOREIGN_ORIGIN) as ws:
+            ws.receive_text()
+    except WebSocketDisconnect as exc:
+        assert exc.code == 4003, exc.code
+        return
+    raise AssertionError("expected a foreign Origin to be refused")
 
 
 # ── reading behavior ─────────────────────────────────────────────────────────
@@ -240,7 +339,7 @@ def test_ws_snapshot_on_connect_and_ordered_replay(env):
         {"kind": "running"},
         {"kind": "phase_started", "phase": "discovery"},
     ])
-    with _connect(env.client, env.scan.id, headers=env.headers) as ws:
+    with _connect(env.client, env.scan.id, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
         frames = []
         while True:
             try:
@@ -264,7 +363,7 @@ def test_ws_resume_from_last_event_id_without_duplicates(env):
         {"kind": "running"},
         {"kind": "phase_started", "phase": "discovery"},
     ])
-    with _connect(env.client, env.scan.id, headers=env.headers) as ws:
+    with _connect(env.client, env.scan.id, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
         frames = []
         while True:
             try:
@@ -280,6 +379,7 @@ def test_ws_resume_from_last_event_id_without_duplicates(env):
     with _connect(
         env.client, env.scan.id,
         headers=env.headers,
+        origin=_ALLOWED_ORIGIN,
         query_params={"lastEventId": ids[1]},
     ) as ws:
         while True:
@@ -300,7 +400,7 @@ def test_ws_terminal_event_closes_socket(env):
         {"kind": "queued"},
         {"kind": "completed", "counts": {"findings": 3}},
     ])
-    with _connect(env.client, env.scan.id, headers=env.headers) as ws:
+    with _connect(env.client, env.scan.id, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
         frames = []
         while True:
             try:
@@ -320,9 +420,9 @@ def test_ws_heartbeat_sent(env, monkeypatch):
     monkeypatch.setattr(config.settings, "scan_stream_heartbeat_seconds", 0.2, raising=False)
     monkeypatch.setattr(config.settings, "scan_stream_max_duration_seconds", 2.0, raising=False)
     # A non-terminal scan keeps the socket open and sends heartbeats until the
-    # max duration elapses. We only need to observe one heartbeat comment, then
-    # we stop reading (we never read after the server closes).
-    with _connect(env.client, env.scan.id, headers=env.headers) as ws:
+    # max duration elapses.  We only need to observe one heartbeat comment,
+    # then we stop reading (we never read after the server closes).
+    with _connect(env.client, env.scan.id, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
         saw_heartbeat = False
         for _ in range(60):  # bounded; server sends a heartbeat every 0.2 s
             try:
@@ -348,7 +448,7 @@ def test_ws_cap_429_and_slot_freed(env, monkeypatch):
     seeded.zadd(cap_key, {"existing-session": time.time() + 3600})
 
     try:
-        with _connect(env.client, env.scan_completed.id, headers=env.headers) as ws:
+        with _connect(env.client, env.scan_completed.id, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
             ws.receive_text()
     except WebSocketDisconnect as exc:
         assert exc.code == 4003, exc.code
@@ -365,7 +465,7 @@ def test_ws_disconnect_frees_cap_slot(env, monkeypatch):
     seeded = get_redis()
     seeded.zadd(cap_key, {"other-session": time.time() + 3600})
 
-    with _connect(env.client, env.scan_completed.id, headers=env.headers) as ws:
+    with _connect(env.client, env.scan_completed.id, headers=env.headers, origin=_ALLOWED_ORIGIN) as ws:
         ws.receive_text()  # snapshot; slot now held
 
     slot = seeded.zcard(cap_key)
@@ -374,3 +474,62 @@ def test_ws_disconnect_frees_cap_slot(env, monkeypatch):
         time.sleep(0.1)
         slot = seeded.zcard(cap_key)
     assert slot == 1, f"cap slot leaked after disconnect: {slot}"
+
+
+# ── revocation / expiry during an open stream ──────────────────────────────
+
+
+def test_ws_revocation_closes_open_stream(env, monkeypatch):
+    """Revoking the bearer token mid-stream closes the WebSocket (fail-closed)."""
+    from auth import jwt as token_service
+    from auth.token_store import token_store
+    import app.api.v1.scans as scans_api
+
+    # Speed up the periodic re-validation so the test stays fast.
+    monkeypatch.setattr(scans_api, "_WS_REVALIDATE_INTERVAL_SECONDS", 0.2, raising=False)
+
+    token = token_service.create_access_token(env.user.id)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with _connect(env.client, env.scan_completed.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
+        ws.receive_text()  # snapshot; stream is open
+
+        token_store.revoke(token)
+
+        # The next periodic re-validation (0.2 s) must close the socket.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                block = ws.receive_text()
+            except WebSocketDisconnect as exc:
+                assert exc.code == 4001, exc.code
+                return
+        raise AssertionError("stream did not close after token revocation")
+
+
+def test_ws_expiry_closes_open_stream(env, monkeypatch):
+    """An expired bearer token closes an already-open WebSocket."""
+    from auth import jwt as token_service
+    from datetime import datetime, timedelta, timezone
+    import app.api.v1.scans as scans_api
+    from config import settings
+
+    monkeypatch.setattr(scans_api, "_WS_REVALIDATE_INTERVAL_SECONDS", 0.2, raising=False)
+
+    # Token already expired at issue time.
+    old_expire = settings.access_token_expire_minutes
+    monkeypatch.setattr(settings, "access_token_expire_minutes", -1, raising=False)
+    try:
+        token = token_service.create_access_token(env.user.id)
+    finally:
+        monkeypatch.setattr(settings, "access_token_expire_minutes", old_expire, raising=False)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        with _connect(env.client, env.scan_completed.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
+            ws.receive_text()
+    except WebSocketDisconnect as exc:
+        # Expired token is refused at the handshake.
+        assert exc.code == 4001, exc.code
+        return
+    raise AssertionError("expected an expired token to be refused")
