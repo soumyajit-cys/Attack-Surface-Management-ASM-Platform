@@ -860,6 +860,9 @@ async def stream_scan_events_ws(
         cursor = resume_id
         deadline = time.monotonic() + settings.scan_stream_max_duration_seconds
         last_output = time.monotonic()
+        # Periodic re-validation of the presenting token so revocation or
+        # deactivation mid-stream closes an already-open WebSocket.
+        last_validated = time.monotonic()
         while True:
             now_mono = time.monotonic()
             # heartbeat cadence
