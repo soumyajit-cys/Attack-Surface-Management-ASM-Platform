@@ -86,7 +86,7 @@ flowchart TD
 | Edge security headers | ✅ works | CSP + `frame-ancestors 'none'` + X-Frame-Options on the SPA; nosniff + Referrer-Policy everywhere; HSTS in the TLS block; `server_tokens off` |
 | API keys (scoped, hashed, expiry) | ✅ works | Intersect-only, never expand role |
 | Audit log of privileged actions | ✅ works | Written on sensitive endpoints |
-| Real-time scan progress (WebSocket) | 🔜 planned | Polling today (`GET /scans/{id}`) |
+| Real-time scan progress (WebSocket) | ✅ works | WebSocket (`GET /scans/{id}/ws`) with SSE + polling fallback; reconnect + heartbeat. Authenticated, tenant-scoped, org-checked. |
 | SSO / SCIM | 🔜 planned | Roadmap |
 | Postgres row-level security (RLS) | 🔮 deferred to first SaaS-scale run | Design only — `docs/rls-design.md` |
 | Email digests without SMTP configured | ⚠️ partial | Configuration-dependent; fails "closed" with error mail state |
