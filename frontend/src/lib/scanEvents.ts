@@ -231,7 +231,8 @@ async function runWebSocket({
         finish('polling')
         return
       }
-      onStatus('reconnecting') // let the loop recreate the socket
+      onStatus('reconnecting')
+      settle() // let the loop recreate the socket
     }
 
     // Wait for this session to settle (terminal, transport failure, or abort).
