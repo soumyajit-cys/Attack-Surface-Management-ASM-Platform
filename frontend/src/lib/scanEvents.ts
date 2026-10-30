@@ -150,16 +150,23 @@ async function runWebSocket({
 }): Promise<TransportOutcome> {
   const Ws = WebSocketImpl ?? globalThis.WebSocket
   let lastEventId: string | undefined
-  let refreshed = false
   let failures = 0
   let backoff = initialBackoffMs
   let aborted = false
+  let outcome: TransportOutcome | null = null
 
   signal.addEventListener('abort', () => {
     aborted = true
   }, { once: true })
 
-  while (!aborted) {
+  const finish = (next: TransportOutcome) => {
+    if (outcome === null) {
+      outcome = next
+    }
+    return outcome
+  }
+
+  while (!aborted && outcome === null) {
     const token = getToken()
     if (!token) {
       // No credentials: nothing to authenticate with; hand off to polling.
@@ -177,20 +184,13 @@ async function runWebSocket({
       ws = new Ws(url)
     } catch {
       failures += 1
-      if (failures >= maxFailedConnects) return 'polling'
+      if (failures >= maxFailedConnects) {
+        return finish('polling')
+      }
       onStatus('reconnecting')
       await sleep(backoff)
       backoff = Math.min(backoff * 2, maxBackoffMs)
       continue
-    }
-
-    let resolved = false
-    const finish = (outcome: TransportOutcome) => {
-      if (!resolved) {
-        resolved = true
-        try { ws.close() } catch { /* best effort */ }
-      }
-      return outcome
     }
 
     ws.onopen = () => {
@@ -209,14 +209,14 @@ async function runWebSocket({
       }
     }
     ws.onerror = () => {
-      // A transport error: count it as a failed attempt.
+      // A transport error counts as a failed attempt.
       failures += 1
       if (failures >= maxFailedConnects) {
         finish('polling')
       }
     }
     ws.onclose = () => {
-      if (resolved || aborted) return
+      if (outcome !== null || aborted) return
       failures += 1
       if (failures >= maxFailedConnects) {
         finish('polling')
@@ -228,12 +228,12 @@ async function runWebSocket({
     // Wait for this session to settle (open/error/close/terminal/abort).
     await new Promise<void>((resolveSession) => {
       const check = () => {
-        if (resolved || aborted) {
+        if (outcome !== null || aborted) {
           resolveSession()
           return
         }
         if (ws.readyState === WebSocket.CLOSED) {
-          // onclose already handled the outcome; give the event loop a tick.
+          // onclose already handled the outcome; yield to the event loop.
           setTimeout(resolveSession, 0)
           return
         }
@@ -241,17 +241,10 @@ async function runWebSocket({
       }
       setTimeout(check, 50)
     })
-
-    if (aborted) return 'aborted'
-    if (resolved) {
-      // onmessage/onerror/onclose already stored the outcome in `resolved`;
-      // re-run the finish decision here is unnecessary; just return it.
-      // Recompute from failures for the non-terminal paths.
-      if (failures >= maxFailedConnects) return 'polling'
-      return 'polling'
-    }
   }
-  return 'polling'
+
+  if (aborted) return 'aborted'
+  return outcome ?? 'polling'
 }
 
 /**
