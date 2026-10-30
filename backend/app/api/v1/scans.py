@@ -6,6 +6,7 @@ Replaces the legacy ``/scan`` routes with:
 - SSRF pin-on-submit (resolve + pin once, scanners reuse the pin).
 """
 
+import asyncio
 import json
 import re
 import time
@@ -571,3 +572,197 @@ async def stream_scan_events(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── live scan progress (WebSocket) ─────────────────────────────────────────
+#
+# GET /scans/{id}/ws streams the same Redis Stream ``scan:{id}:events`` as the
+# SSE endpoint, framed as SSE text blocks (``event:``/``data:``/``id:`` lines,
+# plus ``: heartbeat`` comments) over a WebSocket text channel.
+#
+# Auth is the ``Authorization: Bearer`` header. Browsers cannot set custom
+# WebSocket headers, so a ``?token=`` query parameter is also accepted as the
+# WebSocket fallback. Either way the token is validated identically (active
+# JWT, not revoked, org-scoped) and the caller must own the scan's
+# organization — cross-org and unknown scans are refused with a close code.
+#
+# Frames carry only data ``GET /scans/{id}`` already exposes (status, phase,
+# counts, short static codes, timestamps) — never hostnames, banners, secrets
+# or raw error text. A terminal event (completed/failed/skipped) is sent and
+# then the socket closes with code 1000; the client reconnects and resumes
+# from ``Last-Event-ID`` via ``?lastEventId=``. A per-user concurrent cap and
+# maximum stream duration mirror the SSE endpoint.
+
+_WS_CLOSE_AUTH = 4001
+_WS_CLOSE_FORBIDDEN = 4003
+_WS_CLOSE_NOT_FOUND = 4004
+_WS_CLOSE_INTERNAL = 1011
+
+
+def _authenticate_ws_token(token: str, db: Session) -> Principal | None:
+    """Validate a bearer token for a WebSocket; mirror ``authenticate_bearer``.
+
+    Returns a :class:`Principal` or ``None``. Never raises.
+    """
+    payload = token_service.decode_token(token)
+    if not payload or payload.get("type") != token_service.ACCESS:
+        return None
+    if token_store.is_revoked(token):
+        return None
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    user = (
+        db.query(User)
+        .filter(User.id == user_id, User.is_active.is_(True))
+        .first()
+    )
+    if user is None:
+        return None
+    return Principal(
+        user=user,
+        via="jwt",
+        permissions=effective_permissions(user.role),
+    )
+
+
+@router.websocket("/{scan_id}/ws")
+async def stream_scan_events_ws(
+    websocket: WebSocket,
+    scan_id: int,
+    db: Session = Depends(get_db),
+):
+    """WebSocket live scan progress (org-scoped, authenticated, capped)."""
+    await websocket.accept()
+
+    # ── authenticate (header first; ``?token=`` is the browser fallback) ──
+    auth = websocket.headers.get("authorization") or ""
+    token = auth[7:] if auth.startswith("Bearer ") else websocket.query_params.get("token")
+    principal = _authenticate_ws_token(token, db) if token else None
+    if principal is None:
+        await websocket.close(code=_WS_CLOSE_AUTH)
+        return
+
+    # ── org-scoped scan lookup (cross-org == not found) ──────────────────
+    scan = (
+        db.query(ScanHistory)
+        .filter(
+            ScanHistory.id == scan_id,
+            ScanHistory.organization_id == principal.organization_id,
+        )
+        .first()
+    )
+    if scan is None:
+        await websocket.close(code=_WS_CLOSE_NOT_FOUND)
+        return
+
+    resume_id = websocket.query_params.get("lastEventId") or ""
+    if not _LAST_EVENT_ID.match(resume_id):
+        resume_id = "0"
+
+    snapshot = json.dumps({
+        "status": scan.status or "pending",
+        "started_at": _iso(scan.started_at),
+        "completed_at": _iso(scan.completed_at),
+    })
+    status = scan.status or "pending"
+    terminal_now = status in _TERMINAL_SCAN_STATUSES
+
+    key = f"scan:{scan.id}:events"
+    cap_key = _CAP_KEY.format(user_id=principal.user.id)
+    member = uuid.uuid4().hex
+
+    r = _stream_redis_client()
+    try:
+        now = time.time()
+        await r.zremrangebyscore(cap_key, "-inf", now)
+        await r.zadd(
+            cap_key,
+            {
+                member: now
+                + settings.scan_stream_max_duration_seconds
+                + _SLOT_MARGIN_SECONDS
+            },
+        )
+        count = await r.zcard(cap_key)
+    except redis_lib.exceptions.RedisError:
+        await websocket.close(code=_WS_CLOSE_INTERNAL)
+        await r.aclose()
+        return
+    if count > settings.scan_stream_max_per_user:
+        await r.zrem(cap_key, member)
+        await r.aclose()
+        await websocket.close(code=_WS_CLOSE_FORBIDDEN)
+        return
+
+    try:
+        # 1. snapshot so a late client is never blind
+        try:
+            await websocket.send_text(_sse_frame("snapshot", snapshot).decode())
+        except Exception:
+            return
+        # 2. terminal already in the DB: synthesize the terminal frame, close
+        if terminal_now:
+            try:
+                await websocket.send_text(
+                    _sse_frame(status, json.dumps({"status": status})).decode()
+                )
+            except Exception:
+                return
+            return
+        # 3. ordered replay + live tail
+        cursor = resume_id
+        deadline = time.monotonic() + settings.scan_stream_max_duration_seconds
+        last_output = time.monotonic()
+        while True:
+            now_mono = time.monotonic()
+            # heartbeat cadence
+            if now_mono - last_output >= settings.scan_stream_heartbeat_seconds:
+                try:
+                    await websocket.send_text(": heartbeat\n\n")
+                except Exception:
+                    return
+                last_output = now_mono
+                continue
+            # maximum stream duration: client reconnects and resumes
+            if now_mono >= deadline:
+                return
+            # client disconnect probe (non-blocking)
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=0.05)
+            except asyncio.TimeoutError:
+                pass  # no client frame this iteration
+            except (WebSocketDisconnect, Exception):
+                return
+            if websocket.client_state != WebSocketState.CONNECTED:
+                return
+            # read from the Redis stream (250 ms block, like SSE)
+            try:
+                events = await r.xread({key: cursor}, block=250, count=50)
+            except Exception:
+                return
+            for _stream_name, entries in events or []:
+                for entry_id, fields in entries:
+                    cursor = entry_id
+                    kind = fields.get("kind") or "message"
+                    try:
+                        await websocket.send_text(
+                            _sse_frame(
+                                kind,
+                                fields.get("data") or "{}",
+                                event_id=str(entry_id),
+                            ).decode()
+                        )
+                    except Exception:
+                        return
+                    last_output = time.monotonic()
+                    if kind in TERMINAL_KINDS:
+                        return
+    finally:
+        # release the concurrent-cap slot (shielded like SSE)
+        with anyio.CancelScope(shield=True):
+            try:
+                await r.zrem(cap_key, member)
+            finally:
+                await r.aclose()
