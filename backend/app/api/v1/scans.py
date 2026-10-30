@@ -34,6 +34,7 @@ from app.core.permissions import Permission
 from app.api.deps import Principal, current_principal, require_permissions_dep
 from app.db.session import get_db
 from app.scanning import scope as scope_policy
+from services.scan_events import TERMINAL_KINDS
 from services.verification import verification_service as verification
 from tasks.discovery_tasks import run_discovery
 from utils.rate_limiter import limiter
