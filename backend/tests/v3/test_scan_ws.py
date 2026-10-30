@@ -319,16 +319,20 @@ def test_ws_heartbeat_sent(env, monkeypatch):
 
     monkeypatch.setattr(config.settings, "scan_stream_heartbeat_seconds", 0.2, raising=False)
     monkeypatch.setattr(config.settings, "scan_stream_max_duration_seconds", 2.0, raising=False)
-    with _connect(env.client, env.scan_completed.id, headers=env.headers) as ws:
-        blocks = []
-        deadline = time.monotonic() + 2.0
-        while time.monotonic() < deadline:
+    # A non-terminal scan keeps the socket open and sends heartbeats until the
+    # max duration elapses. We only need to observe one heartbeat comment, then
+    # we stop reading (we never read after the server closes).
+    with _connect(env.client, env.scan.id, headers=env.headers) as ws:
+        saw_heartbeat = False
+        for _ in range(60):  # bounded; server sends a heartbeat every 0.2 s
             try:
                 block = ws.receive_text()
             except WebSocketDisconnect:
                 break
-            blocks.append(block)
-    assert any(": heartbeat" in b for b in blocks), blocks
+            if ": heartbeat" in block:
+                saw_heartbeat = True
+                break
+    assert saw_heartbeat, "no heartbeat comment was sent over the socket"
 
 
 # ── stream cap ───────────────────────────────────────────────────────────────
