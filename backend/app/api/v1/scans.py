@@ -718,12 +718,25 @@ async def stream_scan_events_ws(
     """WebSocket live scan progress (org-scoped, authenticated, capped)."""
     await websocket.accept()
 
-    # ── authenticate (header first; ``?token=`` is the browser fallback) ──
+    # ── authenticate (header first; ``?ticket=`` is the browser fallback) ──
+    # The raw JWT is never accepted from a query string: browsers use a
+    # short-lived single-use ticket, non-browser clients use the bearer header.
     auth = websocket.headers.get("authorization") or ""
-    token = auth[7:] if auth.startswith("Bearer ") else websocket.query_params.get("token")
-    principal = _authenticate_ws_token(token, db) if token else None
+    token = auth[7:] if auth.startswith("Bearer ") else None
+    ticket = websocket.query_params.get("ticket")
+    principal: Principal | None = None
+    if token:
+        principal = _authenticate_ws_token(token, db)
+    elif ticket:
+        principal = _authenticate_ws_ticket(ticket, db)
     if principal is None:
         await websocket.close(code=_WS_CLOSE_AUTH)
+        return
+
+    # ── Origin allowlist (cross-site WebSocket hijacking protection) ──
+    origin = websocket.headers.get("origin") or ""
+    if origin not in _allowed_ws_origins():
+        await websocket.close(code=_WS_CLOSE_FORBIDDEN)
         return
 
     # ── org-scoped scan lookup (cross-org == not found) ──────────────────
