@@ -153,9 +153,13 @@ async function runWebSocket({
   let aborted = false
   let outcome: TransportOutcome | null = null
 
-  signal.addEventListener('abort', () => {
-    aborted = true
-  }, { once: true })
+  signal.addEventListener(
+    'abort',
+    () => {
+      aborted = true
+    },
+    { once: true },
+  )
 
   const finish = (next: TransportOutcome) => {
     if (outcome === null) {
@@ -173,7 +177,9 @@ async function runWebSocket({
     const qs = [
       `token=${encodeURIComponent(token)}`,
       lastEventId ? `lastEventId=${encodeURIComponent(lastEventId)}` : '',
-    ].filter(Boolean).join('&')
+    ]
+      .filter(Boolean)
+      .join('&')
     const url = `${API_PREFIX}/scans/${scanId}/ws?${qs}`
 
     onStatus('connecting')
@@ -282,9 +288,13 @@ async function runSse({
   let backoff = initialBackoffMs
   let aborted = false
 
-  signal.addEventListener('abort', () => {
-    aborted = true
-  }, { once: true })
+  signal.addEventListener(
+    'abort',
+    () => {
+      aborted = true
+    },
+    { once: true },
+  )
 
   while (!aborted) {
     let response: Response | null = null
@@ -413,8 +423,13 @@ export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnect
     // 1. WebSocket (preferred real-time transport).
     if (webSocketAvailable(WebSocketImpl)) {
       const outcome = await runWebSocket({
-        scanId, getToken, onEvent, onStatus,
-        maxFailedConnects, initialBackoffMs, maxBackoffMs,
+        scanId,
+        getToken,
+        onEvent,
+        onStatus,
+        maxFailedConnects,
+        initialBackoffMs,
+        maxBackoffMs,
         WebSocketImpl,
         signal: controller.signal,
       })
@@ -427,8 +442,14 @@ export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnect
     // 2. Server-Sent Events fallback (only reached when WebSocket was
     // unavailable or gave up; keeps a real-time fallback before polling).
     const sseOutcome = await runSse({
-      scanId, getToken, refresh, onEvent, onStatus,
-      maxFailedConnects, initialBackoffMs, maxBackoffMs,
+      scanId,
+      getToken,
+      refresh,
+      onEvent,
+      onStatus,
+      maxFailedConnects,
+      initialBackoffMs,
+      maxBackoffMs,
       fetchImpl,
       signal: controller.signal,
     })
