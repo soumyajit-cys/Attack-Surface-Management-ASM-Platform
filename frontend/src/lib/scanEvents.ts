@@ -211,32 +211,40 @@ async function runWebSocket({
     ws.onerror = () => {
       // Transport errors are counted via onclose, which always fires next.
     }
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve
+    })
     ws.onclose = () => {
-      if (outcome !== null || aborted) return
+      if (aborted) {
+        settle()
+        return
+      }
+      if (outcome !== null) {
+        // Terminal (or already-finalized): settled, do not reconnect.
+        settle()
+        return
+      }
       failures += 1
       if (failures >= maxFailedConnects) {
         finish('polling')
+        settle()
         return
       }
       onStatus('reconnecting')
+      settle() // let the loop recreate the socket
     }
+    signal.addEventListener(
+      'abort',
+      () => {
+        aborted = true
+        settle()
+      },
+      { once: true },
+    )
 
-    // Wait for this session to settle (open/error/close/terminal/abort).
-    await new Promise<void>((resolveSession) => {
-      const check = () => {
-        if (outcome !== null || aborted) {
-          resolveSession()
-          return
-        }
-        if (ws.readyState === WebSocket.CLOSED) {
-          // onclose already handled the outcome; yield to the event loop.
-          setTimeout(resolveSession, 0)
-          return
-        }
-        setTimeout(check, 50)
-      }
-      setTimeout(check, 50)
-    })
+    // Wait for this session to settle (terminal, transport failure, or abort).
+    await settled
   }
 
   if (aborted) return 'aborted'
