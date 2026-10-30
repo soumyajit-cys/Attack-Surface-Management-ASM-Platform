@@ -138,7 +138,6 @@ async function runWebSocket({
 }: {
   scanId: number
   getToken: () => string | null
-  refresh: () => Promise<void> | void
   onEvent: (event: ScanEvent) => void
   onStatus: (status: ScanEventConnectionStatus) => void
   maxFailedConnects: number
