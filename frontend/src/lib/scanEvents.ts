@@ -128,7 +128,6 @@ function webSocketAvailable(WebSocketImpl?: typeof WebSocket): boolean {
 async function runWebSocket({
   scanId,
   getToken,
-  refresh,
   onEvent,
   onStatus,
   maxFailedConnects,
