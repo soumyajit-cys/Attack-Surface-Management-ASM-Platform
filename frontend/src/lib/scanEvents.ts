@@ -414,7 +414,7 @@ export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnect
     // 1. WebSocket (preferred real-time transport).
     if (webSocketAvailable(WebSocketImpl)) {
       const outcome = await runWebSocket({
-        scanId, getToken, refresh, onEvent, onStatus,
+        scanId, getToken, onEvent, onStatus,
         maxFailedConnects, initialBackoffMs, maxBackoffMs,
         WebSocketImpl,
         signal: controller.signal,
