@@ -576,29 +576,109 @@ async def stream_scan_events(
     )
 
 
+# ── WebSocket ticket ──────────────────────────────────────────────────────
+#
+# POST /scans/{id}/ws-ticket issues a single-use, short-lived ticket that
+# browsers (which cannot set custom WebSocket headers) send as ``?ticket=``
+# to authenticate ``GET /scans/{id}/ws``.  The ticket is scoped to
+# user + scan + org, stored in Redis with a short TTL
+# (``ws_ticket_ttl_seconds``), and deleted on first use.  The raw JWT is
+# never placed in a query string; the ``Authorization`` bearer header remains
+# the primary path for non-browser clients.
+
+_WS_TICKET_PREFIX = "ws:ticket:"
+
+
+@router.post("/{scan_id}/ws-ticket", status_code=201)
+async def issue_ws_ticket(
+    scan_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_READ_SCAN_DEP),
+):
+    """Issue a single-use WebSocket ticket for *scan_id* (org-scoped)."""
+    scan = (
+        db.query(ScanHistory)
+        .filter(
+            ScanHistory.id == scan_id,
+            ScanHistory.organization_id == principal.organization_id,
+        )
+        .first()
+    )
+    if scan is None:
+        raise NotFoundError("Scan not found", code="scan_not_found")
+
+    ticket = uuid.uuid4().hex
+    payload = {
+        "user_id": principal.user.id,
+        "scan_id": scan_id,
+        "organization_id": principal.organization_id,
+    }
+    r = get_redis()
+    r.set(
+        f"{_WS_TICKET_PREFIX}{ticket}",
+        json.dumps(payload),
+        ex=settings.ws_ticket_ttl_seconds,
+    )
+    record_audit(
+        db,
+        organization_id=principal.organization_id,
+        actor=principal.user.username,
+        action="scan.ws_ticket_issued",
+        details={"scan_id": scan_id},
+        request=request,
+    )
+    db.commit()
+
+    return {
+        "ticket": ticket,
+        "expires_in": settings.ws_ticket_ttl_seconds,
+    }
+
+
 # ── live scan progress (WebSocket) ─────────────────────────────────────────
 #
 # GET /scans/{id}/ws streams the same Redis Stream ``scan:{id}:events`` as the
 # SSE endpoint, framed as SSE text blocks (``event:``/``data:``/``id:`` lines,
 # plus ``: heartbeat`` comments) over a WebSocket text channel.
 #
-# Auth is the ``Authorization: Bearer`` header. Browsers cannot set custom
-# WebSocket headers, so a ``?token=`` query parameter is also accepted as the
-# WebSocket fallback. Either way the token is validated identically (active
-# JWT, not revoked, org-scoped) and the caller must own the scan's
-# organization — cross-org and unknown scans are refused with a close code.
+# Auth is the ``Authorization: Bearer`` header (primary), or a single-use
+# short-lived ``?ticket=`` obtained from POST /scans/{id}/ws-ticket (browser
+# fallback -- browsers cannot set custom WebSocket headers).  The raw JWT is
+# never sent in a query string.  Either way the caller is org-scoped and must
+# own the scan's organization; cross-org and unknown scans are refused with a
+# close code, as are requests whose Origin is not allowed.
 #
 # Frames carry only data ``GET /scans/{id}`` already exposes (status, phase,
-# counts, short static codes, timestamps) — never hostnames, banners, secrets
-# or raw error text. A terminal event (completed/failed/skipped) is sent and
+# counts, short static codes, timestamps) -- never hostnames, banners, secrets
+# or raw error text.  A terminal event (completed/failed/skipped) is sent and
 # then the socket closes with code 1000; the client reconnects and resumes
-# from ``Last-Event-ID`` via ``?lastEventId=``. A per-user concurrent cap and
-# maximum stream duration mirror the SSE endpoint.
+# from ``Last-Event-ID`` via ``?lastEventId=``.  A per-user concurrent cap and
+# maximum stream duration mirror the SSE endpoint.  The presenting token is
+# re-validated periodically so revocation/expiry mid-stream closes the socket.
 
 _WS_CLOSE_AUTH = 4001
 _WS_CLOSE_FORBIDDEN = 4003
 _WS_CLOSE_NOT_FOUND = 4004
 _WS_CLOSE_INTERNAL = 1011
+
+# Re-validate the presenting token (revocation / user active) at least this
+# often while a WebSocket stays open, so a revoked token closes an open stream.
+_WS_REVALIDATE_INTERVAL_SECONDS = 5.0
+
+
+def _allowed_ws_origins() -> frozenset[str]:
+    """Origins the WebSocket endpoint accepts (Origin allowlist)."""
+
+    origins: set[str] = set()
+    for origin in settings.cors_origins:
+        origin = (origin or "").strip().rstrip("/")
+        if origin:
+            origins.add(origin)
+    frontend = (settings.frontend_url or "").strip().rstrip("/")
+    if frontend:
+        origins.add(frontend)
+    return frozenset(origins)
 
 
 def _authenticate_ws_token(token: str, db: Session) -> Principal | None:
