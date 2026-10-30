@@ -422,10 +422,8 @@ export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnect
       }
       if (aborted) return
     }
-    // 2. Server-Sent Events fallback.
-    if (webSocketAvailable(WebSocketImpl)) {
-      // WebSocket was available but gave up: still try SSE before polling.
-    }
+    // 2. Server-Sent Events fallback (only reached when WebSocket was
+    // unavailable or gave up; keeps a real-time fallback before polling).
     const sseOutcome = await runSse({
       scanId, getToken, refresh, onEvent, onStatus,
       maxFailedConnects, initialBackoffMs, maxBackoffMs,
