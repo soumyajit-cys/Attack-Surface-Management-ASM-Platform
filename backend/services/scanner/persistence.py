@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from models.asset import Asset
@@ -103,11 +106,45 @@ def persist_discovery_results(
 
     subdomains = results.get("subdomains", [])
     saved = []
+    now = datetime.now(timezone.utc)
 
     for sub in subdomains:
         name = sub.get("subdomain") or sub.get("name")
         if not name:
             continue
+
+        sources = sub.get("sources") or [sub.get("source", "unknown")]
+        first_seen = sub.get("first_seen")
+        last_seen = sub.get("last_seen") or now
+
+        # Upsert: concurrent scans must not duplicate rows or lose sources.
+        stmt = (
+            insert(Subdomain)
+            .values(
+                domain_id=domain.id,
+                subdomain=name,
+                source=sources[0] if sources else "unknown",
+                sources=sources,
+                first_seen=first_seen or last_seen,
+                last_seen=last_seen,
+            )
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_subdomains_domain_subdomain",
+            set_={
+                "source": stmt.excluded.source,
+                "sources": sa.func.array_cat(
+                    Subdomain.sources, stmt.excluded.sources
+                ),
+                "first_seen": sa.func.least(
+                    Subdomain.first_seen, stmt.excluded.first_seen
+                ),
+                "last_seen": sa.func.greatest(
+                    Subdomain.last_seen, stmt.excluded.last_seen
+                ),
+            },
+        )
+        db.execute(stmt)
 
         existing = (
             db.query(Subdomain)
@@ -117,15 +154,6 @@ def persist_discovery_results(
             )
             .first()
         )
-        if existing is None:
-            existing = Subdomain(
-                domain_id=domain.id,
-                subdomain=name,
-                source=sub.get("source", "unknown"),
-            )
-            db.add(existing)
-            db.flush()
-
         if sub.get("ip_address"):
             existing.ip_address = sub["ip_address"]
 
