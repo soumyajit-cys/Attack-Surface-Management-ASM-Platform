@@ -136,8 +136,7 @@ class CrtShProvider(DiscoveryProvider):
         # Cache hit (per domain, TTL-bound).
         cached = self._cache_get(domain)
         if cached is not None:
-            hosts = [self._normalize_item(item, domain) for item in cached]
-            hosts = [h for h in hosts if h is not None]
+            hosts = self._normalize_list(cached, domain)
             return ProviderResult(
                 provider=self.name,
                 hosts=hosts,
