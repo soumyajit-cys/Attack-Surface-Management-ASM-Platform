@@ -476,13 +476,76 @@ def test_ws_disconnect_frees_cap_slot(env, monkeypatch):
     assert slot == 1, f"cap slot leaked after disconnect: {slot}"
 
 
+# ── raw-ASGI WebSocket driver ────────────────────────────────────────────
+#
+# TestClient cannot be relied on to surface a server-initiated WebSocket close
+# mid-stream, so revocation/expiry-during-stream is exercised through the real
+# app with a scripted receive channel (same pattern as the SSE tests in
+# tests/v3/test_scan_events.py).  The client stays idle after connect; the
+# server's periodic re-validation is what closes the socket.
+
+
+def _drive_ws_revocation(scan_id: int, token: str, timeout: float = 6.0) -> list:
+    """Run the WebSocket app against an idle client that revokes *token* on
+    the second receive, then capture every message the server sends."""
+    from main import app
+    from auth.token_store import token_store
+
+    import asyncio
+
+    capture: list = []
+    state = {"step": 0}
+    never = asyncio.Event()  # never set -> client stays idle forever
+
+    async def receive():
+        if state["step"] == 0:
+            state["step"] = 1
+            return {"type": "websocket.connect"}
+        # Second receive: revoke the presenting token, then stay idle so the
+        # server's periodic re-validation (not a client disconnect) closes it.
+        token_store.revoke(token)
+        await never.wait()
+        return {"type": "websocket.disconnect"}
+
+    async def send(message):
+        capture.append(message)
+
+    scope = {
+        "type": "websocket",
+        "http_version": "1.1",
+        "method": "GET",
+        "path": f"/api/v1/scans/{scan_id}/ws",
+        "raw_path": f"/api/v1/scans/{scan_id}/ws".encode(),
+        "query_string": b"",
+        "headers": [
+            [b"authorization", b"Bearer " + token.encode()],
+            [b"origin", _ALLOWED_ORIGIN.encode()],
+            [b"host", b"testserver"],
+        ],
+        "client": ("testclient", 50000),
+        "server": ("testserver", 80),
+        "scheme": "ws",
+        "state": {},
+        "app": app,
+        "asgi": {"spec_version": "2.0"},
+    }
+
+    async def run():
+        await asyncio.wait_for(app(scope, receive, send), timeout=timeout)
+
+    try:
+        asyncio.run(run())
+    except asyncio.TimeoutError:
+        pass
+    return capture
+
+
 # ── revocation / expiry during an open stream ──────────────────────────────
 
 
 def test_ws_revocation_closes_open_stream(env, monkeypatch):
     """Revoking the bearer token mid-stream closes the WebSocket (fail-closed)."""
     from auth import jwt as token_service
-    from auth.token_store import token_store
     import app.api.v1.scans as scans_api
 
     # Speed up the periodic re-validation so the test stays fast.
@@ -494,24 +557,11 @@ def test_ws_revocation_closes_open_stream(env, monkeypatch):
                          target="revokable.example.com")
 
     token = token_service.create_access_token(env.user.id)
-    headers = {"Authorization": f"Bearer {token}"}
+    capture = _drive_ws_revocation(running.id, token)
 
-    with _connect(env.client, running.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
-        ws.receive_text()  # snapshot; stream is open
-
-        token_store.revoke(token)
-
-        # The next periodic re-validation (0.2 s) must close the socket with
-        # an auth close code.  Use receive() to observe the disconnect frame.
-        deadline = time.monotonic() + 5
-        saw_disconnect = False
-        while time.monotonic() < deadline:
-            msg = ws.receive()
-            if msg.get("type") == "websocket.disconnect":
-                assert msg.get("code") == 4001, msg
-                saw_disconnect = True
-                break
-    assert saw_disconnect, "stream did not close after token revocation"
+    closes = [m for m in capture if m.get("type") == "websocket.close"]
+    assert closes, f"no websocket.close was sent; capture={capture}"
+    assert closes[0].get("code") == 4001, closes[0]
 
 
 def test_ws_expired_token_refused_at_handshake(env, monkeypatch):
