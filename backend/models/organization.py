@@ -113,6 +113,12 @@ class Organization(Base):
         cascade="all, delete-orphan"
     )
 
+    enrichment_providers = relationship(
+        "EnrichmentProvider",
+        back_populates="organization",
+        cascade="all, delete-orphan"
+    )
+
 
 class Invitation(Base):
 

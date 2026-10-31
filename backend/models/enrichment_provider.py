@@ -12,18 +12,15 @@ the owning organisation, consistent with the other tenant tables.
 
 from __future__ import annotations
 
-from datetime import datetime
-
+import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
     Integer,
     String,
-    Text,
     func,
 )
-
 from sqlalchemy.orm import relationship
 
 from app.core.crypto import EncryptedText
@@ -77,11 +74,3 @@ class EnrichmentProvider(Base):
         "Organization",
         back_populates="enrichment_providers",
     )
-
-
-class _MissingColumn:  # pragma: no cover - mypy shim
-    pass
-
-
-# Imported here so the UniqueConstraint reference resolves.
-import sqlalchemy as sa  # noqa: E402
