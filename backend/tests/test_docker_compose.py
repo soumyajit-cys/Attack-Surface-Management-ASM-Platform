@@ -72,6 +72,25 @@ def test_nginx_proxies_api_and_serves_spa():
     assert "proxy_pass http://frontend" in text
 
 
+def test_nginx_websocket_proxy():
+    """The WebSocket live-progress endpoint is proxied with HTTP/1.1 and the
+    Upgrade/Connection hop-by-hop headers, plus a long read timeout so idle
+    streams are not killed mid-flight."""
+    text = NGINX_CONF.read_text()
+    assert "location ~ ^/api/v1/scans/[0-9]+/ws$" in text
+    assert "proxy_http_version 1.1" in text
+    assert 'proxy_set_header Upgrade $http_upgrade;' in text
+    assert 'proxy_set_header Connection "upgrade";' in text
+    assert "proxy_read_timeout 1h" in text
+
+
+def test_nginx_csp_allows_websocket_to_own_origin():
+    """connect-src 'self' permits ws/wss connections to the same origin the
+    SPA is served from (the WebSocket endpoint is same-origin)."""
+    text = NGINX_CONF.read_text()
+    assert "connect-src 'self'" in text
+
+
 def test_nginx_tls_ready():
     text = NGINX_CONF.read_text()
     assert "443 ssl" in text  # commented TLS block counts as TLS-ready
