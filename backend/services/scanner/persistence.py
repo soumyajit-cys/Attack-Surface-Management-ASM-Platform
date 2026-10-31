@@ -1,3 +1,4 @@
+import sqlalchemy as sa
 from datetime import datetime, timezone
 
 from sqlalchemy.dialects.postgresql import insert
