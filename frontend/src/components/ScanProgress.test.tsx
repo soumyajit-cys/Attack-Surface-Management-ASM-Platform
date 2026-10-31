@@ -47,6 +47,7 @@ vi.mock('../lib/scanEvents', () => ({
   TERMINAL_EVENT_KINDS: new Set(['completed', 'failed', 'skipped']),
   subscribeScanEvents: (args: {
     scanId: number
+    fetchTicket: () => Promise<string | null>
     onEvent: (e: FakeEvent) => void
     onStatus: (s: Status) => void
   }) => {
