@@ -668,15 +668,20 @@ _WS_REVALIDATE_INTERVAL_SECONDS = 5.0
 
 
 def _allowed_ws_origins() -> frozenset[str]:
-    """Origins the WebSocket endpoint accepts (Origin allowlist)."""
+    """Origins the WebSocket endpoint accepts (Origin allowlist).
+
+    Wildcard origins (``*``) are never allowed: a WebSocket connection from
+    any site would bypass the same-origin protection.  Only concrete origins
+    from ``CORS_ORIGINS`` plus ``FRONTEND_URL`` are accepted.
+    """
 
     origins: set[str] = set()
     for origin in settings.cors_origins:
         origin = (origin or "").strip().rstrip("/")
-        if origin:
+        if origin and origin != "*":
             origins.add(origin)
     frontend = (settings.frontend_url or "").strip().rstrip("/")
-    if frontend:
+    if frontend and frontend != "*":
         origins.add(frontend)
     return frozenset(origins)
 
