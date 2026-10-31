@@ -51,4 +51,5 @@ __all__ = [
     "AlertSeverity",
     "EmailDigestConfig",
     "VerifiedDomain",
+    "EnrichmentProvider",
 ]

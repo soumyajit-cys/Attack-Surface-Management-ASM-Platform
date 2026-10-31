@@ -15,6 +15,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
+    Column,
     DateTime,
     ForeignKey,
     Integer,
