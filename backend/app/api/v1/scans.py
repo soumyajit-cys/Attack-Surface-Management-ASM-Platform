@@ -878,12 +878,9 @@ async def stream_scan_events_ws(
                         revoked = True
                     user = db.get(User, principal.user.id)
                     if revoked or user is None or not user.is_active:
-                        print(f"WS REVALIDATE closing: revoked={revoked} user_none={user is None} inactive={not user.is_active if user else None}", flush=True)
                         try:
                             await websocket.close(code=_WS_CLOSE_AUTH)
-                            print("WS close sent", flush=True)
-                        except Exception as e:
-                            print(f"WS close error: {e}", flush=True)
+                        except Exception:
                             pass
                         return
             # heartbeat cadence
