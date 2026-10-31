@@ -428,7 +428,7 @@ export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnect
     if (webSocketAvailable(WebSocketImpl)) {
       const outcome = await runWebSocket({
         scanId,
-        getToken,
+        fetchTicket,
         onEvent,
         onStatus,
         maxFailedConnects,
