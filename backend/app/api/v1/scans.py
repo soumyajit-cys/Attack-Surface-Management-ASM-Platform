@@ -718,25 +718,23 @@ def _authenticate_ws_ticket(ticket: str, db: Session) -> Principal | None:
     if not ticket:
         return None
     r = get_redis()
-    raw = r.get(f"{_WS_TICKET_PREFIX}{ticket}")
+    # GETDEL atomically returns the value and deletes the key, so two
+    # concurrent holders of the same ticket cannot both consume it.
+    raw = r.getdel(f"{_WS_TICKET_PREFIX}{ticket}")
     if raw is None:
         # Missing, expired, or already consumed (single-use).
         return None
     try:
         payload = json.loads(raw)
     except (ValueError, TypeError):
-        r.delete(f"{_WS_TICKET_PREFIX}{ticket}")
+        # Corrupt ticket payload: already deleted by GETDEL, nothing to do.
         return None
     try:
         user_id = int(payload["user_id"])
         scan_id = int(payload["scan_id"])
         org_id = int(payload["organization_id"])
     except (KeyError, TypeError, ValueError):
-        r.delete(f"{_WS_TICKET_PREFIX}{ticket}")
         return None
-
-    # Single-use: consume the ticket now so it cannot be reused.
-    r.delete(f"{_WS_TICKET_PREFIX}{ticket}")
 
     scan = (
         db.query(ScanHistory)
