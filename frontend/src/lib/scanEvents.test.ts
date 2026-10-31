@@ -79,6 +79,7 @@ const base = {
   scanId: 42,
   getToken: () => 'token-1',
   refresh: vi.fn(async () => undefined),
+  fetchTicket: vi.fn(async () => 'ticket-1'),
   onEvent: vi.fn(),
   onStatus: vi.fn(),
   initialBackoffMs: 1,

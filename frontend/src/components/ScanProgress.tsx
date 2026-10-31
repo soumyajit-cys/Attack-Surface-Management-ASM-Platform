@@ -95,6 +95,8 @@ export function ScanProgress({ scanId, initialStatus, onTerminal }: ScanProgress
       scanId,
       getToken: () => api.getAccessToken(),
       refresh: () => api.refreshTokenOnce(),
+      // Each WebSocket connection authenticates with a single-use ticket.
+      fetchTicket: () => api.getWsTicket(scanId).then((t) => t.ticket),
       onEvent: (event: ScanEvent) => {
         if (aborted) return
         applyEvent(event.event, event.data)
