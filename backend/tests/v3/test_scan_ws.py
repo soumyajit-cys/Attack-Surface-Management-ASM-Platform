@@ -488,29 +488,35 @@ def test_ws_revocation_closes_open_stream(env, monkeypatch):
     # Speed up the periodic re-validation so the test stays fast.
     monkeypatch.setattr(scans_api, "_WS_REVALIDATE_INTERVAL_SECONDS", 0.2, raising=False)
 
+    # A non-terminal scan keeps the server in the live-tail loop where
+    # re-validation runs.
+    running = _make_scan(env.db, env.org.id, status="running",
+                         target="revokable.example.com")
+
     token = token_service.create_access_token(env.user.id)
     headers = {"Authorization": f"Bearer {token}"}
 
-    with _connect(env.client, env.scan_completed.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
+    with _connect(env.client, running.id, headers=headers, origin=_ALLOWED_ORIGIN) as ws:
         ws.receive_text()  # snapshot; stream is open
 
         token_store.revoke(token)
 
-        # The next periodic re-validation (0.2 s) must close the socket.
+        # The next periodic re-validation (0.2 s) must close the socket with
+        # an auth close code.  Use receive() to observe the disconnect frame.
         deadline = time.monotonic() + 5
+        saw_disconnect = False
         while time.monotonic() < deadline:
-            try:
-                block = ws.receive_text()
-            except WebSocketDisconnect as exc:
-                assert exc.code == 4001, exc.code
-                return
-        raise AssertionError("stream did not close after token revocation")
+            msg = ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                assert msg.get("code") == 4001, msg
+                saw_disconnect = True
+                break
+    assert saw_disconnect, "stream did not close after token revocation"
 
 
-def test_ws_expiry_closes_open_stream(env, monkeypatch):
-    """An expired bearer token closes an already-open WebSocket."""
+def test_ws_expired_token_refused_at_handshake(env, monkeypatch):
+    """An expired bearer token is refused at the WebSocket handshake."""
     from auth import jwt as token_service
-    from datetime import datetime, timedelta, timezone
     import app.api.v1.scans as scans_api
     from config import settings
 
@@ -532,4 +538,4 @@ def test_ws_expiry_closes_open_stream(env, monkeypatch):
         # Expired token is refused at the handshake.
         assert exc.code == 4001, exc.code
         return
-    raise AssertionError("expected an expired token to be refused")
+    raise AssertionError("expected an expired token to be refused at handshake")
