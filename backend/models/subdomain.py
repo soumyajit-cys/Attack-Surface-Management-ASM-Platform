@@ -1,3 +1,4 @@
+import sqlalchemy as sa
 from sqlalchemy import (
     Column,
     Integer,
@@ -21,6 +22,16 @@ class Subdomain(Base):
     __tablename__ = "subdomains"
 
     id = Column(Integer, primary_key=True)
+
+    __table_args__ = (
+        # Discovery upserts (INSERT ... ON CONFLICT) must be safe under
+        # concurrent scans; subdomains are tenant-scoped via domain->asset.
+        sa.UniqueConstraint(
+            "domain_id",
+            "subdomain",
+            name="uq_subdomains_domain_subdomain",
+        ),
+    )
 
     domain_id = Column(
         Integer,
