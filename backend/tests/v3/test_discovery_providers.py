@@ -118,7 +118,9 @@ class TestCrtShProvider:
 
     @pytest.mark.asyncio
     async def test_lookup_returns_in_scope_hosts_and_dedups(self, provider, monkeypatch):
-        fetch = FakeFetch([_FetchResult(200, b'[{"name_value":"www.example.com\nwww.example.com"}]')])
+        fetch = FakeFetch(
+            [_FetchResult(200, b'[{"name_value":"www.example.com\\nwww.example.com"}]')]
+        )
         monkeypatch.setattr(
             "services.discovery.providers.crt_sh.fetch_url_validated", fetch
         )
@@ -132,7 +134,7 @@ class TestCrtShProvider:
 
     @pytest.mark.asyncio
     async def test_wildcard_recorded_without_literal_host(self, provider, monkeypatch):
-        body = '[{"name_value":"*.example.com\nwww.example.com"}]'
+        body = '[{"name_value":"*.example.com\\nwww.example.com"}]'
         fetch = FakeFetch([_FetchResult(200, body.encode())])
         monkeypatch.setattr(
             "services.discovery.providers.crt_sh.fetch_url_validated", fetch
