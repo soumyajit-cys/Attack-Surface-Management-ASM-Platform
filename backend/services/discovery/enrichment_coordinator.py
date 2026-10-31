@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Iterable, cast
 
 from metrics.prometheus import (
@@ -97,12 +98,12 @@ class DiscoveryCoordinator:
                         source=existing.source,
                         is_wildcard=existing.is_wildcard or host.is_wildcard,
                         first_seen=min(
-                            existing.first_seen or host.first_seen,
-                            host.first_seen or existing.first_seen,
+                            cast(datetime, existing.first_seen or host.first_seen),
+                            cast(datetime, host.first_seen or existing.first_seen),
                         ),
                         last_seen=max(
-                            existing.last_seen or host.last_seen,
-                            host.last_seen or existing.last_seen,
+                            cast(datetime, existing.last_seen or host.last_seen),
+                            cast(datetime, host.last_seen or existing.last_seen),
                         ),
                     )
 
