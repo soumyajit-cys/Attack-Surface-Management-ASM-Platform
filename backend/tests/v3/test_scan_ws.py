@@ -220,6 +220,41 @@ def test_ws_ticket_is_single_use(env):
     raise AssertionError("expected a consumed ticket to be refused")
 
 
+def test_ws_ticket_concurrent_use_only_one_succeeds(env):
+    """GETDEL makes ticket consumption atomic: only one of two concurrent
+    connections can consume the same ticket."""
+    ticket = _issue_ticket(env.client, env.scan_completed.id, env.headers)
+
+    results = []
+
+    def connect():
+        try:
+            with _connect(
+                env.client, env.scan_completed.id,
+                query_params={"ticket": ticket},
+                origin=_ALLOWED_ORIGIN,
+            ) as ws:
+                ws.receive_text()  # snapshot
+            results.append("success")
+        except WebSocketDisconnect as exc:
+            results.append(("refused", exc.code))
+
+    # Two concurrent connections presenting the same single-use ticket.
+    import threading
+
+    t1 = threading.Thread(target=connect)
+    t2 = threading.Thread(target=connect)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert results.count("success") == 1, results
+    refused = [r for r in results if isinstance(r, tuple)]
+    assert len(refused) == 1
+    assert refused[0][1] == 4001, refused
+
+
 def test_ws_revoked_token_refused(env, db):
     from auth import jwt as token_service
     from auth.token_store import token_store
