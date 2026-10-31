@@ -365,6 +365,24 @@ def test_ws_foreign_origin_refused(env):
     raise AssertionError("expected a foreign Origin to be refused")
 
 
+def test_ws_wildcard_origin_refused(env, monkeypatch):
+    """A wildcard origin (``*``) is never accepted for WebSocket upgrades,
+    even if listed in CORS_ORIGINS."""
+    import app.api.v1.scans as scans_api
+    from config import settings
+
+    monkeypatch.setattr(
+        settings, "cors_origins", ["*", _ALLOWED_ORIGIN], raising=False)
+
+    try:
+        with _connect(env.client, env.scan_completed.id, headers=env.headers, origin="*") as ws:
+            ws.receive_text()
+    except WebSocketDisconnect as exc:
+        assert exc.code == 4003, exc.code
+        return
+    raise AssertionError("expected a wildcard Origin to be refused")
+
+
 # ── reading behavior ─────────────────────────────────────────────────────────
 
 
