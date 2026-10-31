@@ -24,7 +24,6 @@ ENCRYPTED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("alert_integrations", "secret"),
     ("alert_integrations", "jira_api_token"),
     ("alert_integrations", "webhook_url"),
-    ("enrichment_providers", "encrypted_api_key"),
 )
 
 #: Values that are never valid secrets keys (fail fast with a clear message).
