@@ -55,6 +55,7 @@ COVERED_ELSEWHERE = {
 COVERED_ID_ROUTES = {
     ("GET", "/api/v1/scans/{scan_id}"),
     ("GET", "/api/v1/scans/{scan_id}/events"),
+    ("POST", "/api/v1/scans/{scan_id}/ws-ticket"),
     ("GET", "/api/v1/findings/{finding_id}"),
     ("GET", "/api/v1/assets/{asset_id}"),
     ("POST", "/api/v1/assets/{asset_id}/enrich"),

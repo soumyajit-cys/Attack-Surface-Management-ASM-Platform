@@ -76,6 +76,7 @@ EXPECTED = {
     ("GET", "/api/v1/scans"): frozenset({Permission.SCAN_READ}),
     ("GET", "/api/v1/scans/{scan_id}"): frozenset({Permission.SCAN_READ}),
     ("GET", "/api/v1/scans/{scan_id}/events"): frozenset({Permission.SCAN_READ}),
+    ("POST", "/api/v1/scans/{scan_id}/ws-ticket"): frozenset({Permission.SCAN_READ}),
     ("GET", "/api/v1/findings"): frozenset({Permission.FINDING_READ}),
     ("GET", "/api/v1/findings/{finding_id}"): frozenset({Permission.FINDING_READ}),
     ("GET", "/api/v1/alerts"): frozenset({Permission.FINDING_READ}),
