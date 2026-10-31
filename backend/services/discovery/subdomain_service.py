@@ -1,7 +1,34 @@
+"""Subdomain discovery pipeline.
+
+Merges passive discovery sources (crt.sh Certificate Transparency logs and
+DNS brute-force resolution) into a single list of candidate subdomains for a
+registered domain.
+
+Every source result carries a ``source`` attribute plus ``first_seen`` /
+``last_seen`` timestamps.  All external data is treated as untrusted:
+hostnames are normalized, only the registered domain (and its subdomains)
+are kept, results are deduplicated and capped per source, and raw responses
+are never logged.
+
+Passive discovery (crt.sh, public DNS) is allowed for any domain already
+registered in the org.  Active probing of discovered hosts (ports, SSL,
+HTTP headers) is gated separately: it only runs when the parent domain is
+verified and inside scan scope (see tasks.discovery_tasks and the
+corresponding scope test).
+"""
+
+from __future__ import annotations
+
 import asyncio
 import json
+import logging
 import socket
+from datetime import datetime, timezone
+from typing import Optional
 
+from services.discovery.enrichment_coordinator import DiscoveryCoordinator
+from services.discovery.providers.crt_sh import CrtShProvider
+from utils.egress import fetch_url_validated
 from utils.logger import logger
 
 CRT_API = "https://crt.sh/?q=%25.{}&output=json"
@@ -31,65 +58,106 @@ COMMON_SUBDOMAINS = [
     "research", "development", "security", "compliance", "audit", "risk", "governance",
 ]
 
+logger = logging.getLogger("sentinelasm.discovery")
 
-async def discover_subdomains(domain):
-    subdomains = set()
-    sources = {}
 
-    crt_subs = await _crt_sh_discovery(domain)
-    for sub in crt_subs:
-        subdomains.add(sub)
-        sources[sub] = "crt.sh"
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
-    if len(subdomains) < 50:
-        brute_subs = await _dns_brute_force(domain)
-        for sub in brute_subs:
-            if sub not in subdomains:
-                sources[sub] = "dns_brute"
-            subdomains.add(sub)
 
-    result = []
-    for sub in sorted(subdomains):
-        result.append({
+def _normalize_hostname(host: str) -> str:
+    return (host or "").strip().lower().rstrip(".")
+
+
+async def discover_subdomains(domain: str) -> list[dict]:
+    """Discover subdomains for *domain* from all enabled passive sources.
+
+    Returns a list of dicts: ``{"subdomain", "source", "first_seen",
+    "last_seen"}``.  Only the registered domain and its subdomains are kept;
+    results are deduplicated across sources and capped per source.
+    """
+    domain = _normalize_hostname(domain)
+    if not domain:
+        return []
+
+    providers = _build_providers()
+    coordinator = DiscoveryCoordinator(
+        providers,
+        max_hosts_per_source_per_scan=500,
+    )
+    hosts, _results = await coordinator.discover(domain)
+
+    # DNS brute-force as an additional passive source (public DNS only).
+    brute = await _dns_brute_force(domain)
+    now = _now()
+    for sub in brute:
+        normalized = _normalize_hostname(sub)
+        if normalized and (normalized == domain or normalized.endswith("." + domain)):
+            hosts.append(
+                DiscoveredHostView(
+                    subdomain=normalized,
+                    source="dns_brute",
+                    first_seen=now,
+                    last_seen=now,
+                )
+            )
+
+    # Dedup across sources: keep earliest first_seen, latest last_seen,
+    # merge sources.
+    merged: dict[str, dict] = {}
+    for h in hosts:
+        entry = merged.get(h.subdomain)
+        if entry is None:
+            merged[h.subdomain] = {
+                "subdomain": h.subdomain,
+                "source": h.source,
+                "sources": [h.source],
+                "first_seen": h.first_seen,
+                "last_seen": h.last_seen,
+            }
+        else:
+            if h.source not in entry["sources"]:
+                entry["sources"].append(h.source)
+            entry["first_seen"] = min(entry["first_seen"], h.first_seen)
+            entry["last_seen"] = max(entry["last_seen"], h.last_seen)
+
+    result = [
+        {
             "subdomain": sub,
-            "source": sources.get(sub, "unknown"),
-        })
-
+            "source": entry["sources"][0] if entry["sources"] else "unknown",
+            "sources": entry["sources"],
+            "first_seen": entry["first_seen"].isoformat(),
+            "last_seen": entry["last_seen"].isoformat(),
+        }
+        for sub, entry in sorted(merged.items())
+    ]
     return result
 
 
-async def _crt_sh_discovery(domain):
-    from utils.egress import fetch_url_validated
+def _build_providers():
+    from app.core.config import settings
 
-    try:
-        result = await fetch_url_validated(
-            CRT_API.format(domain), timeout=15, max_bytes=CRTSH_MAX_BYTES
-        )
-        if result.status_code != 200:
-            logger.warning(
-                "crt.sh discovery failed for %s: HTTP %s", domain, result.status_code
+    enabled = [
+        name.strip() for name in (settings.discovery_providers or "crt_sh").split(",")
+        if name.strip()
+    ]
+    providers = []
+    if "crt_sh" in enabled:
+        providers.append(
+            CrtShProvider(
+                rate_limit_per_min=settings.crt_sh_rate_limit_per_min,
+                cache_ttl_seconds=settings.crt_sh_cache_ttl_seconds,
+                timeout_seconds=settings.crt_sh_timeout_seconds,
+                max_retries=settings.crt_sh_max_retries,
             )
-            return []
-        data = json.loads(result.body)
-    except Exception as exc:
-        logger.warning("crt.sh discovery failed for %s: %s", domain, exc)
-        return []
-
-    subdomains = set()
-    for item in data:
-        name = item.get("name_value")
-        if name:
-            for entry in name.split("\n"):
-                entry = entry.strip().lower().rstrip(".")
-                if entry and "*" not in entry:
-                    subdomains.add(entry)
-    return list(subdomains)
+        )
+    return providers
 
 
-async def _dns_brute_force(domain):
+async def _dns_brute_force(domain: str) -> list[str]:
     semaphore = asyncio.Semaphore(50)
 
-    async def resolve_one(prefix):
+    async def resolve_one(prefix: str) -> Optional[str]:
         async with semaphore:
             fqdn = f"{prefix}.{domain}"
             try:
@@ -104,7 +172,8 @@ async def _dns_brute_force(domain):
     return [r for r in results if r]
 
 
-async def resolve_subdomain_ips(subdomain):
+async def resolve_subdomain_ips(subdomain: str) -> list[str]:
+    """Resolve a subdomain's IPs, keeping only globally-routable addresses."""
     from utils.ssrf_guard import is_globally_routable_ip
 
     try:
@@ -123,3 +192,19 @@ async def resolve_subdomain_ips(subdomain):
     except Exception as exc:
         logger.warning("Failed to resolve IPs for %s: %s", subdomain, exc)
         return []
+
+
+class DiscoveredHostView:
+    """In-memory view of one discovered subdomain from the coordinator."""
+
+    def __init__(
+        self,
+        subdomain: str,
+        source: str,
+        first_seen: datetime,
+        last_seen: datetime,
+    ) -> None:
+        self.subdomain = subdomain
+        self.source = source
+        self.first_seen = first_seen
+        self.last_seen = last_seen
