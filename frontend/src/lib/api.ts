@@ -21,6 +21,7 @@ import type {
   ChangeEvent,
   VerifiedDomain,
   VerificationChallenge,
+  WsTicket,
 } from './types'
 import type { AssetGraphData } from '../AssetGraph'
 
@@ -437,6 +438,13 @@ class ApiClient {
 
   async getScan(scanId: number): Promise<ScanStatusResponse> {
     return this.get<ScanStatusResponse>(`/scans/${scanId}`)
+  }
+
+  /** Obtain a single-use, short-lived ticket to authenticate a WebSocket
+   *  connection to ``GET /scans/{id}/ws`` (browsers cannot set custom
+   *  WebSocket headers). */
+  async getWsTicket(scanId: number): Promise<WsTicket> {
+    return this.post<WsTicket>(`/scans/${scanId}/ws-ticket`)
   }
 
   async getScans(params?: {

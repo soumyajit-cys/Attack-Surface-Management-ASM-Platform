@@ -52,6 +52,12 @@ export interface VerifiedDomain {
   last_checked_at: string | null
 }
 
+/** Single-use, short-lived WebSocket authentication ticket. */
+export interface WsTicket {
+  ticket: string
+  expires_in: number
+}
+
 export interface VerificationChallenge {
   domain: string
   method: string
