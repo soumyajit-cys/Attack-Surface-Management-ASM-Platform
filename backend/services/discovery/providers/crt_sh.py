@@ -226,23 +226,22 @@ class CrtShProvider(DiscoveryProvider):
         now = now_utc()
         wildcard_seen = False
         for item in data if isinstance(data, list) else []:
-            host, was_wildcard = self._normalize_item(item, domain)
-            if host is None:
-                continue
+            item_hosts, was_wildcard = self._normalize_item(item, domain)
             if was_wildcard:
                 wildcard_seen = True
-            if host in seen:
-                continue
-            seen.add(host)
-            hosts.append(
-                DiscoveredHost(
-                    host=host,
-                    source=self.name,
-                    is_wildcard=was_wildcard,
-                    first_seen=now,
-                    last_seen=now,
+            for host in item_hosts:
+                if host in seen:
+                    continue
+                seen.add(host)
+                hosts.append(
+                    DiscoveredHost(
+                        host=host,
+                        source=self.name,
+                        is_wildcard=was_wildcard,
+                        first_seen=now,
+                        last_seen=now,
+                    )
                 )
-            )
         if wildcard_seen:
             # Record that a wildcard cert covered this domain without
             # creating a literal wildcard host.
@@ -259,10 +258,11 @@ class CrtShProvider(DiscoveryProvider):
 
     def _normalize_item(
         self, item: dict, domain: str
-    ) -> tuple[Optional[str], bool]:
+    ) -> tuple[list[str], bool]:
+        """Return (in-scope hosts, whether any wildcard cert covered them)."""
         name_value = item.get("name_value") if isinstance(item, dict) else None
         if not name_value or not isinstance(name_value, str):
-            return None, False
+            return [], False
         was_wildcard = False
         hosts: list[str] = []
         for entry in name_value.split("\n"):
@@ -279,10 +279,7 @@ class CrtShProvider(DiscoveryProvider):
             # Only keep the registered domain or its subdomains.
             if normalized == domain or normalized.endswith("." + domain):
                 hosts.append(normalized)
-        if not hosts:
-            return None, was_wildcard
-        # Dedup within this response: return the first (canonical) host.
-        return hosts[0], was_wildcard
+        return hosts, was_wildcard
 
 
 async def _sleep(seconds: float) -> None:

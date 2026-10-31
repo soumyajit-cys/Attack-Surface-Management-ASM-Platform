@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Iterable
+from typing import Iterable, cast
 
 from metrics.prometheus import (
     DISCOVERY_CACHE_HITS_TOTAL,
