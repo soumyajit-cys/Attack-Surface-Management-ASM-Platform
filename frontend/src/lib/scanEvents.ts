@@ -233,7 +233,7 @@ async function runWebSocket({
     ws.onerror = () => {
       // Transport errors are counted via onclose, which always fires next.
     }
-    ws.onclose = (event: CloseEvent) => {
+    ws.onclose = () => {
       if (aborted || outcome !== null) {
         // Already finalized (terminal / aborted); nothing more to do.
         return
