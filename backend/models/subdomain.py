@@ -3,9 +3,11 @@ from sqlalchemy import (
     Integer,
     String,
     ForeignKey,
-    DateTime
+    DateTime,
+    text,
 )
 
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.sql import func
 
 from sqlalchemy.orm import relationship
