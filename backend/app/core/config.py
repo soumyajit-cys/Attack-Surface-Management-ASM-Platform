@@ -133,6 +133,21 @@ class Settings(BaseSettings):
     # after this many seconds (default 30 s).
     ws_ticket_ttl_seconds: int = 30
 
+    # Discovery sources (Phase 2). Comma-separated list of enabled provider
+    # names (e.g. ``crt_sh``). Providers not listed here never run.
+    discovery_providers: str = "crt_sh"
+    # Max subdomains returned per source per scan (prevents DB flooding).
+    max_subdomains_per_source_per_scan: int = 500
+    # crt.sh CT-log discovery. Rate limit is a global Redis token bucket
+    # shared by all workers (tokens per minute).
+    crt_sh_rate_limit_per_min: int = 60
+    # Per-domain cache TTL for crt.sh responses (seconds).
+    crt_sh_cache_ttl_seconds: int = 3600
+    # crt.sh connect/read timeout (seconds).
+    crt_sh_timeout_seconds: float = 15.0
+    # crt.sh max retries on transient failure (502/503/504 / network).
+    crt_sh_max_retries: int = 3
+
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
     # and the direct peer is used. Set behind nginx/traefik so the limiter,
