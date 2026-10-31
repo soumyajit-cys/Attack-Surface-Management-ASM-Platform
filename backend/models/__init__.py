@@ -19,6 +19,7 @@ from models.subdomain_ip import subdomain_ips
 from models.scan_policy import ScanPolicy, ScanScope, ScanFrequency
 from models.verified_domain import VerifiedDomain
 from models.alert_integration import AlertIntegration, AlertChannel, AlertSeverity, EmailDigestConfig
+from models.enrichment_provider import EnrichmentProvider
 
 __all__ = [
     "Base",
