@@ -130,7 +130,7 @@ function webSocketAvailable(WebSocketImpl?: typeof WebSocket): boolean {
  */
 async function runWebSocket({
   scanId,
-  getToken,
+  fetchTicket,
   onEvent,
   onStatus,
   maxFailedConnects,
@@ -140,7 +140,7 @@ async function runWebSocket({
   signal,
 }: {
   scanId: number
-  getToken: () => string | null
+  fetchTicket: () => Promise<string | null>
   onEvent: (event: ScanEvent) => void
   onStatus: (status: ScanEventConnectionStatus) => void
   maxFailedConnects: number
@@ -178,13 +178,22 @@ async function runWebSocket({
   }
 
   while (!aborted && outcome === null) {
-    const token = getToken()
-    if (!token) {
-      // No credentials: nothing to authenticate with; hand off to polling.
+    // Each WebSocket connection authenticates with a single-use, short-lived
+    // ticket (browsers cannot set custom WebSocket headers).  Fetch a fresh
+    // ticket for every attempt so reconnects always present a valid one.
+    let ticket: string | null
+    try {
+      ticket = await fetchTicket()
+    } catch {
+      ticket = null
+    }
+    if (!ticket) {
+      // No ticket available: cannot authenticate the WebSocket; hand off to
+      // the next transport / polling.
       return 'polling'
     }
     const qs = [
-      `token=${encodeURIComponent(token)}`,
+      `ticket=${encodeURIComponent(ticket)}`,
       lastEventId ? `lastEventId=${encodeURIComponent(lastEventId)}` : '',
     ]
       .filter(Boolean)
@@ -224,12 +233,15 @@ async function runWebSocket({
     ws.onerror = () => {
       // Transport errors are counted via onclose, which always fires next.
     }
-    ws.onclose = () => {
+    ws.onclose = (event: CloseEvent) => {
       if (aborted || outcome !== null) {
         // Already finalized (terminal / aborted); nothing more to do.
         return
       }
       failures += 1
+      // 4001 = auth failure (ticket expired / consumed / invalid).  The loop
+      // will refetch a ticket on the next attempt, but this attempt still
+      // counts toward the fallback cap.
       if (failures >= maxFailedConnects) {
         finish('polling')
         return
@@ -391,6 +403,7 @@ export function subscribeScanEvents(options: ScanEventOptions): ScanEventConnect
     scanId,
     getToken,
     refresh,
+    fetchTicket,
     onEvent,
     onStatus,
     maxFailedConnects = 3,
