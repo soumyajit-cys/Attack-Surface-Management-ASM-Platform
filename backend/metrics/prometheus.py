@@ -38,6 +38,29 @@ SUBDOMAINS_DISCOVERED = Counter(
     ["organization", "source"],
 )
 
+# Discovery provider metrics. Labels: provider and outcome only -- never a
+# domain or hostname (observability must not leak scan targets).
+DISCOVERY_REQUESTS_TOTAL = Counter(
+    "sentinelasm_discovery_provider_requests_total",
+    "Total discovery provider lookups",
+    ["provider", "outcome"],
+)
+DISCOVERY_HOSTS_FOUND_TOTAL = Counter(
+    "sentinelasm_discovery_provider_hosts_found_total",
+    "Total hosts returned by a discovery provider",
+    ["provider"],
+)
+DISCOVERY_CACHE_HITS_TOTAL = Counter(
+    "sentinelasm_discovery_provider_cache_hits_total",
+    "Total discovery provider cache hits",
+    ["provider"],
+)
+DISCOVERY_SUBDOMAINS_RETURNED_TOTAL = Counter(
+    "sentinelasm_discovery_subdomains_returned_total",
+    "Total subdomains returned after per-source capping",
+    ["provider"],
+)
+
 PORTS_SCANNED = Counter(
     "sentinelasm_ports_scanned_total",
     "Total ports scanned",
