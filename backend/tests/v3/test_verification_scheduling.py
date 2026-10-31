@@ -48,13 +48,18 @@ class TestBackstopGate:
         self, db, org_factory, monkeypatch
     ):
         import tasks.discovery_tasks as dt
+        from services.verification import verification_service
+
+        # Freeze time so the test never depends on the wall clock.
+        FIXED_NOW = datetime(2026, 11, 1, 12, 0, 0, tzinfo=timezone.utc)
+        monkeypatch.setattr(
+            verification_service, "_now", lambda: FIXED_NOW, raising=False)
 
         org, scan = self._scan_row(db, org_factory, "gdirect.example.com")
-        now = datetime.now(timezone.utc)
         db.add(VerifiedDomain(
             organization_id=org.id, domain="gdirect.example.com",
             method="grandfathered", status="grandfathered", token="grandfathered",
-            expires_at=now + timedelta(days=14),
+            expires_at=FIXED_NOW + timedelta(days=14),
         ))
         db.commit()
 
