@@ -31,6 +31,7 @@ from types import SimpleNamespace
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
+from app.api.v1.scans import _WS_TICKET_PREFIX
 from services.scan_events import publish_scan_event
 
 
