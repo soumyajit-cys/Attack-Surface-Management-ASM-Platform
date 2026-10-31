@@ -51,10 +51,13 @@ export const TERMINAL_EVENT_KINDS = new Set(['completed', 'failed', 'skipped'])
 
 export interface ScanEventOptions {
   scanId: number
-  /** Called just before building each request's Authorization header / ws token. */
+  /** Called just before building each request's Authorization header (SSE). */
   getToken: () => string | null
-  /** Invoked once on the first 401 (token refresh), then reconnect. */
+  /** Invoked once on the first 401 (token refresh), then reconnect (SSE). */
   refresh: () => Promise<void> | void
+  /** Fetch a fresh single-use WebSocket ticket (async HTTP POST to
+   *  ``POST /scans/{id}/ws-ticket``). Required for the WebSocket transport. */
+  fetchTicket: () => Promise<string | null>
   onEvent: (event: ScanEvent) => void
   onStatus: (status: ScanEventConnectionStatus) => void
   /** Failed connection attempts before falling back to the next transport / polling. */
