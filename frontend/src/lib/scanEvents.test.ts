@@ -89,6 +89,7 @@ const base = {
 beforeEach(() => {
   vi.useFakeTimers()
   base.refresh.mockClear()
+  base.fetchTicket.mockClear()
   base.onEvent.mockClear()
   base.onStatus.mockClear()
 })
@@ -273,7 +274,8 @@ describe('subscribeScanEvents — WebSocket transport', () => {
     await flush(4)
     expect(sockets).toHaveLength(1)
     expect(sockets[0].url).toContain('/scans/42/ws')
-    expect(sockets[0].url).toContain('token=token-1')
+    expect(sockets[0].url).toContain('ticket=ticket-1')
+    expect(sockets[0].url).not.toContain('token')
     expect(sockets[0].url).not.toContain('lastEventId')
     // the socket is open
     sockets[0].onopen!()
