@@ -35,6 +35,18 @@ class Subdomain(Base):
 
     source = Column(String)
 
+    # discovery sources (Phase 2): the full set of providers that have
+    # observed this subdomain; source remains the latest/primary source.
+    sources = Column(
+        ARRAY(String),
+        nullable=True,
+        server_default=text("'{}'"),
+    )
+
+    first_seen = Column(DateTime(timezone=True), nullable=True)
+
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
