@@ -189,6 +189,11 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
                 verification.record_grace_notice(
                     db, scan.organization_id, scan.asset_id, covering
                 )
+                # The grace-notice alert is independent of the scan outcome: it
+                # reminds the owner to verify before the grace window lapses.
+                # Commit it now so it survives a later rollback (e.g. Phase 1
+                # failing and ``except Exception`` rolling back the scan).
+                db.commit()
 
         publish_scan_event(scan_id, "running")
         ACTIVE_SCANS.labels(organization=org_label).inc()
