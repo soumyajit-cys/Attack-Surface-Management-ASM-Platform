@@ -4493,6 +4493,47 @@
         ]
       }
     },
+    "/api/v1/scans/{scan_id}/ws-ticket": {
+      "post": {
+        "description": "Issue a single-use WebSocket ticket for *scan_id* (org-scoped).",
+        "operationId": "issue_ws_ticket_api_v1_scans__scan_id__ws_ticket_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scan_id",
+            "required": true,
+            "schema": {
+              "title": "Scan Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Ws Ticket",
+        "tags": [
+          "scans"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",

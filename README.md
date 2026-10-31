@@ -252,6 +252,7 @@ Settings field without documenting it fails `make check`.
 | `SCAN_STREAM_HEARTBEAT_SECONDS` | `15` | No | `: heartbeat` cadence inside an open stream; heartbeats are bytes of the already-counted request and never rate-limit again |
 | `SCAN_STREAM_MAX_PER_USER` | `5` | No | Per-user concurrent open scan streams; exceeding answers 429 `stream_cap_reached` (slot released in `finally` including on client disconnect; each slot carries its own expiry score = open + max duration + margin, pruned on every open, so a killed API process cannot leak the cap) |
 | `SCAN_STREAM_MAX_DURATION_SECONDS` | `900` | No | Maximum stream duration (15 min); after it the server closes and the client reconnects, resuming via `Last-Event-ID` |
+| `WS_TICKET_TTL_SECONDS` | `30` | No | WebSocket live-progress ticket TTL in seconds. Browsers cannot set custom WebSocket headers, so the WS fallback authenticates with a single-use, short-lived ticket from `POST /scans/{id}/ws-ticket`. |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
