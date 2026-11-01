@@ -95,7 +95,7 @@ async def discover_subdomains(domain: str) -> list[dict]:
         if normalized and (normalized == domain or normalized.endswith("." + domain)):
             hosts.append(
                 DiscoveredHostView(
-                    subdomain=normalized,
+                    host=normalized,
                     source="dns_brute",
                     first_seen=now,
                     last_seen=now,
@@ -106,10 +106,10 @@ async def discover_subdomains(domain: str) -> list[dict]:
     # merge sources.
     merged: dict[str, dict] = {}
     for h in hosts:
-        entry = merged.get(h.subdomain)
+        entry = merged.get(h.host)
         if entry is None:
-            merged[h.subdomain] = {
-                "subdomain": h.subdomain,
+            merged[h.host] = {
+                "subdomain": h.host,
                 "source": h.source,
                 "sources": [h.source],
                 "first_seen": h.first_seen,
