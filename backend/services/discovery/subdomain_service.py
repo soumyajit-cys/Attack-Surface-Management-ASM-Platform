@@ -87,6 +87,13 @@ async def discover_subdomains(domain: str) -> list[dict]:
     )
     hosts, _results = await coordinator.discover(domain)
 
+    # Defense-in-depth: only keep the registered domain and its subdomains
+    # from provider results (providers are expected to filter, but we verify).
+    hosts = [
+        h for h in hosts
+        if h.host == domain or h.host.endswith("." + domain)
+    ]
+
     # DNS brute-force as an additional passive source (public DNS only).
     brute = await _dns_brute_force(domain)
     now = _now()
