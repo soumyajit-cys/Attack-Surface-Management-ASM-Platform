@@ -199,12 +199,12 @@ class DiscoveredHostView:
 
     def __init__(
         self,
-        subdomain: str,
+        host: str,
         source: str,
         first_seen: datetime,
         last_seen: datetime,
     ) -> None:
-        self.subdomain = subdomain
+        self.host = host
         self.source = source
         self.first_seen = first_seen
         self.last_seen = last_seen
