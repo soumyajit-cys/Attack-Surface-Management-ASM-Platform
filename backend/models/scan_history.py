@@ -43,6 +43,10 @@ class ScanHistory(Base):
     # Scope the scan ran under (passive/active/full). Set by the pipeline.
     scope = Column(String, nullable=False, default="full")
 
+    # Discovery metadata (Phase 2.1): per-source truncation flags and counts
+    # from discover_subdomains, stored as JSON so the API can surface it.
+    discovery_meta = Column(JSONB, nullable=True)
+
     started_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
