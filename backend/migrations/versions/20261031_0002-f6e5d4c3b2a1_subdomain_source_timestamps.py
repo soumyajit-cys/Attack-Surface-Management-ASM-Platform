@@ -131,7 +131,7 @@ def upgrade() -> None:
         """
         UPDATE subdomains
         SET sources = CASE
-            WHEN (sources IS NULL OR array_length(sources, 1) = 0)
+            WHEN (sources IS NULL OR cardinality(sources) = 0)
                  AND source IS NOT NULL THEN ARRAY[source]
             ELSE sources
         END,
