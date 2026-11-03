@@ -130,11 +130,13 @@ def upgrade() -> None:
     op.execute(
         """
         UPDATE subdomains
-        SET sources = COALESCE(sources, CASE WHEN source IS NOT NULL
-                                             THEN ARRAY[source]
-                                             ELSE '{}'::text[] END),
-            first_seen = COALESCE(first_seen, created_at),
-            last_seen = COALESCE(last_seen, created_at)
+        SET sources = CASE
+            WHEN (sources IS NULL OR array_length(sources, 1) = 0)
+                 AND source IS NOT NULL THEN ARRAY[source]
+            ELSE sources
+        END,
+        first_seen = COALESCE(first_seen, created_at),
+        last_seen = COALESCE(last_seen, created_at)
         """
     )
 
