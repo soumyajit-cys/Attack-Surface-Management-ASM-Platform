@@ -382,6 +382,7 @@ async def get_scan_status(
         "error": scan.error,
         "started_at": scan.started_at,
         "completed_at": scan.completed_at,
+        "discovery_meta": scan.discovery_meta,
         "unavailable_phases": scanner_registry.unavailable_phases(),
     }
 

@@ -214,6 +214,17 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
 
         pin_ip(domain_name, resolved_ip)
 
+        # Aggregate per-source truncation from discovery results and stash it
+        # on the scan record so the API can surface it (Phase 2.1).
+        truncation: dict[str, int] = {}
+        for sub in results.get("subdomains", []):
+            if isinstance(sub, dict) and sub.get("truncated"):
+                src = sub.get("source", "unknown")
+                truncation[src] = sub.get("truncated_count", 0)
+        if truncation:
+            scan.discovery_meta = {"truncated_sources": truncation}
+            db.flush()
+
         persisted = _persist_discovery(db, scan, domain_name, results)
         publish_scan_event(
             scan_id, "phase_finished", phase="discovery",
