@@ -230,16 +230,27 @@ class TestSubdomainDedupeMigration:
         alembic_ini = str(
             tmp_path / "alembic.ini"
         )
-        # Write a minimal alembic.ini pointing at the backend tree.
+        # Copy the real alembic.ini (has logging sections) and override
+        # only the DB URL + script_location.
         from pathlib import Path
+        import shutil
 
         backend_root = Path(__file__).resolve().parents[2]
-        ini_content = f"""
-[alembic]
-script_location = {backend_root}/migrations
-sqlalchemy.url = {db_url}
-"""
-        Path(alembic_ini).write_text(ini_content)
+        shutil.copy(backend_root / "alembic.ini", alembic_ini)
+        ini_text = Path(alembic_ini).read_text()
+        ini_text = ini_text.replace(
+            "script_location = migrations",
+            f"script_location = {backend_root}/migrations",
+        )
+        ini_text = ini_text.replace(
+            "sqlalchemy.url =",
+            f"sqlalchemy.url = {db_url}",
+        )
+        ini_text = ini_text.replace(
+            "prepend_sys_path = .",
+            f"prepend_sys_path = {backend_root}",
+        )
+        Path(alembic_ini).write_text(ini_text)
 
         # alembic env.py imports `from config import settings`, so the
         # backend tree must be on PYTHONPATH.
