@@ -196,3 +196,272 @@ class TestScopeGating:
         assert calls == [], f"active probing must not run without pin: {calls}"
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
+
+
+# ── migration safety: subdomain dedupe before unique constraint ─────────────
+
+
+class TestSubdomainDedupeMigration:
+    """Seed duplicate subdomain rows, upgrade (which dedupes + adds the
+    unique constraint), assert merged data, then downgrade + upgrade again
+    to prove idempotency. Runs against a scratch_ database via alembic."""
+
+    @staticmethod
+    def _run(cmd: list[str], env: dict) -> None:
+        import subprocess
+
+        result = subprocess.run(
+            cmd, env=env, capture_output=True, text=True
+        )
+        assert result.returncode == 0, (
+            f"command failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
+        )
+
+    def test_dedupe_before_unique_constraint(self, monkeypatch, tmp_path):
+        import os
+
+        db_url = os.environ.get(
+            "SCRATCH_DB_URL",
+            "postgresql://sentinel:sentinelpass@localhost:5432/scratch_dedupe_test",
+        )
+        env = dict(os.environ)
+        env["DATABASE_URL"] = db_url
+
+        alembic_ini = str(
+            tmp_path / "alembic.ini"
+        )
+        # Write a minimal alembic.ini pointing at the backend tree.
+        from pathlib import Path
+
+        backend_root = Path(__file__).resolve().parents[2]
+        ini_content = f"""
+[alembic]
+script_location = {backend_root}/migrations
+sqlalchemy.url = {db_url}
+"""
+        Path(alembic_ini).write_text(ini_content)
+
+        # Create a fresh scratch DB.
+        import psycopg2
+
+        conn = psycopg2.connect(
+            "postgresql://sentinel:sentinelpass@localhost:5432/postgres"
+        )
+        conn.autocommit = True
+        try:
+            conn.cursor().execute(
+                f'DROP DATABASE IF EXISTS scratch_dedupe_test;'
+            )
+            conn.cursor().execute(
+                'CREATE DATABASE scratch_dedupe_test OWNER sentinel;'
+            )
+        finally:
+            conn.close()
+
+        # Apply all migrations up to (but not including) the unique constraint.
+        self._run(
+            [
+                "alembic",
+                "-c",
+                alembic_ini,
+                "upgrade",
+                "a1b2c3d4e5f6",  # enrichment_providers (before subdomain timestamps)
+            ],
+            env,
+        )
+
+        # Seed duplicate subdomain rows directly (simulating pre-constraint
+        # duplicates from concurrent scans).
+        from sqlalchemy import create_engine, text
+
+        engine = create_engine(db_url)
+        with engine.begin() as conn:
+            # Need a domain first.
+            conn.execute(
+                text(
+                    "INSERT INTO organizations (id, name, created_at) "
+                    "VALUES (1, 'dedupe-org', now())"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO assets (id, organization_id, name, created_at) "
+                    "VALUES (1, 1, 'example.com', now())"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO domains (id, organization_id, asset_id, domain, "
+                    "created_at, updated_at) VALUES (1, 1, 1, 'example.com', "
+                    "now(), now())"
+                )
+            )
+            # Two duplicate rows for www.example.com under domain 1.
+            conn.execute(
+                text(
+                    "INSERT INTO subdomains (id, domain_id, subdomain, source, "
+                    "created_at, updated_at) VALUES "
+                    "(10, 1, 'www.example.com', 'crt.sh', '2026-11-01 10:00:00+00', "
+                    "'2026-11-01 10:00:00+00')"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO subdomains (id, domain_id, subdomain, source, "
+                    "created_at, updated_at) VALUES "
+                    "(11, 1, 'www.example.com', 'dns_brute', '2026-11-02 10:00:00+00', "
+                    "'2026-11-02 10:00:00+00')"
+                )
+            )
+            # A subdomain_ip pointing to the dup row (id=11).
+            conn.execute(
+                text(
+                    "INSERT INTO subdomain_ips (subdomain_id, ip_address) "
+                    "VALUES (11, '93.184.216.34')"
+                )
+            )
+        engine.dispose()
+
+        # Upgrade to the migration with the unique constraint (f6e5d4c3b2a1).
+        # The upgrade should dedupe: keep id=10 (oldest), union sources,
+        # min first_seen, max last_seen, repoint subdomain_ips to id=10,
+        # delete id=11.
+        self._run(
+            ["alembic", "-c", alembic_ini, "upgrade", "f6e5d4c3b2a1"],
+            env,
+        )
+
+        # Assert merged data.
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, source, sources, first_seen, last_seen "
+                    "FROM subdomains WHERE subdomain = 'www.example.com'"
+                )
+            ).fetchall()
+            assert len(rows) == 1, f"expected 1 merged row, got {rows}"
+            row = rows[0]
+            assert row.id == 10, f"kept row should be id=10 (oldest), got {row.id}"
+            assert set(row.sources) == {"crt.sh", "dns_brute"}, row.sources
+            # subdomain_ips repointed to the kept row.
+            ips = conn.execute(
+                text(
+                    "SELECT subdomain_id FROM subdomain_ips "
+                    "WHERE ip_address = '93.184.216.34'"
+                )
+            ).fetchall()
+            assert ips and ips[0].subdomain_id == 10, ips
+        engine.dispose()
+
+        # Downgrade then upgrade again (idempotency).
+        self._run(
+            ["alembic", "-c", alembic_ini, "downgrade", "a1b2c3d4e5f6"],
+            env,
+        )
+        self._run(
+            ["alembic", "-c", alembic_ini, "upgrade", "f6e5d4c3b2a1"],
+            env,
+        )
+
+        # Data should still be correct after the round-trip.
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT COUNT(*) FROM subdomains "
+                    "WHERE subdomain = 'www.example.com'"
+                )
+            ).fetchall()
+            assert rows[0][0] == 1, f"expected 1 row after round-trip, got {rows[0][0]}"
+        engine.dispose()
+
+
+# ── rate limiter: fail closed on Redis errors ──────────────────────────────
+
+
+class TestRateLimitFailClosed:
+    def test_redis_down_skips_lookup_rate_limit_unavailable(
+        self, monkeypatch
+    ):
+        """When Redis is unavailable, _grant_token returns None, the
+        lookup is skipped, and the result error is rate_limit_unavailable."""
+        from services.discovery.providers.crt_sh import CrtShProvider
+
+        provider = CrtShProvider(
+            rate_limit_per_min=1000,
+            cache_ttl_seconds=60,
+            timeout_seconds=5.0,
+            max_retries=1,
+            max_bytes=524288,
+        )
+
+        def boom(*a, **k):
+            raise redis_error()
+
+        class redis_error(Exception):
+            pass
+
+        monkeypatch.setattr(provider, "_grant_token", boom)
+        # Also block the fetch so we can confirm it's never reached.
+        fetch_called = []
+
+        async def blocked_fetch(*a, **k):
+            fetch_called.append(True)
+            raise AssertionError("fetch must not be called when Redis is down")
+
+        monkeypatch.setattr(
+            "services.discovery.providers.crt_sh.fetch_url_validated",
+            blocked_fetch,
+        )
+
+        import asyncio
+
+        result = asyncio.run(provider.lookup("example.com"))
+        assert result.error == "rate_limit_unavailable", result.error
+        assert result.hosts == []
+        assert result.hosts_returned == 0
+        assert not fetch_called, "fetch must not be called"
+
+
+# ── DNS brute-force gating: active discovery requires scope + verification ─
+
+
+class TestDnsBruteGating:
+    def test_dns_brute_is_active_and_gated(self, db, org_factory, monkeypatch):
+        """DNS brute-force is active discovery: it is skipped when the
+        domain is not pinned (unverified), just like port/SSL scanning."""
+        import tasks.discovery_tasks as dt
+
+        org, _ = org_factory("Gate2 Org", "gateuser2", "gateuser2@example.com")
+        scan = SimpleNamespace(organization_id=org.id, id=2)
+
+        # No pinned IP for the subdomain → active probing skipped.
+        calls = []
+
+        def fake_run(ctx, modules):
+            calls.append([m.phase for m in modules])
+            return {}
+
+        monkeypatch.setattr(dt, "_run_in_context", fake_run)
+        monkeypatch.setattr(
+            dt,
+            "pinned_resolve",
+            lambda host: (_ for _ in ()).throw(
+                __import__("app.core.ssrf", fromlist=["PinnedResolutionMissing"]).PinnedResolutionMissing(
+                    host
+                )
+            ),
+        )
+
+        persisted = {
+            "subdomains": [
+                SimpleNamespace(subdomain="www.example.com", id=1, ip_address=None)
+            ],
+        }
+
+        summary = dt._scan_targets(
+            db, scan, persisted, "example.com", None, "full"
+        )
+
+        assert calls == [], f"active probing must not run without pin: {calls}"
+        assert summary["unpinned_skipped"] == ["www.example.com"]
+        assert summary["ports_total"] == 0
