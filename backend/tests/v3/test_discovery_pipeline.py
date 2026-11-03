@@ -241,6 +241,10 @@ sqlalchemy.url = {db_url}
 """
         Path(alembic_ini).write_text(ini_content)
 
+        # alembic env.py imports `from config import settings`, so the
+        # backend tree must be on PYTHONPATH.
+        env["PYTHONPATH"] = str(backend_root)
+
         # Create a fresh scratch DB (connect as postgres superuser).
         import psycopg2
 
