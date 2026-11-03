@@ -176,7 +176,13 @@ def _build_providers():
 
 
 async def _dns_brute_force(domain: str) -> list[str]:
-    semaphore = asyncio.Semaphore(50)
+    """Active DNS brute-force: resolve candidate names against the target.
+
+    Bounded wordlist and concurrency -- this is active discovery, not
+    passive enumeration.  Every resolved IP passes the full SSRF guard
+    before being stored or scanned (see resolve_subdomain_ips).
+    """
+    semaphore = asyncio.Semaphore(DNS_BRUTE_CONCURRENCY)
 
     async def resolve_one(prefix: str) -> Optional[str]:
         async with semaphore:
@@ -188,7 +194,7 @@ async def _dns_brute_force(domain: str) -> list[str]:
             except Exception:
                 return None
 
-    tasks = [resolve_one(prefix) for prefix in COMMON_SUBDOMAINS]
+    tasks = [resolve_one(prefix) for prefix in DNS_BRUTE_WORDLIST]
     results = await asyncio.gather(*tasks)
     return [r for r in results if r]
 
