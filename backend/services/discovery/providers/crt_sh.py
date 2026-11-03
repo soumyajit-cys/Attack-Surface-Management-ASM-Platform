@@ -80,12 +80,13 @@ class CrtShProvider(DiscoveryProvider):
         self._bucket_key = "ratelimit:discovery:crt_sh"
 
     # ── rate limiting (global token bucket, shared by all workers) ──
-    def _grant_token(self) -> bool:
+    def _grant_token(self) -> bool | None:
         """Atomically grant one token from the shared bucket via Lua.
 
-        Fail CLOSED: Redis errors return False so the lookup is skipped
-        and the provider reports ``rate_limit_unavailable`` rather than
-        silently bypassing the rate limit.
+        Returns:
+          True  -- token granted, proceed with lookup.
+          False -- bucket empty (rate limited), retry with backoff.
+          None  -- Redis unavailable: fail closed, skip the lookup.
         """
         r = get_redis()
         try:
@@ -103,7 +104,7 @@ class CrtShProvider(DiscoveryProvider):
                 "crt.sh rate-limit bucket unavailable (%s), lookup skipped",
                 type(exc).__name__,
             )
-            return False
+            return None
 
     # ── per-domain Redis cache ──
     def _cache_key(self, domain: str) -> str:
@@ -149,20 +150,33 @@ class CrtShProvider(DiscoveryProvider):
                 hosts_returned=len(hosts),
             )
 
-        # Global rate limit (shared by all workers).
+        # Global rate limit (shared by all workers).  Fail CLOSED on Redis
+        # outage (skip the lookup, report rate_limit_unavailable); retry
+        # with backoff when the bucket is merely exhausted.
+        rate_unavailable = False
         for attempt in range(self._max_retries + 1):
-            if not self._grant_token():
-                wait = min(1.0 * (2**attempt), 8.0)
-                logger.debug(
-                    "crt.sh rate-limited for %s, retrying in %.1fs", domain, wait
-                )
-                await _sleep(wait)
-                continue
-            break
+            granted = self._grant_token()
+            if granted is None:
+                # Redis down: fail closed, skip lookup non-fatally.
+                rate_unavailable = True
+                break
+            if granted:
+                break
+            wait = min(1.0 * (2**attempt), 8.0)
+            logger.debug(
+                "crt.sh rate-limited for %s, retrying in %.1fs", domain, wait
+            )
+            await _sleep(wait)
         else:
             return ProviderResult(
                 provider=self.name,
                 error="rate_limit_exceeded",
+                hosts_returned=0,
+            )
+        if rate_unavailable:
+            return ProviderResult(
+                provider=self.name,
+                error="rate_limit_unavailable",
                 hosts_returned=0,
             )
 
