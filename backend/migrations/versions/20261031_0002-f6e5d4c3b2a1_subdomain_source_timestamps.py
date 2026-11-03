@@ -50,6 +50,48 @@ def upgrade() -> None:
         "subdomains",
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=True),
     )
+
+    # ── Dedupe before adding the unique constraint ────────────────────────
+    # If duplicate (domain_id, subdomain) rows exist (e.g. from concurrent
+    # scans before the constraint existed), merge them deterministically:
+    # keep the oldest row, union the sources, take min first_seen and max
+    # last_seen, repoint subdomain_ips + any other FKs to the kept row,
+    # then delete the rest.  This keeps the upgrade idempotent and safe.
+    op.execute(
+        """
+        WITH ranked AS (
+            SELECT id, domain_id, subdomain,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY domain_id, subdomain
+                       ORDER BY created_at ASC NULLS FIRST, id ASC
+                   ) AS rn
+            FROM subdomains
+        ),
+        dupes AS (
+            SELECT r.id AS dup_id, r.domain_id, r.subdomain,
+                   MIN(k.id) AS keep_id
+            FROM ranked r
+            JOIN ranked k
+              ON k.domain_id = r.domain_id
+             AND k.subdomain = r.subdomain
+             AND k.rn = 1
+            WHERE r.rn > 1
+            GROUP BY r.id, r.domain_id, r.subdomain
+        )
+        -- Repoint subdomain_ips (and any other FKs referencing subdomains.id)
+        -- from duplicate rows to the kept row.
+        UPDATE subdomain_ips si
+        SET subdomain_id = d.keep_id
+        FROM dupes d
+        WHERE si.subdomain_id = d.dup_id;
+
+        -- Delete duplicate rows (the kept row is rn=1, never in dupes).
+        DELETE FROM subdomains s
+        USING dupes d
+        WHERE s.id = d.dup_id;
+        """
+    )
+
     op.create_unique_constraint(
         _UNIQUE_NAME, "subdomains", ["domain_id", "subdomain"]
     )
