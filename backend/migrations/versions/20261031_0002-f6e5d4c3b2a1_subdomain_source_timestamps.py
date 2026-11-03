@@ -59,36 +59,67 @@ def upgrade() -> None:
     # then delete the rest.  This keeps the upgrade idempotent and safe.
     op.execute(
         """
-        WITH ranked AS (
-            SELECT id, domain_id, subdomain,
-                   ROW_NUMBER() OVER (
-                       PARTITION BY domain_id, subdomain
-                       ORDER BY created_at ASC NULLS FIRST, id ASC
-                   ) AS rn
-            FROM subdomains
-        ),
-        dupes AS (
-            SELECT r.id AS dup_id, r.domain_id, r.subdomain,
-                   MIN(k.id) AS keep_id
-            FROM ranked r
-            JOIN ranked k
-              ON k.domain_id = r.domain_id
-             AND k.subdomain = r.subdomain
-             AND k.rn = 1
-            WHERE r.rn > 1
-            GROUP BY r.id, r.domain_id, r.subdomain
-        )
-        -- Repoint subdomain_ips (and any other FKs referencing subdomains.id)
-        -- from duplicate rows to the kept row.
-        UPDATE subdomain_ips si
-        SET subdomain_id = d.keep_id
-        FROM dupes d
-        WHERE si.subdomain_id = d.dup_id;
+        DO $$
+        DECLARE
+            rec RECORD;
+            keep_id INTEGER;
+        BEGIN
+            FOR rec IN
+                SELECT domain_id, subdomain
+                FROM subdomains
+                GROUP BY domain_id, subdomain
+                HAVING COUNT(*) > 1
+            LOOP
+                -- Keep the oldest row (by created_at, then id).
+                SELECT id INTO keep_id
+                FROM subdomains
+                WHERE domain_id = rec.domain_id
+                  AND subdomain = rec.subdomain
+                ORDER BY created_at ASC NULLS FIRST, id ASC
+                LIMIT 1;
 
-        -- Delete duplicate rows (the kept row is rn=1, never in dupes).
-        DELETE FROM subdomains s
-        USING dupes d
-        WHERE s.id = d.dup_id;
+                -- Repoint subdomain_ips (and any other FKs referencing
+                -- subdomains.id) from duplicate rows to the kept row.
+                UPDATE subdomain_ips si
+                SET subdomain_id = keep_id
+                WHERE si.subdomain_id IN (
+                    SELECT id FROM subdomains
+                    WHERE domain_id = rec.domain_id
+                      AND subdomain = rec.subdomain
+                      AND id <> keep_id
+                );
+
+                -- Merge sources / timestamps into the kept row.
+                UPDATE subdomains
+                SET sources = (
+                    SELECT ARRAY(
+                        SELECT DISTINCT unnest(sources)
+                        FROM subdomains
+                        WHERE domain_id = rec.domain_id
+                          AND subdomain = rec.subdomain
+                    )
+                ),
+                first_seen = COALESCE(
+                    (SELECT MIN(first_seen) FROM subdomains
+                     WHERE domain_id = rec.domain_id
+                       AND subdomain = rec.subdomain),
+                    created_at
+                ),
+                last_seen = COALESCE(
+                    (SELECT MAX(last_seen) FROM subdomains
+                     WHERE domain_id = rec.domain_id
+                       AND subdomain = rec.subdomain),
+                    created_at
+                )
+                WHERE id = keep_id;
+
+                -- Delete the duplicate rows (kept row is never deleted).
+                DELETE FROM subdomains
+                WHERE domain_id = rec.domain_id
+                  AND subdomain = rec.subdomain
+                  AND id <> keep_id;
+            END LOOP;
+        END $$;
         """
     )
 
