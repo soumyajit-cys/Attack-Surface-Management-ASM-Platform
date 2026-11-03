@@ -406,11 +406,8 @@ class TestRateLimitFailClosed:
             max_bytes=524288,
         )
 
-        class RedisDownError(Exception):
-            pass
-
         def boom(*a, **k):
-            raise RedisDownError("redis is down")
+            return None  # Redis down → fail closed → None
 
         monkeypatch.setattr(provider, "_grant_token", boom)
         # Also block the fetch so we can confirm it's never reached.
