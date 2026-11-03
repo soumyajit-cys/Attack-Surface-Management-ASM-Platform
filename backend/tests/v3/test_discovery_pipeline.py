@@ -326,18 +326,18 @@ class TestSubdomainDedupeMigration:
             # Two duplicate rows for www.example.com under domain 1.
             conn.execute(
                 text(
-                    "INSERT INTO subdomains (id, domain_id, subdomain, source, "
+                    "INSERT INTO subdomains (id, domain_id, subdomain, source, sources, "
                     "created_at, updated_at) VALUES "
-                    "(10, 1, 'www.example.com', 'crt.sh', '2026-11-01 10:00:00+00', "
-                    "'2026-11-01 10:00:00+00')"
+                    "(10, 1, 'www.example.com', 'crt.sh', ARRAY['crt.sh'], "
+                    "'2026-11-01 10:00:00+00', '2026-11-01 10:00:00+00')"
                 )
             )
             conn.execute(
                 text(
-                    "INSERT INTO subdomains (id, domain_id, subdomain, source, "
+                    "INSERT INTO subdomains (id, domain_id, subdomain, source, sources, "
                     "created_at, updated_at) VALUES "
-                    "(11, 1, 'www.example.com', 'dns_brute', '2026-11-02 10:00:00+00', "
-                    "'2026-11-02 10:00:00+00')"
+                    "(11, 1, 'www.example.com', 'dns_brute', ARRAY['dns_brute'], "
+                    "'2026-11-02 10:00:00+00', '2026-11-02 10:00:00+00')"
                 )
             )
             # A subdomain_ip pointing to the dup row (id=11).
