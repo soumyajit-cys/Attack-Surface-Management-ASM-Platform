@@ -241,11 +241,11 @@ sqlalchemy.url = {db_url}
 """
         Path(alembic_ini).write_text(ini_content)
 
-        # Create a fresh scratch DB.
+        # Create a fresh scratch DB (connect as postgres superuser).
         import psycopg2
 
         conn = psycopg2.connect(
-            "postgresql://sentinel:sentinelpass@localhost:5432/postgres"
+            "postgresql://postgres:postgres@localhost:5432/postgres"
         )
         conn.autocommit = True
         try:
@@ -254,6 +254,18 @@ sqlalchemy.url = {db_url}
             )
             conn.cursor().execute(
                 'CREATE DATABASE scratch_dedupe_test OWNER sentinel;'
+            )
+        finally:
+            conn.close()
+
+        # Grant sentinel access to the new database.
+        conn = psycopg2.connect(
+            "postgresql://postgres:postgres@localhost:5432/postgres"
+        )
+        conn.autocommit = True
+        try:
+            conn.cursor().execute(
+                'GRANT ALL ON DATABASE scratch_dedupe_test TO sentinel;'
             )
         finally:
             conn.close()
@@ -394,11 +406,11 @@ class TestRateLimitFailClosed:
             max_bytes=524288,
         )
 
-        def boom(*a, **k):
-            raise redis_error()
-
-        class redis_error(Exception):
+        class RedisDownError(Exception):
             pass
+
+        def boom(*a, **k):
+            raise RedisDownError("redis is down")
 
         monkeypatch.setattr(provider, "_grant_token", boom)
         # Also block the fetch so we can confirm it's never reached.
