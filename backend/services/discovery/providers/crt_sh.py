@@ -81,7 +81,12 @@ class CrtShProvider(DiscoveryProvider):
 
     # ── rate limiting (global token bucket, shared by all workers) ──
     def _grant_token(self) -> bool:
-        """Atomically grant one token from the shared bucket via Lua."""
+        """Atomically grant one token from the shared bucket via Lua.
+
+        Fail CLOSED: Redis errors return False so the lookup is skipped
+        and the provider reports ``rate_limit_unavailable`` rather than
+        silently bypassing the rate limit.
+        """
         r = get_redis()
         try:
             granted = r.eval(
@@ -93,12 +98,12 @@ class CrtShProvider(DiscoveryProvider):
                 time.time(),
             )
             return bool(granted)
-        except Exception as exc:  # Redis down: fail open with a warning
+        except Exception as exc:  # Redis down: fail closed, do not bypass
             logger.warning(
-                "crt.sh rate-limit bucket unavailable (%s), proceeding",
+                "crt.sh rate-limit bucket unavailable (%s), lookup skipped",
                 type(exc).__name__,
             )
-            return True
+            return False
 
     # ── per-domain Redis cache ──
     def _cache_key(self, domain: str) -> str:
