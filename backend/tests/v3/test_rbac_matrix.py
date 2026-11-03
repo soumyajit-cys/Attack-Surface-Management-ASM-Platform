@@ -130,6 +130,9 @@ EXPECTED = {
     ("POST", "/api/v1/organizations/2fa-requirement"): frozenset({Permission.ORG_MANAGE}),
     ("POST", "/api/v1/auth/admin/reset-2fa"): frozenset({Permission.ORG_MANAGE}),
     ("GET", "/api/v1/audit-logs"): frozenset({Permission.ORG_MANAGE}),
+    ("GET", "/api/v1/enrichment/providers"): frozenset({Permission.ENRICHMENT_MANAGE}),
+    ("PUT", "/api/v1/enrichment/providers/{name}"): frozenset({Permission.ENRICHMENT_MANAGE}),
+    ("DELETE", "/api/v1/enrichment/providers/{name}"): frozenset({Permission.ENRICHMENT_MANAGE}),
 }
 
 
