@@ -64,11 +64,15 @@ def _normalize_hostname(host: str) -> str:
 
 
 async def discover_subdomains(domain: str) -> list[dict]:
-    """Discover subdomains for *domain* from all enabled passive sources.
+    """Discover subdomains for *domain* from all enabled sources.
 
     Returns a list of dicts: ``{"subdomain", "source", "first_seen",
     "last_seen"}``.  Only the registered domain and its subdomains are kept;
     results are deduplicated across sources and capped per source.
+
+    Each result dict may also carry ``truncated`` (bool) and
+    ``truncated_count`` (int) when a source was capped by
+    ``settings.max_subdomains_per_source_per_scan``.
     """
     domain = _normalize_hostname(domain)
     if not domain:
@@ -77,9 +81,15 @@ async def discover_subdomains(domain: str) -> list[dict]:
     providers = _build_providers()
     coordinator = DiscoveryCoordinator(
         providers,
-        max_hosts_per_source_per_scan=500,
+        max_hosts_per_source_per_scan=settings.max_subdomains_per_source_per_scan,
     )
-    hosts, _results = await coordinator.discover(domain)
+    hosts, results = await coordinator.discover(domain)
+
+    # Collect truncation flags from provider results.
+    truncation = {}
+    for r in results:
+        if getattr(r, "truncated", False):
+            truncation[r.provider] = getattr(r, "truncated_count", 0)
 
     # Defense-in-depth: only keep the registered domain and its subdomains
     # from provider results (providers are expected to filter, but we verify).
@@ -88,7 +98,9 @@ async def discover_subdomains(domain: str) -> list[dict]:
         if h.host == domain or h.host.endswith("." + domain)
     ]
 
-    # DNS brute-force as an additional passive source (public DNS only).
+    # DNS brute-force is *active* discovery (DNS queries against the target).
+    # It is bounded by DNS_BRUTE_WORDLIST / DNS_BRUTE_CONCURRENCY and subject
+    # to the same scope gating as other active discovery downstream.
     brute = await _dns_brute_force(domain)
     now = _now()
     for sub in brute:
@@ -115,12 +127,18 @@ async def discover_subdomains(domain: str) -> list[dict]:
                 "sources": [h.source],
                 "first_seen": h.first_seen,
                 "last_seen": h.last_seen,
+                "truncated": truncation.get(h.source, False),
+                "truncated_count": truncation.get(h.source, 0),
             }
         else:
             if h.source not in entry["sources"]:
                 entry["sources"].append(h.source)
             entry["first_seen"] = min(entry["first_seen"], h.first_seen)
             entry["last_seen"] = max(entry["last_seen"], h.last_seen)
+            # A source is truncated if any of its entries were truncated.
+            if truncation.get(h.source, False):
+                entry["truncated"] = True
+                entry["truncated_count"] = truncation.get(h.source, 0)
 
     result = [
         {
@@ -129,6 +147,8 @@ async def discover_subdomains(domain: str) -> list[dict]:
             "sources": entry["sources"],
             "first_seen": entry["first_seen"].isoformat(),
             "last_seen": entry["last_seen"].isoformat(),
+            "truncated": entry.get("truncated", False),
+            "truncated_count": entry.get("truncated_count", 0),
         }
         for sub, entry in sorted(merged.items())
     ]
