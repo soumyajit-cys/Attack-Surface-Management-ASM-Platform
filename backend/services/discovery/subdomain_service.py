@@ -1,7 +1,7 @@
 """Subdomain discovery pipeline.
 
-Merges passive discovery sources (crt.sh Certificate Transparency logs and
-DNS brute-force resolution) into a single list of candidate subdomains for a
+Merges discovery sources (crt.sh Certificate Transparency logs and DNS
+brute-force resolution) into a single list of candidate subdomains for a
 registered domain.
 
 Every source result carries a ``source`` attribute plus ``first_seen`` /
@@ -10,11 +10,14 @@ hostnames are normalized, only the registered domain (and its subdomains)
 are kept, results are deduplicated and capped per source, and raw responses
 are never logged.
 
-Passive discovery (crt.sh, public DNS) is allowed for any domain already
-registered in the org.  Active probing of discovered hosts (ports, SSL,
-HTTP headers) is gated separately: it only runs when the parent domain is
-verified and inside scan scope (see tasks.discovery_tasks and the
-corresponding scope test).
+crt.sh is passive (public CT logs, no connections to the target).  DNS
+brute-force is *active* discovery (it resolves candidate names against the
+target's DNS) -- it is bounded, and its results are subject to the same
+scope/verification gating as other active discovery (see
+tasks.discovery_tasks).
+
+Per-source results are capped at ``settings.max_subdomains_per_source_per_scan``;
+truncated sources are flagged so the scan record and UI can surface it.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ import socket
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.core.config import settings
 from services.discovery.enrichment_coordinator import DiscoveryCoordinator
 from services.discovery.providers.crt_sh import CrtShProvider
 from utils.egress import fetch_url_validated
@@ -36,27 +40,17 @@ CRT_API = "https://crt.sh/?q=%25.{}&output=json"
 # Subdomain enumeration arrays scale with the target footprint; bounded here.
 CRTSH_MAX_BYTES = 524288
 
-COMMON_SUBDOMAINS = [
-    "www", "mail", "ftp", "localhost", "webmail", "smtp", "pop", "ns1", "ns2",
-    "ns3", "ns4", "dns1", "dns2", "dns3", "dns4", "mx1", "mx2", "mx3", "mx4",
-    "test", "staging", "dev", "api", "admin", "app", "blog", "shop", "store",
-    "support", "help", "docs", "wiki", "forum", "community", "status", "monitor",
-    "vpn", "remote", "portal", "secure", "ssl", "cdn", "static", "assets", "media",
-    "images", "img", "video", "stream", "live", "demo", "sandbox", "beta", "alpha",
-    "prod", "production", "stage", "preprod", "uat", "qa", "ci", "jenkins", "gitlab",
-    "github", "bitbucket", "jira", "confluence", "wiki", "redmine", "svn", "cvs",
-    "backup", "db", "database", "sql", "mysql", "postgres", "redis", "mongo", "elastic",
-    "kibana", "grafana", "prometheus", "alertmanager", "nginx", "apache", "iis",
-    "tomcat", "jetty", "weblogic", "websphere", "jboss", "wildfly", "glassfish",
-    "docker", "k8s", "kubernetes", "swarm", "mesos", "nomad", "consul", "vault",
-    "registry", "harbor", "nexus", "artifactory", "jenkins", "gitlab-ci", "drone",
-    "build", "deploy", "release", "artifact", "package", "npm", "maven", "gradle",
-    "pip", "pypi", "composer", "nuget", "gem", "cargo", "go", "vendor", "third-party",
-    "external", "internal", "private", "public", "dmz", "intranet", "extranet",
-    "partner", "vendor", "client", "customer", "user", "member", "employee", "staff",
-    "hr", "finance", "accounting", "legal", "marketing", "sales", "support", "engineering",
-    "research", "development", "security", "compliance", "audit", "risk", "governance",
+# DNS brute-force wordlist: bounded to keep active discovery cheap and
+# predictable.  This is active DNS querying against the target, not passive
+# enumeration -- kept small on purpose.
+DNS_BRUTE_WORDLIST = [
+    "www", "mail", "ftp", "localhost", "webmail", "smtp", "pop",
+    "ns1", "ns2", "dns1", "dns2", "mx1", "mx2", "api", "admin",
+    "app", "dev", "staging", "test", "vpn", "portal", "blog",
+    "shop", "support", "dev", "gitlab", "jenkins",
 ]
+# Concurrency cap for the active DNS brute-force sweep.
+DNS_BRUTE_CONCURRENCY = 10
 
 logger = logging.getLogger("sentinelasm.discovery")
 
