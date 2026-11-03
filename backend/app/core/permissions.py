@@ -23,6 +23,7 @@ class Permission(str, Enum):
     ALERT_MANAGE = "alert:manage"
     REPORT_EXPORT = "report:export"
     ORG_MANAGE = "org:manage"
+    ENRICHMENT_MANAGE = "enrichment:manage"
     AUDIT_READ = "audit:read"
 
 
