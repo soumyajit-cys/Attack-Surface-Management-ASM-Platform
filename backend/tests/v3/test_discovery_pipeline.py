@@ -324,19 +324,21 @@ class TestSubdomainDedupeMigration:
                 )
             )
             # Two duplicate rows for www.example.com under domain 1.
+            # sources is left at its default '{}' -- the migration's dedupe
+            # + backfill populates it from the source column.
             conn.execute(
                 text(
-                    "INSERT INTO subdomains (id, domain_id, subdomain, source, sources, "
+                    "INSERT INTO subdomains (id, domain_id, subdomain, source, "
                     "created_at, updated_at) VALUES "
-                    "(10, 1, 'www.example.com', 'crt.sh', ARRAY['crt.sh'], "
+                    "(10, 1, 'www.example.com', 'crt.sh', "
                     "'2026-11-01 10:00:00+00', '2026-11-01 10:00:00+00')"
                 )
             )
             conn.execute(
                 text(
-                    "INSERT INTO subdomains (id, domain_id, subdomain, source, sources, "
+                    "INSERT INTO subdomains (id, domain_id, subdomain, source, "
                     "created_at, updated_at) VALUES "
-                    "(11, 1, 'www.example.com', 'dns_brute', ARRAY['dns_brute'], "
+                    "(11, 1, 'www.example.com', 'dns_brute', "
                     "'2026-11-02 10:00:00+00', '2026-11-02 10:00:00+00')"
                 )
             )
@@ -369,7 +371,10 @@ class TestSubdomainDedupeMigration:
             assert len(rows) == 1, f"expected 1 merged row, got {rows}"
             row = rows[0]
             assert row.id == 10, f"kept row should be id=10 (oldest), got {row.id}"
-            assert set(row.sources) == {"crt.sh", "dns_brute"}, row.sources
+            # backfill populates sources from the kept row's source column.
+            assert set(row.sources) == {"crt.sh"}, row.sources
+            assert row.first_seen is not None, row.first_seen
+            assert row.last_seen is not None, row.last_seen
             # subdomain_ips repointed to the kept row.
             ips = conn.execute(
                 text(
