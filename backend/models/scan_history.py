@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime
 )
 
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
 from sqlalchemy.orm import relationship
