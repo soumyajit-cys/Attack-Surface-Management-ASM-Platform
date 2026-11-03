@@ -55,6 +55,10 @@ class ProviderResult:
     error: str | None = None
     cache_hit: bool = False
     hosts_returned: int = 0
+    truncated: bool = False
+    """True when results were capped by max_hosts_per_source_per_scan."""
+    truncated_count: int = 0
+    """Number of hosts dropped by the per-source cap."""
 
 
 def now_utc() -> datetime:

@@ -46,6 +46,11 @@ class DiscoveryCoordinator:
         Returns ``(hosts, results)`` where *hosts* is the merged, deduplicated,
         capped list of :class:`DiscoveredHost` and *results* is one
         :class:`ProviderResult` per provider (including failures).
+
+        Per-source capping is deterministic: hosts are sorted alphabetically
+        before the cap is applied, so the same input always yields the same
+        output.  Providers whose results are truncated get
+        ``result.truncated = True`` plus ``truncated_count``.
         """
         if not self._providers:
             return [], []
@@ -57,6 +62,7 @@ class DiscoveryCoordinator:
 
         merged: dict[str, DiscoveredHost] = {}
         provider_results: list[ProviderResult] = []
+        per_source_counts: dict[str, int] = {}
 
         for provider, result in zip(self._providers, results):
             if isinstance(result, Exception):
@@ -73,26 +79,24 @@ class DiscoveryCoordinator:
 
             if result.error:
                 continue
-            for host in result.hosts:
-                # Cap per source per scan (prevents DB flooding).
-                if (
-                    len(
-                        [
-                            h
-                            for h in merged.values()
-                            if h.source == host.source
-                        ]
-                    )
-                    >= self._max_hosts_per_source_per_scan
-                ):
+
+            # Deterministic ordering before capping: alphabetical by host.
+            sorted_hosts = sorted(result.hosts, key=lambda h: h.host)
+            kept: list[DiscoveredHost] = []
+            truncated_count = 0
+            for host in sorted_hosts:
+                count_so_far = per_source_counts.get(host.source, 0)
+                if count_so_far >= self._max_hosts_per_source_per_scan:
+                    truncated_count += 1
                     continue
+                per_source_counts[host.source] = count_so_far + 1
+                kept.append(host)
+                # Merge into the global dedup map.
                 key = host.host
                 existing = merged.get(key)
                 if existing is None:
                     merged[key] = host
                 else:
-                    # Keep the earliest first_seen and latest last_seen; merge
-                    # wildcard flags.
                     merged[key] = DiscoveredHost(
                         host=existing.host,
                         source=existing.source,
@@ -107,12 +111,29 @@ class DiscoveryCoordinator:
                         ),
                     )
 
+            if truncated_count > 0:
+                result.truncated = True
+                result.truncated_count = truncated_count
+            result.hosts = kept
+            result.hosts_returned = len(kept)
+
         hosts = sorted(merged.values(), key=lambda h: h.host)
         return hosts, provider_results
 
     def _record_metrics(self, result: ProviderResult) -> None:
+        """Record discovery provider metrics.
+
+        Labels are provider and outcome *only* -- never a domain or hostname.
+        Outcomes: ok | error | rate_limit_unavailable | truncated.
+        """
+        if result.error:
+            outcome = "rate_limit_unavailable" if "rate_limit_unavailable" in result.error else "error"
+        elif result.truncated:
+            outcome = "truncated"
+        else:
+            outcome = "ok"
         DISCOVERY_REQUESTS_TOTAL.labels(
-            provider=result.provider, outcome="error" if result.error else "ok"
+            provider=result.provider, outcome=outcome
         ).inc()
         if result.cache_hit:
             DISCOVERY_CACHE_HITS_TOTAL.labels(provider=result.provider).inc()
