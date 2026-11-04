@@ -14,6 +14,14 @@ Updated as hardening lands; each row names the control and where it lives.
 | Redis (Celery broker, rate-limit + lockout counters, JWT blacklist) | named volume `redisdata`, now password-protected |
 | KEV enrichment cache | named volume `kevdata`, mounted at `/kev-cache` (`KEV_CACHE_DIR`) |
 | Registry/SMTP/webhook credentials | DB rows, Fernet-encrypted |
+| Enrichment provider API keys | DB rows `enrichment_providers.encrypted_api_key`, Fernet-encrypted at rest (never returned by the API, never logged) |
+
+## Data flows
+
+| Flow | What leaves the platform | Control | Status |
+|------|--------------------------|---------|--------|
+| crt.sh CT-log query | Registered domain name sent to crt.sh (public Certificate Transparency log) to enumerate subdomains | SSRF-pinned fetch via `utils.egress.fetch_url_validated`; rate-limited (Redis token bucket, fail-closed); per-domain cache; no credentials sent | Mitigated |
+| Optional third-party provider (Shodan/Censys/etc.) | Domain + API key sent to the provider | Provider management API (`enrichment:manage`, admin-only); key Fernet-encrypted at rest; `acknowledge_data_sharing=true` required to enable; key never returned by API or logged | 🔜 planned (no provider implementation shipped) |
 
 ## Threats and controls
 

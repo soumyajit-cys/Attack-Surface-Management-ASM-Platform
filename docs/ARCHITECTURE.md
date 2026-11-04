@@ -81,6 +81,11 @@ POST /scans  (target domain must be verified)
     403 domain_not_verified; limited by RATE_LIMIT_SCAN_REQUESTS_PER_MINUTE
   → Celery worker picks up 'tasks.discovery.run_discovery' (queue 'scans')
       phase 1  DNS resolution / subdomain enumeration      → rows recorded
+       phase 1a  crt.sh CT-log lookup (passive; rate-limited, cached,
+                  results capped per source, truncation flagged)
+       phase 1b  DNS brute-force (ACTIVE, bounded wordlist + concurrency,
+                  scope/verification-gated like port/SSL scanning)
+       phase 2  port scanning + service banners               → rows recorded
       phase 2  port scanning + service banners               → rows recorded
       phase 3  SSL/TLS certificate introspection             → rows recorded
       phase 4  enrichment (OSV/KEV) + findings synthesis     → findings rows
