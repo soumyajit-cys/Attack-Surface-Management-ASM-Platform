@@ -7,6 +7,12 @@ targets).
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Ensure the backend root is on sys.path so `metrics.prometheus` imports.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 # Import the metrics module so all discovery counters are registered.
 import metrics.prometheus  # noqa: F401
 from prometheus_client import REGISTRY
