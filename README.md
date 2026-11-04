@@ -73,6 +73,8 @@ flowchart TD
 |------------|--------|-------|
 | Domain ownership verification (DNS-TXT) | ✅ works | Block scans until verified; expiry + recheck scheduling |
 | Subdomain / port / DNS / SSL / WHOIS enumeration | ✅ works | Celery pipeline w/ retries + DLQ; per-target enrichment timeouts |
+| Discovery sources: crt.sh CT logs + bounded DNS brute-force | ✅ works | crt.sh passive; DNS brute-force is **active** and scope-gated; per-source cap + truncation surfaced |
+| Optional key-based enrichment providers (Shodan/Censys/etc.) | 🔜 planned | Provider management API + Fernet-encrypted keys; no provider implementation shipped yet |
 | Findings + risk scoring (KEV/OSV, age, exposure) | ✅ works | KEV cached to disk (named volume in compose); OSV configurable |
 | Scan policies (cron / periodic) | ✅ works | Celery Beat + `run-now`; per-org policies |
 | RBAC (viewer/analyst/admin, 10 permissions) | ✅ works | Enforced per-route; tenant matrix test suite |
