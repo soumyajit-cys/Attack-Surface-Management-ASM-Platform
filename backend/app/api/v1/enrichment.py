@@ -148,7 +148,20 @@ async def delete_provider(
     db=Depends(get_db),
     principal: Principal = Depends(_ENRICHMENT_DEP),
 ):
-    """Remove an enrichment provider row for this org."""
+    """Remove an enrichment provider row for this org.
+
+    Idempotent for a missing provider in this org (204).  Cross-org access
+    returns 404 so the existence of another org's provider is not leaked.
+    """
+    # Does a provider with this name exist at all (any org)?
+    any_row = db.query(EnrichmentProvider).filter(
+        EnrichmentProvider.name == name
+    ).first()
+
+    if any_row is not None and any_row.organization_id != principal.organization_id:
+        # Exists but belongs to a different org: 404, never leak it.
+        raise NotFoundError("Provider not found", code="provider_not_found")
+
     row = (
         db.query(EnrichmentProvider)
         .filter(
@@ -157,18 +170,19 @@ async def delete_provider(
         )
         .first()
     )
-    if row is None:
-        # Cross-org or missing provider: 404 (never leak existence of
-        # another org's provider).
-        raise NotFoundError("Provider not found", code="provider_not_found")
 
+    if row is None:
+        # Idempotent delete: nothing to remove in this org.
+        return None
+
+    provider_type = row.provider_type
     db.delete(row)
     record_audit(
         db,
         organization_id=principal.organization_id,
         actor=principal.user.username,
         action="enrichment.provider_deleted",
-        details={"provider_name": name, "provider_type": row.provider_type},
+        details={"provider_name": name, "provider_type": provider_type},
         request=request,
     )
     db.commit()
