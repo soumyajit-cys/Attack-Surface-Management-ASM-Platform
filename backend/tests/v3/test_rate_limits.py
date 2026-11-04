@@ -215,12 +215,12 @@ def test_rate_limiter_fail_closed_when_redis_down(client, monkeypatch):
     headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
 
     # Take Redis down mid-test.
-    original_increment = limiter._storage.increment
+    original_incr = limiter._storage.incr
 
     def boom(*a, **k):
         raise RedisError("connection refused")
 
-    monkeypatch.setattr(limiter.storage, "increment", boom)
+    monkeypatch.setattr(limiter._storage, "incr", boom)
 
     # Health stays exempt even with Redis down.
     assert client.get("/health").status_code == 200
