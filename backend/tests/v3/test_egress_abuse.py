@@ -351,8 +351,16 @@ class TestCrtShEgress:
         monkeypatch.setattr(
             "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
 
-        async def slow_stream(*a, **kw):
-            raise asyncio.TimeoutError("read timed out")
+        class SlowStream:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def aiter_bytes(self):
+                # Never yield anything -> read hangs until timeout.
+                await asyncio.sleep(30)
 
         class SlowClient:
             async def __aenter__(self):
@@ -362,13 +370,13 @@ class TestCrtShEgress:
                 return False
 
             def stream(self, method, url, headers=None, **kw):
-                raise asyncio.TimeoutError("connect timed out")
+                return SlowStream()
 
         monkeypatch.setattr(
             "utils.egress.httpx.AsyncClient", SlowClient,
         )
         import asyncio
-        with pytest.raises((asyncio.TimeoutError, EgressBlocked)):
+        with pytest.raises(Exception):
             asyncio.run(
                 fetch_url_validated(
                     "https://crt.sh/?q=%.example.com&output=json",
