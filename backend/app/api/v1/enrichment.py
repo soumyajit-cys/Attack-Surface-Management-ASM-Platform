@@ -132,7 +132,7 @@ async def upsert_provider(
             "provider_name": name,
             "provider_type": data.provider_type,
             "is_active": data.is_active,
-            "credentials_rotated": data.api_key is not None,
+            "config_changed": data.api_key is not None,
             "acknowledge_data_sharing": data.acknowledge_data_sharing,
         },
         request=request,

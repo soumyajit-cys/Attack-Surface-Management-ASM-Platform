@@ -211,7 +211,7 @@ class TestSubdomainDedupeMigration:
         import subprocess
 
         result = subprocess.run(
-            cmd, env=env, capture_output=True, text=True
+            cmd, env=env, capture_output=True, text=True, check=False
         )
         assert result.returncode == 0, (
             f"command failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
@@ -265,7 +265,7 @@ class TestSubdomainDedupeMigration:
         conn.autocommit = True
         try:
             conn.cursor().execute(
-                f'DROP DATABASE IF EXISTS scratch_dedupe_test;'
+                'DROP DATABASE IF EXISTS scratch_dedupe_test;'
             )
             conn.cursor().execute(
                 'CREATE DATABASE scratch_dedupe_test OWNER sentinel;'

@@ -6,6 +6,7 @@ do not exist yet. Every test here is mocked -- no real network access.
 
 import socket as real_socket
 from typing import ClassVar
+from unittest.mock import patch
 
 import pytest
 
@@ -352,8 +353,8 @@ class TestCrtShEgress:
             "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
 
         class SlowStream:
-            status_code = 200
-            headers = {}
+            status_code: ClassVar[int] = 200
+            headers: ClassVar[dict] = {}
 
             async def __aenter__(self):
                 return self

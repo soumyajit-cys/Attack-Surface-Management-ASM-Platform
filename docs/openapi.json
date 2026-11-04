@@ -812,6 +812,113 @@
         "title": "EmailDigestConfigUpdate",
         "type": "object"
       },
+      "EnrichmentProviderList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EnrichmentProviderResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EnrichmentProviderList",
+        "type": "object"
+      },
+      "EnrichmentProviderResponse": {
+        "description": "Public view of a provider: key presence + active state only.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "has_key": {
+            "title": "Has Key",
+            "type": "boolean"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider_type": {
+            "title": "Provider Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "provider_type",
+          "has_key",
+          "is_active"
+        ],
+        "title": "EnrichmentProviderResponse",
+        "type": "object"
+      },
+      "EnrichmentProviderUpsert": {
+        "description": "Request to set/rotate a provider's encrypted key and active flag.",
+        "properties": {
+          "acknowledge_data_sharing": {
+            "default": false,
+            "description": "Must be true to enable any third-party provider (data leaves the platform). Required when is_active=true.",
+            "title": "Acknowledge Data Sharing",
+            "type": "boolean"
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plaintext API key. Omit to leave the existing key unchanged.",
+            "title": "Api Key"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "provider_type": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Provider Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_type"
+        ],
+        "title": "EnrichmentProviderUpsert",
+        "type": "object"
+      },
       "EnrollRequest": {
         "properties": {
           "code": {
@@ -3143,6 +3250,113 @@
         "summary": "Get Dashboard",
         "tags": [
           "dashboard"
+        ]
+      }
+    },
+    "/api/v1/enrichment/providers": {
+      "get": {
+        "description": "List this org's enrichment providers (key material withheld).",
+        "operationId": "list_providers_api_v1_enrichment_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrichmentProviderList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Providers",
+        "tags": [
+          "enrichment"
+        ]
+      }
+    },
+    "/api/v1/enrichment/providers/{name}": {
+      "delete": {
+        "description": "Remove an enrichment provider row for this org.\n\nIdempotent for a missing provider in this org (204).  Cross-org access\nreturns 404 so the existence of another org's provider is not leaked.",
+        "operationId": "delete_provider_api_v1_enrichment_providers__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Provider",
+        "tags": [
+          "enrichment"
+        ]
+      },
+      "put": {
+        "description": "Set or rotate a provider's encrypted API key and active flag.\n\n``acknowledge_data_sharing=true`` is required to activate any\nthird-party provider (crt.sh is exempt -- public CT logs only).",
+        "operationId": "upsert_provider_api_v1_enrichment_providers__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrichmentProviderUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Provider",
+        "tags": [
+          "enrichment"
         ]
       }
     },

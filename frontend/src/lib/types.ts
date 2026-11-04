@@ -243,3 +243,20 @@ export const SEVERITY_COLORS: Record<string, string> = {
   low: 'badge-low',
   info: 'badge-info',
 }
+
+export interface EnrichmentProvider {
+  name: string
+  provider_type: string
+  /** True when a key is configured; the key itself is never returned. */
+  has_key: boolean
+  is_active: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface EnrichmentProviderUpsert {
+  provider_type: string
+  api_key?: string
+  is_active: boolean
+  acknowledge_data_sharing: boolean
+}

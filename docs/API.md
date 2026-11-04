@@ -42,6 +42,9 @@ or `X-API-Key: <key>`; `/auth/*` and `/health` need neither.
 | `/api/v1/auth/reset-password` | `POST` | Reset Password | public |
 | `/api/v1/auth/step-up` | `POST` | Step Up | jwt or X-API-Key |
 | `/api/v1/dashboard` | `GET` | Get Dashboard | jwt or X-API-Key |
+| `/api/v1/enrichment/providers` | `GET` | List Providers | jwt or X-API-Key |
+| `/api/v1/enrichment/providers/{name}` | `DELETE` | Delete Provider | jwt or X-API-Key |
+| `/api/v1/enrichment/providers/{name}` | `PUT` | Upsert Provider | jwt or X-API-Key |
 | `/api/v1/findings` | `GET` | List Findings | jwt or X-API-Key |
 | `/api/v1/findings/{finding_id}` | `GET` | Get Finding | jwt or X-API-Key |
 | `/api/v1/organizations` | `POST` | Create Organization | jwt or X-API-Key |

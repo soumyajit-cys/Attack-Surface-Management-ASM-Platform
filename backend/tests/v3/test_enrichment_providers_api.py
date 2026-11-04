@@ -349,4 +349,4 @@ class TestProviderAudit:
         assert "encrypted_api_key" not in details_str, details_str
         assert details["provider_name"] == "shodan"
         assert details["is_active"] is True
-        assert details["credentials_rotated"] is True
+        assert details["config_changed"] is True

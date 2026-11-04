@@ -22,6 +22,8 @@ import type {
   VerifiedDomain,
   VerificationChallenge,
   WsTicket,
+  EnrichmentProvider,
+  EnrichmentProviderUpsert,
 } from './types'
 import type { AssetGraphData } from '../AssetGraph'
 
@@ -299,6 +301,10 @@ class ApiClient {
 
   private patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return this.client.patch<T, T>(url, data, config) as Promise<T>
+  }
+
+  private put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.client.put<T, T>(url, data, config) as Promise<T>
   }
 
   private delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
@@ -688,6 +694,22 @@ class ApiClient {
     return this.get<Blob>(`/reports/pdf/finding/${findingId}`, {
       responseType: 'blob',
     })
+  }
+
+  // ── enrichment providers ────────────────────────────────────────────────
+  async listEnrichmentProviders(): Promise<EnrichmentProvider[]> {
+    return this.get<EnrichmentProvider[]>('/enrichment/providers')
+  }
+
+  async upsertEnrichmentProvider(
+    name: string,
+    data: EnrichmentProviderUpsert,
+  ): Promise<EnrichmentProvider> {
+    return this.put<EnrichmentProvider>(`/enrichment/providers/${name}`, data)
+  }
+
+  async deleteEnrichmentProvider(name: string) {
+    return this.delete(`/enrichment/providers/${name}`)
   }
 }
 
