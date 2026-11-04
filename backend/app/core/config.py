@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     rate_limit_requests_per_minute: int = 60
     rate_limit_auth_requests_per_minute: int = 10
     rate_limit_scan_requests_per_minute: int = 5
+    # When the rate-limit backend (Redis) is unreachable, reject every
+    # request with 429 instead of letting traffic through (fail-open).
+    # Health checks are always exempt.
+    rate_limit_fail_closed: bool = True
 
     kev_cache_dir: str = ""
 

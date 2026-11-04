@@ -197,3 +197,36 @@ def test_limiter_storage_resets_between_tests(client):
             "/api/v1/auth/login",
             json={"username": "nobody", "password": "x"}).status_code == 401
     # If storage leaked from another test, even the first request would 429.
+
+
+def test_rate_limiter_fail_closed_when_redis_down(client, monkeypatch):
+    """When Redis is unreachable and rate_limit_fail_closed is on, every
+    non-health request gets 429 (fail-closed) instead of failing open."""
+    from redis.exceptions import RedisError
+    from utils.rate_limiter import limiter
+
+    # Register while Redis is up.
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "rlfc", "email": "rlfc@example.com",
+              "password": "password123", "organization": "RLFC Org"},
+    )
+    assert reg.status_code == 201, reg.text
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    # Take Redis down mid-test.
+    original_increment = limiter._storage.increment
+
+    def boom(*a, **k):
+        raise RedisError("connection refused")
+
+    monkeypatch.setattr(limiter.storage, "increment", boom)
+
+    # Health stays exempt even with Redis down.
+    assert client.get("/health").status_code == 200
+
+    # Everything else gets 429 (fail-closed, not fail-open).
+    response = client.get("/api/v1/assets", headers=headers)
+    assert response.status_code == 429, response.text
+    assert response.json()["error"]["code"] == "rate_limit_storage_down"
+
