@@ -359,7 +359,7 @@ class TestCrtShEgress:
                 return False
 
             async def aiter_bytes(self):
-                # Never yield anything -> read hangs until timeout.
+                # Never yield anything -> read hangs.
                 await asyncio.sleep(30)
 
         class SlowClient:
@@ -376,10 +376,15 @@ class TestCrtShEgress:
             "utils.egress.httpx.AsyncClient", SlowClient,
         )
         import asyncio
-        with pytest.raises(Exception):
+        # The mocked client has no httpx timeout enforcement, so wrap the
+        # call ourselves to prove a slow/hanging crt.sh response does not
+        # block forever.
+        with pytest.raises(asyncio.TimeoutError):
             asyncio.run(
-                fetch_url_validated(
-                    "https://crt.sh/?q=%.example.com&output=json",
+                asyncio.wait_for(
+                    fetch_url_validated(
+                        "https://crt.sh/?q=%.example.com&output=json"
+                    ),
                     timeout=0.5,
                 )
             )

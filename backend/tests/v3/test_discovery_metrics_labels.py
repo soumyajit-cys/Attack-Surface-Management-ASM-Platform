@@ -12,8 +12,9 @@ from prometheus_client import REGISTRY
 
 class TestDiscoveryMetricsLabels:
     def test_discovery_labels_are_provider_and_outcome_only(self):
-        """Every discovery provider counter/histogram carries only the
-        allowed label sets: provider (+ outcome for requests)."""
+        """Every discovery provider counter carries only the allowed
+        label sets: provider (+ outcome for requests). Domains/hostnames
+        must never appear as labels (observability must not leak targets)."""
         expected = {
             "sentinelasm_discovery_provider_requests_total": {"provider", "outcome"},
             "sentinelasm_discovery_provider_hosts_found_total": {"provider"},
@@ -24,7 +25,9 @@ class TestDiscoveryMetricsLabels:
         for metric in REGISTRY.collect():
             name = metric.name
             if name in expected:
-                label_names = {lab.name for lab in metric.samples[0].labels} if metric.samples else set()
+                label_names = set()
+                for sample in metric.samples:
+                    label_names.update(sample.labels.keys())
                 found[name] = label_names
         for name, allowed in expected.items():
             assert name in found, f"{name} not registered"
