@@ -80,6 +80,26 @@ Setting `SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM` (loopback-only for dev is fine)
 is required; without it, sends fail closed/logs an error rather than silently dropping —
 password reset just won't deliver.
 
+## Discovery sources operations (Phase 2)
+
+- crt.sh rate limit (`CRT_SH_RATE_LIMIT_PER_MIN`, default 60/min): global
+  Redis token bucket shared by all workers. Fail-closed: if Redis is down,
+  crt.sh lookups are skipped (reported as `rate_limit_unavailable`) and the
+  scan continues non-fatally. Clear the bucket with
+  `DEL ratelimit:discovery:crt_sh` in Redis if it is stuck.
+- crt.sh cache TTL (`CRT_SH_CACHE_TTL_SECONDS`, default 3600s): per-domain
+  Redis cache key `discovery:crt_sh:cache:<domain>`. Flush with
+  `KEYS 'discovery:crt_sh:cache:*' | xargs redis-cli DEL` when you need
+  fresh CT-log data.
+- crt.sh down / degraded: discovery continues with the remaining providers;
+  the scan is NOT failed. `truncated=true` on the scan record / API
+  response indicates results were capped by
+  `MAX_SUBDOMAINS_PER_SOURCE_PER_SCAN` (default 500 per source).
+- DNS brute-force is **active** discovery (queries the target's DNS), bounded
+  by `DNS_BRUTE_WORDLIST` (~20 names) and `DNS_BRUTE_CONCURRENCY` (10). It is
+  subject to the same scope/verification gating as port/SSL scanning: an
+  unpinned target (no verified IP) is skipped, never probed via fresh DNS.
+
 ## Tags and releases
 
 Single branch, tag-cut releases. **Nothing auto-publishes**: `docker-publish`
