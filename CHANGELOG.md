@@ -29,7 +29,50 @@ when they disagree).
   CONTRIBUTING.md (single-branch policy), CODE_OF_CONDUCT.md, issue + PR
   templates.
 
-### Security (Phase 0–2 hardening, pre-0.1.0 baseline)
+### Changed (Phase 2.1)
+
+- Discovery sources: crt.sh CT-log provider now **fail-closed** on Redis
+  outage (skip lookup, report `rate_limit_unavailable`, scan continues);
+  per-source cap `max_subdomains_per_source_per_scan` applied with
+  deterministic ordering, `truncated=true` + counts on the provider result
+  and scan record (`scan_history.discovery_meta`), surfaced in `GET
+  /scans/{id}`; new metric outcome `truncated`.
+- DNS brute-force relabeled honestly as **active** discovery (bounded
+  wordlist ~20 names, concurrency 10, scope/verification gated like
+  port/SSL scanning).
+- `subdomains` migration adds `sources`, `first_seen`, `last_seen` and a
+  unique constraint on `(domain_id, subdomain)`; the upgrade deterministically
+  merges pre-existing duplicate rows (oldest kept, sources unioned,
+  min/max timestamps, FKs repointed) before creating the constraint.
+- Metrics: discovery provider labels are `provider` and `outcome` only
+  (`ok | error | rate_limit_unavailable | truncated`) — never a domain or
+  hostname.
+
+### Added (Phase 2.1)
+
+- `EnrichmentProvider` ORM model + `enrichment_providers` table: per-org
+  provider config with Fernet-encrypted API key (`encrypted_api_key`),
+  `is_active`, `created_at`/`updated_at`, unique `(organization_id, name)`.
+- `backend/app/api/v1/enrichment.py`: admin-only (`enrichment:manage`)
+  provider management API — GET lists providers returning only `has_key` /
+  `is_active` (never the key); PUT sets/rotates the key + active flag with
+  required `acknowledge_data_sharing=true` to enable any third-party
+  provider; DELETE removes a provider; all mutations audited.
+- `backend/migrations/versions/20261101_0001-7a8b9c0d1e2f_discovery_meta.py`:
+  `scan_history.discovery_meta` JSONB column for per-source truncation.
+- Frontend Settings UI section for enrichment provider management
+  (admin-only) with tenant isolation and key-never-exposed behavior.
+- Grafana panels: discovery provider requests by outcome, rate limit
+  unavailable, truncated sources.
+- docs/ARCHITECTURE.md §8, docs/OPERATIONS.md discovery runbook,
+  docs/threat-model.md data flows (crt.sh egress + third-party provider),
+  README config table + feature table updated.
+
+### Fixed (Phase 2.1)
+
+- `subdomains` unique constraint no longer fails on duplicate rows: the
+  upgrade dedupes deterministically first.
+
 
 - Container posture: non-root UID 10001, multi-stage builds, digest-pinned
   base images, read-only rootfs with tmpfs and a `kevdata` named volume,
