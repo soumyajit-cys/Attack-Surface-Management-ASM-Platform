@@ -235,9 +235,10 @@ Settings field without documenting it fails `make check`.
 | `CORS_ORIGINS` | (empty) | No | Extra `<scheme>://<host>` entries allowed for CORS; empty = same-origin only |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | (empty) / `587` | No | Required for password-reset emails and digest delivery |
 | `FRONTEND_URL` | `http://localhost:5173` | No | Used in password-reset links |
-| `RATE_LIMIT_REQUESTS_PER_MINUTE` | `120` | No | Global API limiter budget |
+| `RATE_LIMIT_REQUESTS_PER_MINUTE` | `60` | No | Global API limiter budget |
 | `RATE_LIMIT_AUTH_REQUESTS_PER_MINUTE` | `10` | No | Tighter cap on login/register/reset endpoints |
 | `RATE_LIMIT_SCAN_REQUESTS_PER_MINUTE` | `5` | No | Cap on scan-trigger endpoint (dense abuse vector) |
+| `RATE_LIMIT_FAIL_CLOSED` | `true` | No | When Redis is unreachable, reject every request with 429 (fail-closed) instead of failing open. Health checks stay exempt. |
 | `OSV_API_URL` / `OSV_TIMEOUT_SECONDS` / `OSV_ENABLED` | `https://api.osv.dev/v1/query` / `10.0` / `True` | No | CVE enrichment feed |
 | `KEV_CACHE_DIR` | (empty → `/tmp`) | No | CISA KEV cache dir; compose sets `/kev-cache` named volume (rootfs is read-only) |
 | `WEBHOOK_ALLOWED_PORTS` | `443,8443` | No | Ports Slack/Discord/Jira deliveries may target (save + send enforced) |

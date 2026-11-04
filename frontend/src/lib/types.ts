@@ -30,6 +30,8 @@ export interface Scan {
   started_at: string
   completed_at: string | null
   updated_at?: string
+  /** Per-source truncation from discovery (e.g. {"crt_sh": 150}). */
+  discovery_meta?: Record<string, number> | null
 }
 
 /** Shape of `GET /scans/{id}` (single scan status, used for SSE fallback). */

@@ -347,6 +347,7 @@ async def list_scans(
                 "started_at": s.started_at,
                 "completed_at": s.completed_at,
                 "updated_at": s.updated_at,
+                "discovery_meta": s.discovery_meta,
             }
             for s in items
         ],

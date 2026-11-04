@@ -305,19 +305,22 @@ export function Scans() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Error
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Discovery
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     <Loader2 className="w-6 h-6 animate-spin inline-block text-primary-600" />
                   </td>
                 </tr>
               )}
               {!loading && scans.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                     No scans found. Start a scan to begin.
                   </td>
                 </tr>
@@ -356,6 +359,19 @@ export function Scans() {
                       : '-'}
                   </td>
                   <td className="px-4 py-4 text-gray-500 max-w-xs truncate">{scan.error || '-'}</td>
+                  <td className="px-4 py-4 text-gray-500 text-xs max-w-xs">
+                    {scan.discovery_meta && Object.entries(scan.discovery_meta).length > 0 ? (
+                      <span title="Discovery results were capped per source">
+                        ⚠{' '}
+                        {Object.entries(scan.discovery_meta)
+                          .map(([src, count]) => `${src}: ${count}`)
+                          .join(', ')}
+                        truncated
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

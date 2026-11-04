@@ -47,8 +47,16 @@ when they disagree).
 - Metrics: discovery provider labels are `provider` and `outcome` only
   (`ok | error | rate_limit_unavailable | truncated`) — never a domain or
   hostname.
+- Rate limiter: fail-closed when Redis is unreachable (`RATE_LIMIT_FAIL_CLOSED`,
+  default `true`): every non-health request answers 429 instead of failing
+  open; health checks stay exempt.
 
 ### Added (Phase 2.1)
+
+- Egress-abuse test suite (`tests/v3/test_egress_abuse.py`): non-JSON crt.sh
+  bodies pass through (parse failure lives in the provider), 5xx returns the
+  status as-is (retry/backoff lives in the provider), slow/hanging responses
+  time out — all provider-level concerns, never egress-level blocks.
 
 - `EnrichmentProvider` ORM model + `enrichment_providers` table: per-org
   provider config with Fernet-encrypted API key (`encrypted_api_key`),
