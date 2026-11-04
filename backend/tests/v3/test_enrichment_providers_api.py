@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy import text
 
 
 # ── RBAC + tenant isolation ───────────────────────────────────────────────
@@ -264,13 +265,14 @@ class TestProviderUpsert:
         assert resp.status_code == 200, resp.text
 
         # Raw DB column must hold ciphertext (enc:v1: prefix), never plaintext.
-        row = (
-            db.query(EnrichmentProvider)
-            .filter(EnrichmentProvider.name == "shodan")
-            .one()
-        )
-        assert row.encrypted_api_key.startswith("enc:v1:"), row.encrypted_api_key
-        assert row.encrypted_api_key != "new-plaintext-key"
+        # Read via raw SQL to bypass the ORM EncryptedText type decorator
+        # (which transparently decrypts on read).
+        raw = db.execute(
+            text("SELECT encrypted_api_key FROM enrichment_providers WHERE name = 'shodan'")
+        ).scalar()
+        assert raw is not None
+        assert raw.startswith("enc:v1:"), raw
+        assert raw != "new-plaintext-key"
 
 
 # ── DELETE ────────────────────────────────────────────────────────────────
@@ -345,4 +347,4 @@ class TestProviderAudit:
         assert "encrypted_api_key" not in details.casefold(), details
         assert details["provider_name"] == "shodan"
         assert details["is_active"] is True
-        assert details["key_rotated"] is True
+        assert details["credentials_rotated"] is True
