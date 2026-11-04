@@ -361,9 +361,15 @@ class TestCrtShEgress:
             async def __aexit__(self, *a):
                 return False
 
-            async def aiter_bytes(self):
-                # Never yield anything -> read hangs.
+            def aiter_bytes(self):
+                return self
+
+            async def __aiter__(self):
+                return self
+
+            async def __anext__(self):
                 await asyncio.sleep(30)
+                raise StopAsyncIteration
 
         class SlowClient:
             def __init__(self, *a, **kw):
