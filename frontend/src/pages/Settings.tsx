@@ -51,6 +51,17 @@ export function Settings() {
   })
   const [saving, setSaving] = useState(false)
 
+  const handleProfileSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    addToast({
+      type: 'info',
+      title: 'Profile update not yet available',
+      message: 'Profile editing will be available in a future release.',
+    })
+    setSaving(false)
+  }
+
   // ── enrichment provider state ─────────────────────────────────────────
   const [providers, setProviders] = useState<{
     name: string
