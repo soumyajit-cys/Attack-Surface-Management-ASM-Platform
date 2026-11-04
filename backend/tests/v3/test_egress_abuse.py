@@ -363,6 +363,9 @@ class TestCrtShEgress:
                 await asyncio.sleep(30)
 
         class SlowClient:
+            def __init__(self, *a, **kw):
+                pass
+
             async def __aenter__(self):
                 return self
 
