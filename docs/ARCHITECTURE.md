@@ -160,3 +160,34 @@ repository-level guarantee (deferred — the reasoning lives there).
   Python levels).
 - Compose healthchecks for every app service except beat (rationale in
   README §Monitoring).
+
+## 8. Discovery sources (Phase 2)
+
+- `crt.sh` CT-log provider (`backend/services/discovery/providers/crt_sh.py`):
+  passive, read-only, no connections to the target. Queried through the
+  shared `utils.egress.fetch_url_validated` helper (SSRF-pinned, redirect
+  validated, response capped). Global Redis token bucket (fail-closed if
+  Redis is down), per-domain cache TTL, bounded retries with backoff.
+  Results are normalized (lowercase, IDNA/punycode, wildcard stripped),
+  filtered to the registered domain + subdomains only, deduplicated, and
+  capped at `max_subdomains_per_source_per_scan`; truncated sources set
+  `truncated=true` on the scan record.
+
+- Provider protocol (`backend/services/discovery/providers/base.py`):
+  `DiscoveryProvider` — read-only, no active probing. The
+  `DiscoveryCoordinator` merges providers, dedupes, caps per source, and
+  records granular outcomes (`ok | error | rate_limit_unavailable |
+  truncated`). Metrics labels are `provider` and `outcome` only — never a
+  domain or hostname.
+
+- Provider management (`backend/app/api/v1/enrichment.py`):
+  admin-only (`enrichment:manage`). GET returns `has_key`/`is_active`
+  only (never the key); PUT sets/rotates the Fernet-encrypted key and
+  active flag; enabling any third-party provider requires
+  `acknowledge_data_sharing=true`; all mutations audited. crt.sh needs no
+  key and is exempt from the acknowledgement.
+
+- DNS brute-force is **active** discovery (queries the target's DNS):
+  bounded wordlist (`DNS_BRUTE_WORDLIST`), low concurrency
+  (`DNS_BRUTE_CONCURRENCY`), subject to the same scope/verification gating
+  as port/SSL scanning (pinned IP required; unpinned targets skipped).
