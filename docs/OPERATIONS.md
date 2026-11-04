@@ -87,7 +87,6 @@ builds ghcr images + CycloneDX SBOMs only for `v*` tags, so a tag is the
 release event.
 
 Ritual (on `main`, no feature branches, no force ops):
-
 1. Confirm `make release-check` is green (make check + audit + `uv lock
    --check` + `npm ci --dry-run`). Never tag on red.
 2. Promote the `CHANGELOG.md` `## [Unreleased]` section into
