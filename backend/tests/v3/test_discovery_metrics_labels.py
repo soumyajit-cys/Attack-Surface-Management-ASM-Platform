@@ -7,6 +7,8 @@ targets).
 
 from __future__ import annotations
 
+# Import the metrics module so all discovery counters are registered.
+from metrics import prometheus  # noqa: F401
 from prometheus_client import REGISTRY
 
 
