@@ -352,6 +352,9 @@ class TestCrtShEgress:
             "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
 
         class SlowStream:
+            status_code = 200
+            headers = {}
+
             async def __aenter__(self):
                 return self
 
