@@ -377,7 +377,8 @@ class TestCrtShEgress:
             )
 
     def test_crt_sh_non_json_body(self, monkeypatch):
-        """crt.sh returns non-JSON: treated as a parse failure."""
+        """crt.sh returns non-JSON: fetch_url_validated returns the body
+        as-is (JSON parsing happens in the crt.sh provider)."""
         monkeypatch.setattr(
             "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
         requests_log = []
@@ -390,13 +391,16 @@ class TestCrtShEgress:
             _fake_client_class(requests_log, responder),
         )
         import asyncio
-        with pytest.raises(EgressBlocked):
-            asyncio.run(
-                fetch_url_validated("https://crt.sh/?q=%.example.com&output=json")
-            )
+        result = asyncio.run(
+            fetch_url_validated("https://crt.sh/?q=%.example.com&output=json")
+        )
+        assert result.status_code == 200
+        assert result.body == b"not json at all"
+        assert len(requests_log) == 1
 
-    def test_crt_sh_5xx_exhausts_retries(self, monkeypatch):
-        """crt.sh returns 503 on every attempt; all retries exhausted."""
+    def test_crt_sh_5xx_returns_status_no_retry_at_egress_level(self, monkeypatch):
+        """fetch_url_validated returns the 503 status as-is (retry/backoff
+        lives in the crt.sh provider, not in the egress helper)."""
         monkeypatch.setattr(
             "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
         calls = []
@@ -410,15 +414,11 @@ class TestCrtShEgress:
             _fake_client_class(requests_log := [], responder),
         )
         import asyncio
-        with pytest.raises(EgressBlocked):
-            asyncio.run(
-                fetch_url_validated(
-                    "https://crt.sh/?q=%.example.com&output=json",
-                    timeout=0.1,
-                    max_redirects=3,
-                )
-            )
-        assert len(calls) <= 4, calls  # initial + max 3 retries
+        result = asyncio.run(
+            fetch_url_validated("https://crt.sh/?q=%.example.com&output=json")
+        )
+        assert result.status_code == 503
+        assert len(calls) == 1  # egress helper does not retry
 
     def test_crt_sh_dns_rebinding_via_pin(self, monkeypatch):
         """crt.sh hostname resolves to public on first lookup, then the
