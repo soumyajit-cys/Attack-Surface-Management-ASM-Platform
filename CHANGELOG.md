@@ -74,6 +74,8 @@ when they disagree).
   upgrade dedupes deterministically first.
 
 
+### Security (Phase 0–2 hardening, pre-0.1.0 baseline)
+
 - Container posture: non-root UID 10001, multi-stage builds, digest-pinned
   base images, read-only rootfs with tmpfs and a `kevdata` named volume,
   `cap_drop: ALL`, `no-new-privileges`, resource limits; unprivileged nginx.
