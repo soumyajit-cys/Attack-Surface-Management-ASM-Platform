@@ -253,6 +253,12 @@ Settings field without documenting it fails `make check`.
 | `SCAN_STREAM_MAX_PER_USER` | `5` | No | Per-user concurrent open scan streams; exceeding answers 429 `stream_cap_reached` (slot released in `finally` including on client disconnect; each slot carries its own expiry score = open + max duration + margin, pruned on every open, so a killed API process cannot leak the cap) |
 | `SCAN_STREAM_MAX_DURATION_SECONDS` | `900` | No | Maximum stream duration (15 min); after it the server closes and the client reconnects, resuming via `Last-Event-ID` |
 | `WS_TICKET_TTL_SECONDS` | `30` | No | WebSocket live-progress ticket TTL in seconds. Browsers cannot set custom WebSocket headers, so the WS fallback authenticates with a single-use, short-lived ticket from `POST /scans/{id}/ws-ticket`. |
+| `DISCOVERY_PROVIDERS` | `crt_sh` | No | Comma-separated list of enabled discovery provider names (e.g. `crt_sh`). Providers not listed here never run. |
+| `MAX_SUBDOMAINS_PER_SOURCE_PER_SCAN` | `500` | No | Max subdomains returned per source per scan (prevents DB flooding); truncated sources set `truncated=true` on the scan record and API response. |
+| `CRT_SH_RATE_LIMIT_PER_MIN` | `60` | No | crt.sh global Redis token-bucket rate limit (tokens per minute, shared by all workers). Fail closed if Redis is unavailable. |
+| `CRT_SH_CACHE_TTL_SECONDS` | `3600` | No | Per-domain cache TTL for crt.sh CT-log responses (seconds). |
+| `CRT_SH_TIMEOUT_SECONDS` | `15.0` | No | crt.sh connect/read timeout (seconds). |
+| `CRT_SH_MAX_RETRIES` | `3` | No | crt.sh max retries on transient failure (502/503/504 / network), with exponential backoff. |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
