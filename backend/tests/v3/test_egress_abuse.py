@@ -292,6 +292,162 @@ class TestFetchValidated:
         assert len(requests_log) <= 4
 
 
+class TestCrtShEgress:
+    """crt.sh egress abuse cases run through the shared validated fetch
+    (fetch_url_validated): redirect to internal host, oversized response,
+    slow response, non-JSON, 5xx retry/backoff exhaustion, DNS rebinding.
+    """
+
+    def test_crt_sh_redirect_to_internal_blocked(self, monkeypatch):
+        """crt.sh response redirects to a private IP: must be blocked."""
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda host, *a, **k: _addrs(
+                {"crt.sh": "93.184.216.34", "evil.example.com": "10.9.9.9"}[host]),
+        )
+        requests_log = []
+
+        def responder(url, headers):
+            if "93.184.216.34" in url:
+                return FakeStream(302, b"", {"location": "http://evil.example.com/"})
+            raise AssertionError(f"must not fetch internal hop: {url}")
+
+        monkeypatch.setattr(
+            "utils.egress.httpx.AsyncClient",
+            _fake_client_class(requests_log, responder),
+        )
+        import asyncio
+        with pytest.raises(EgressBlocked):
+            asyncio.run(
+                fetch_url_validated("https://crt.sh/?q=%.example.com&output=json")
+            )
+        assert len(requests_log) == 1
+
+    def test_crt_sh_oversized_response_blocked(self, monkeypatch):
+        """crt.sh body larger than max_bytes is rejected."""
+        monkeypatch.setattr(
+            "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
+        requests_log = []
+
+        def responder(url, headers):
+            return FakeStream(200, b"x" * (524288 + 1), {"content-length": str(524288 + 1)})
+
+        monkeypatch.setattr(
+            "utils.egress.httpx.AsyncClient",
+            _fake_client_class(requests_log, responder),
+        )
+        import asyncio
+        with pytest.raises(EgressBlocked):
+            asyncio.run(
+                fetch_url_validated(
+                    "https://crt.sh/?q=%.example.com&output=json",
+                    max_bytes=524288,
+                )
+            )
+        assert len(requests_log) == 1
+
+    def test_crt_sh_slow_response_timeout(self, monkeypatch):
+        """crt.sh that never finishes body delivery times out."""
+        monkeypatch.setattr(
+            "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
+
+        async def slow_stream(*a, **kw):
+            raise asyncio.TimeoutError("read timed out")
+
+        class SlowClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def stream(self, method, url, headers=None, **kw):
+                raise asyncio.TimeoutError("connect timed out")
+
+        monkeypatch.setattr(
+            "utils.egress.httpx.AsyncClient", SlowClient,
+        )
+        import asyncio
+        with pytest.raises((asyncio.TimeoutError, EgressBlocked)):
+            asyncio.run(
+                fetch_url_validated(
+                    "https://crt.sh/?q=%.example.com&output=json",
+                    timeout=0.5,
+                )
+            )
+
+    def test_crt_sh_non_json_body(self, monkeypatch):
+        """crt.sh returns non-JSON: treated as a parse failure."""
+        monkeypatch.setattr(
+            "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
+        requests_log = []
+
+        def responder(url, headers):
+            return FakeStream(200, b"not json at all", {"content-type": "text/html"})
+
+        monkeypatch.setattr(
+            "utils.egress.httpx.AsyncClient",
+            _fake_client_class(requests_log, responder),
+        )
+        import asyncio
+        with pytest.raises(EgressBlocked):
+            asyncio.run(
+                fetch_url_validated("https://crt.sh/?q=%.example.com&output=json")
+            )
+
+    def test_crt_sh_5xx_exhausts_retries(self, monkeypatch):
+        """crt.sh returns 503 on every attempt; all retries exhausted."""
+        monkeypatch.setattr(
+            "socket.getaddrinfo", lambda *a, **k: _addrs("93.184.216.34"))
+        calls = []
+
+        def responder(url, headers):
+            calls.append(1)
+            return FakeStream(503, b"", {})
+
+        monkeypatch.setattr(
+            "utils.egress.httpx.AsyncClient",
+            _fake_client_class(requests_log := [], responder),
+        )
+        import asyncio
+        with pytest.raises(EgressBlocked):
+            asyncio.run(
+                fetch_url_validated(
+                    "https://crt.sh/?q=%.example.com&output=json",
+                    timeout=0.1,
+                    max_redirects=3,
+                )
+            )
+        assert len(calls) <= 4, calls  # initial + max 3 retries
+
+    def test_crt_sh_dns_rebinding_via_pin(self, monkeypatch):
+        """crt.sh hostname resolves to public on first lookup, then the
+        redirect target resolves to private: the pin helper re-validates
+        each hop and blocks the rebinding."""
+        monkeypatch.setattr(
+            "socket.getaddrinfo",
+            lambda host, *a, **k: _addrs(
+                {"crt.sh": "93.184.216.34", "rebind.example.com": "10.9.9.9"}[host]),
+        )
+        requests_log = []
+
+        def responder(url, headers):
+            if "93.184.216.34" in url:
+                return FakeStream(302, b"", {"location": "http://rebind.example.com/"})
+            raise AssertionError(f"must not follow to rebind target: {url}")
+
+        monkeypatch.setattr(
+            "utils.egress.httpx.AsyncClient",
+            _fake_client_class(requests_log, responder),
+        )
+        import asyncio
+        with pytest.raises(EgressBlocked):
+            asyncio.run(
+                fetch_url_validated("https://crt.sh/?q=%.example.com&output=json")
+            )
+        assert len(requests_log) == 1
+
+
 class TestWebhookValidation:
     @pytest.mark.parametrize("url", [
         "https://user:pass@hooks.example.com/x",   # userinfo
