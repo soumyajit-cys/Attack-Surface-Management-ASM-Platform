@@ -344,8 +344,9 @@ class TestProviderAudit:
         )
         assert len(rows) == 1, rows
         details = json.loads(rows[0].details)
-        assert "key" not in details.casefold() if isinstance(details, str) else True
-        assert "encrypted_api_key" not in str(details).casefold()
+        details_str = json.dumps(details).casefold()
+        assert "key" not in details_str, details_str
+        assert "encrypted_api_key" not in details_str, details_str
         assert details["provider_name"] == "shodan"
         assert details["is_active"] is True
         assert details["credentials_rotated"] is True
