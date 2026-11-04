@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toaster'
 import { api } from '../lib/api'
@@ -176,6 +176,13 @@ export function Settings() {
       acknowledge_data_sharing: false,
     })
   }
+
+  // Load providers whenever the Providers tab is shown.
+  useEffect(() => {
+    if (activeTab === 'providers' && hasEnrichmentManage()) {
+      void loadProviders()
+    }
+  }, [activeTab])
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },

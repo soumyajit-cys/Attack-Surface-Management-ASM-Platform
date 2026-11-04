@@ -5,6 +5,23 @@ Admin-only (``enrichment:manage``).  GET returns only ``has_key`` /
 PUT sets/rotates the Fernet-encrypted key and active flag; enabling any
 third-party provider requires ``acknowledge_data_sharing=true``.  All
 mutations are audited.
+
+Encryption at rest (how it works without ``ENCRYPTED_COLUMNS``):
+
+The ``enrichment_providers.encrypted_api_key`` column is deliberately NOT in
+``app.core.crypto.ENCRYPTED_COLUMNS`` (that table covers alert-integration
+secrets via the ``EncryptedText`` type decorator).  Instead, encryption is
+performed explicitly in this API:
+
+1. ``PUT`` receives the plaintext API key in the request body.
+2. ``encrypt_value()`` (``app.core.crypto``) Fernet-encrypts it using
+   ``SECRETS_ENCRYPTION_KEY``; the ciphertext carries the ``enc:v1:`` prefix.
+3. The ciphertext is stored in ``encrypted_api_key``.  The plaintext is never
+   written to the DB, logs, or any response.
+4. ``GET`` returns only ``has_key`` (``encrypted_api_key IS NOT NULL``) and
+   ``is_active`` -- never the key, never a decryptable value.
+5. Rotation: re-PUT with a new ``api_key`` overwrites the ciphertext;
+   omitting ``api_key`` leaves the existing ciphertext intact.
 """
 
 from __future__ import annotations

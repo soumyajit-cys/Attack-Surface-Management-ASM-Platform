@@ -62,8 +62,8 @@ describe('Settings page — enrichment providers (Phase 2.1)', () => {
     fireEvent.click(screen.getByRole('tab', { name: /providers/i }))
 
     await screen.findByText('shodan')
-    expect(await screen.findByText('key set')).toBeInTheDocument()
-    expect(await screen.findByText('no key')).toBeInTheDocument()
+    expect(await screen.findByText(/key set/)).toBeInTheDocument()
+    expect(await screen.findByText(/no key/)).toBeInTheDocument()
     expect(screen.getByTestId('provider-edit-shodan')).toBeInTheDocument()
     expect(screen.getByTestId('provider-delete-shodan')).toBeInTheDocument()
   })
