@@ -24,7 +24,7 @@ from schemas.enrichment import (
 from app.core.audit import record_audit
 from app.core.config import settings
 from app.core.crypto import EncryptedText, encrypt_value, is_encrypted
-from app.core.errors import BadRequestError, ConflictError, ForbiddenError
+from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.permissions import Permission
 from app.api.deps import Principal, require_permissions_dep
 from app.db.session import get_db
@@ -158,8 +158,9 @@ async def delete_provider(
         .first()
     )
     if row is None:
-        # Idempotent delete: missing provider is a no-op.
-        return None
+        # Cross-org or missing provider: 404 (never leak existence of
+        # another org's provider).
+        raise NotFoundError("Provider not found", code="provider_not_found")
 
     db.delete(row)
     record_audit(
