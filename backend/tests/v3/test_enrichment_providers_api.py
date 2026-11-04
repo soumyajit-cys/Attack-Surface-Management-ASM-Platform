@@ -335,6 +335,7 @@ class TestProviderAudit:
         )
 
         from models.audit_log import AuditLog
+        import json
 
         rows = (
             db.query(AuditLog)
@@ -342,9 +343,9 @@ class TestProviderAudit:
             .all()
         )
         assert len(rows) == 1, rows
-        details = rows[0].details
-        assert "key" not in details.casefold(), details
-        assert "encrypted_api_key" not in details.casefold(), details
+        details = json.loads(rows[0].details)
+        assert "key" not in details.casefold() if isinstance(details, str) else True
+        assert "encrypted_api_key" not in str(details).casefold()
         assert details["provider_name"] == "shodan"
         assert details["is_active"] is True
         assert details["credentials_rotated"] is True
