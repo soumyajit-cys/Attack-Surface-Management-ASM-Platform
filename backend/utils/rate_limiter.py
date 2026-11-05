@@ -1,5 +1,4 @@
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request, FastAPI
 from fastapi.responses import JSONResponse
@@ -42,8 +41,7 @@ limiter = Limiter(
 )
 
 # Disable slowapi's in-memory fallback so a dead Redis backend never silently
-# turns fail-open.  Storage errors propagate to the RedisError exception
-# handler / middleware, which answers 429 on sensitive endpoints only.
+# turns fail-open.
 limiter._in_memory_fallback = False
 limiter._swallow_errors = False
 
@@ -86,18 +84,6 @@ def _redis_down_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
-def _is_storage_down_response(response) -> bool:
-    """True if response is the 429 we emit when Redis is down."""
-    try:
-        body = response.body.decode() if hasattr(response, "body") else ""
-        return (
-            response.status_code == 429
-            and "rate_limit_storage_down" in body
-        )
-    except Exception:  # noqa: BLE001
-        return False
-
-
 def _probe_backend() -> bool:
     """Quickly check whether Redis is back. Returns True if reachable."""
     try:
@@ -110,16 +96,15 @@ def _probe_backend() -> bool:
 class _FailClosedMiddleware(BaseHTTPMiddleware):
     """Fail-closed for sensitive endpoints only when Redis is down.
 
-    Detection paths:
-    1. ``limiter._storage_dead`` is already True -- probe Redis first (at most
-       once per _BACKEND_CHECK_INTERVAL); if back, clear the dead flag and
-       proceed normally.  Otherwise answer 429 for sensitive paths; for
-       non-sensitive paths, proceed unmetered (fail-open).
-    2. ``call_next`` returns a 429 with ``rate_limit_storage_down`` (SlowAPI
-       caught a RedisError internally and converted it via the exception
-       handler).  For sensitive paths, return that 429.  For non-sensitive
-       paths, retry the request with rate limiting disabled so the request
-       proceeds unmetered.
+    Rate limiting is checked manually in this middleware (SlowAPIMiddleware is
+    not used, so Redis/storage errors propagate cleanly to our except block
+    instead of being swallowed by SlowAPI's internal exception handler).
+
+    1. Before ``call_next``, check the default rate limit manually.
+    2. If Redis is down: sensitive endpoints get 429 (fail-closed);
+       non-sensitive endpoints proceed unmetered (fail-open).
+    3. If limit exceeded (Redis up): return 429 normally.
+    4. Periodically probe Redis for recovery.
 
     Health checks and normal reads are never blocked by a storage failure.
     """
@@ -163,8 +148,11 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
             # Non-sensitive: proceed unmetered (fail-open).
             return await call_next(request)
 
+        # Check the default rate limit manually (no SlowAPIMiddleware).
         try:
-            response = await call_next(request)
+            limiter._check_request_limit(request, None, True)
+        except RateLimitExceeded as exc:
+            return _rate_limit_exceeded_handler(request, exc)
         except Exception as exc:  # noqa: BLE001
             from redis.exceptions import RedisError
 
@@ -190,31 +178,10 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
                     "Rate-limit backend unreachable; failing open for %s",
                     request.url.path,
                 )
-                # Retry with rate limiting disabled.
-                limiter._storage_dead = False
-                limiter.enabled = False
-                try:
-                    return await call_next(request)
-                finally:
-                    limiter.enabled = True
+                return await call_next(request)
             raise
 
-        # SlowAPI caught RedisError internally and returned 429 via the
-        # exception handler.  If _storage_dead is True and this is a
-        # non-sensitive path, retry without rate limiting so the request
-        # proceeds (fail-open).
-        if not sensitive and getattr(limiter, "_storage_dead", False) and response.status_code == 429:
-            logger.warning(
-                "Rate-limit backend down; failing open for %s",
-                request.url.path,
-            )
-            limiter._storage_dead = False
-            limiter.enabled = False
-            try:
-                return await call_next(request)
-            finally:
-                limiter.enabled = True
-
+        response = await call_next(request)
         return response
 
 
@@ -226,16 +193,9 @@ def reset_storage_dead() -> None:
 def setup_rate_limiting(app: FastAPI) -> None:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    # Fail-closed: when Redis is unreachable, SlowAPI's middleware catches the
-    # storage error and falls back to the registered exception handler, which
-    # returns 429.  Our middleware then retries non-sensitive paths with rate
-    # limiting disabled (fail-open) and returns 429 for sensitive paths.
-    from redis.exceptions import RedisError
-
-    app.add_exception_handler(RedisError, _redis_down_handler)
-    # Enforces default_limits (60/min) on routes WITHOUT their own decorator.
-    app.add_middleware(SlowAPIMiddleware)
-    # Fail-closed wrapper (outermost).
+    # No SlowAPIMiddleware: rate limiting is handled manually by
+    # _FailClosedMiddleware so Redis/storage errors propagate to our except
+    # block instead of being swallowed by SlowAPI's internal handler.
     app.add_middleware(
         _FailClosedMiddleware, fail_closed=settings.rate_limit_fail_closed
     )
