@@ -202,19 +202,23 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
         # SlowAPI caught RedisError internally and returned 429 via the
         # exception handler.  If this is a non-sensitive path, retry without
         # rate limiting so the request proceeds (fail-open).
-        if not sensitive and _is_storage_down_response(response):
-            logger.warning(
-                "Rate-limit backend down; failing open for %s",
-                request.url.path,
-            )
-            # Temporarily clear the dead flag so the retry isn't blocked by
-            # the fast-path, and disable the limiter so SlowAPI skips checks.
-            limiter._storage_dead = False
-            limiter.enabled = False
+        if not sensitive and response.status_code == 429:
             try:
-                return await call_next(request)
-            finally:
-                limiter.enabled = True
+                body = response.body.decode() if hasattr(response, "body") else ""
+                is_storage_down = "rate_limit_storage_down" in body
+            except Exception:  # noqa: BLE001
+                is_storage_down = False
+            if is_storage_down:
+                logger.warning(
+                    "Rate-limit backend down; failing open for %s",
+                    request.url.path,
+                )
+                limiter._storage_dead = False
+                limiter.enabled = False
+                try:
+                    return await call_next(request)
+                finally:
+                    limiter.enabled = True
 
         return response
 
