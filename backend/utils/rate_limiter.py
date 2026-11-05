@@ -117,6 +117,7 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
     _EXEMPT_PATHS = frozenset({"/health", "/metrics", "/"})
 
     async def dispatch(self, request: Request, call_next):
+        global _last_backend_check
         if not self.fail_closed:
             return await call_next(request)
         if request.url.path in self._EXEMPT_PATHS:
@@ -124,7 +125,6 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
         sensitive = _is_sensitive_path(request.url.path)
         # Fast path: backend already known dead -- probe before 429.
         if getattr(limiter, "_storage_dead", False):
-            global _last_backend_check
             now = time.monotonic()
             if now - _last_backend_check >= _BACKEND_CHECK_INTERVAL:
                 _last_backend_check = now
