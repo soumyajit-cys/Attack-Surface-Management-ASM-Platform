@@ -154,7 +154,6 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
             from redis.exceptions import RedisError
 
             if isinstance(exc, RedisError) or "redis" in type(exc).__module__:
-                global _last_backend_check
                 limiter._storage_dead = True
                 _last_backend_check = time.monotonic()
                 if sensitive:
