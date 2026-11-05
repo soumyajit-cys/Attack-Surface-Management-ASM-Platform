@@ -124,8 +124,8 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
         sensitive = _is_sensitive_path(request.url.path)
         # Fast path: backend already known dead -- probe before 429.
         if getattr(limiter, "_storage_dead", False):
-            now = time.monotonic()
             global _last_backend_check
+            now = time.monotonic()
             if now - _last_backend_check >= _BACKEND_CHECK_INTERVAL:
                 _last_backend_check = now
                 if _probe_backend():
@@ -154,8 +154,8 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
             from redis.exceptions import RedisError
 
             if isinstance(exc, RedisError) or "redis" in type(exc).__module__:
-                limiter._storage_dead = True
                 global _last_backend_check
+                limiter._storage_dead = True
                 _last_backend_check = time.monotonic()
                 if sensitive:
                     logger.warning(
