@@ -42,14 +42,27 @@ limiter = Limiter(
 
 # Disable slowapi's in-memory fallback so a dead Redis backend never silently
 # turns fail-open.  Storage errors propagate to our exception handler /
-# middleware, which answers 429.
+# middleware, which answers 429 on sensitive endpoints only.
 limiter._in_memory_fallback = False
 limiter._swallow_errors = False
 
+# Sensitive endpoints where a Redis outage must fail closed (never let an
+# unauthenticated or state-changing request slip through unmetered).
+_SENSITIVE_PATH_PREFIXES = (
+    "/api/v1/auth/",
+    "/api/v1/scans",
+    "/api/v1/enrichment/providers",
+)
+
+
+def _is_sensitive_path(path: str) -> bool:
+    return any(path.startswith(p) for p in _SENSITIVE_PATH_PREFIXES)
+
 
 def _redis_down_handler(request: Request, exc: Exception) -> JSONResponse:
-    """429 when the rate-limit backend (Redis) is unreachable.  Marks the
-    backend dead so the middleware fast-path catches subsequent requests."""
+    """429 when the rate-limit backend (Redis) is unreachable on a sensitive
+    endpoint.  Marks the backend dead so subsequent sensitive requests fail
+    closed until Redis recovers.  Non-sensitive endpoints are NOT affected."""
     limiter._storage_dead = True
     logger.warning(
         "Rate-limit backend unreachable (%s); failing closed for %s",
@@ -68,23 +81,23 @@ def _redis_down_handler(request: Request, exc: Exception) -> JSONResponse:
 
 
 class _FailClosedMiddleware(BaseHTTPMiddleware):
-    """If the rate-limit backend (Redis) is down and ``rate_limit_fail_closed``
-    is set, reject every non-health request with 429 instead of letting traffic
-    through (fail-open).  Two detection paths:
+    """Fail-closed for sensitive endpoints only when Redis is down.
 
-    1. ``limiter._storage_dead`` is already True (backend flagged dead on a
-       previous request) -- answer 429 immediately, before slowapi runs.
-    2. A Redis/storage exception reaches this middleware (unexpected path) --
-       catch it and answer 429.
+    Two detection paths:
+    1. ``limiter._storage_dead`` is already True -- answer 429 immediately
+       for sensitive paths.
+    2. A Redis/storage exception reaches this middleware -- catch it and
+       answer 429 for sensitive paths.
 
-    Health checks are always exempt.
+    Health checks and normal reads are never blocked by a storage failure:
+    they proceed unmetered (fail-open) so a Redis blip cannot take down
+    /health, /metrics, or read-only endpoints.
     """
 
     def __init__(self, app, fail_closed: bool = True) -> None:
         super().__init__(app)
         self.fail_closed = fail_closed
 
-    # Paths that must never be rate-limited or blocked by a storage failure.
     _EXEMPT_PATHS = frozenset({"/health", "/metrics", "/"})
 
     async def dispatch(self, request: Request, call_next):
@@ -92,8 +105,10 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.url.path in self._EXEMPT_PATHS:
             return await call_next(request)
-        # Fast path: backend already known dead.
-        if getattr(limiter, "_storage_dead", False):
+        # Fast path: backend already known dead -- sensitive paths only.
+        if getattr(limiter, "_storage_dead", False) and _is_sensitive_path(
+            request.url.path
+        ):
             logger.warning(
                 "Rate-limit backend dead; failing closed for %s",
                 request.url.path,
@@ -114,20 +129,31 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
 
             if isinstance(exc, RedisError) or "redis" in type(exc).__module__:
                 limiter._storage_dead = True
+                if _is_sensitive_path(request.url.path):
+                    logger.warning(
+                        "Rate-limit backend unreachable; failing closed for %s",
+                        request.url.path,
+                    )
+                    return JSONResponse(
+                        status_code=429,
+                        content={
+                            "error": {
+                                "message": "Rate limit service unavailable",
+                                "code": "rate_limit_storage_down",
+                            }
+                        },
+                    )
+                # Non-sensitive path: log and proceed unmetered (fail-open).
                 logger.warning(
-                    "Rate-limit backend unreachable; failing closed for %s",
+                    "Rate-limit backend unreachable; failing open for %s",
                     request.url.path,
                 )
-                return JSONResponse(
-                    status_code=429,
-                    content={
-                        "error": {
-                            "message": "Rate limit service unavailable",
-                            "code": "rate_limit_storage_down",
-                        }
-                    },
-                )
             raise
+
+
+def reset_storage_dead() -> None:
+    """Test helper: clear the _storage_dead flag so tests start fresh."""
+    limiter._storage_dead = False
 
 
 def setup_rate_limiting(app: FastAPI) -> None:
@@ -135,14 +161,14 @@ def setup_rate_limiting(app: FastAPI) -> None:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     # Fail-closed: when Redis is unreachable, slowapi's middleware catches the
     # storage error and falls back to the registered exception handler.  Our
-    # RedisError handler answers 429 instead of the default 500.
+    # RedisError handler answers 429 on sensitive endpoints only.
     from redis.exceptions import RedisError
 
     app.add_exception_handler(RedisError, _redis_down_handler)
     # Enforces default_limits (60/min) on routes WITHOUT their own decorator.
     app.add_middleware(SlowAPIMiddleware)
     # Fail-closed wrapper (outermost): catches Redis/storage errors that
-    # propagate through and answers 429 instead of failing open.
+    # propagate through and answers 429 on sensitive endpoints.
     app.add_middleware(
         _FailClosedMiddleware, fail_closed=settings.rate_limit_fail_closed
     )

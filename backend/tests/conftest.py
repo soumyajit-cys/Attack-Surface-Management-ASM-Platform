@@ -40,6 +40,9 @@ def _setup_database():
 @pytest.fixture(autouse=True)
 def _clean_state():
     get_redis().flushdb()
+    from utils.rate_limiter import reset_storage_dead
+
+    reset_storage_dead()
     yield
     get_redis().flushdb()
     # Use a fresh session for cleanup to avoid session state issues
