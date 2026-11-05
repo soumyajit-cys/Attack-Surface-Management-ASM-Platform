@@ -200,8 +200,9 @@ def test_limiter_storage_resets_between_tests(client):
 
 
 def test_rate_limiter_fail_closed_when_redis_down(client, monkeypatch):
-    """When Redis is unreachable and rate_limit_fail_closed is on, every
-    non-health request gets 429 (fail-closed) instead of failing open."""
+    """When Redis is unreachable and rate_limit_fail_closed is on, sensitive
+    endpoints (auth, scans, enrichment) get 429; normal reads proceed
+    unmetered (fail-open). Health checks stay exempt."""
     from redis.exceptions import RedisError
     from utils.rate_limiter import limiter
 
@@ -215,8 +216,6 @@ def test_rate_limiter_fail_closed_when_redis_down(client, monkeypatch):
     headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
 
     # Take Redis down mid-test.
-    original_incr = limiter._storage.incr
-
     def boom(*a, **k):
         raise RedisError("connection refused")
 
@@ -225,8 +224,91 @@ def test_rate_limiter_fail_closed_when_redis_down(client, monkeypatch):
     # Health stays exempt even with Redis down.
     assert client.get("/health").status_code == 200
 
-    # Everything else gets 429 (fail-closed, not fail-open).
-    response = client.get("/api/v1/assets", headers=headers)
+    # Sensitive endpoint: auth/me gets 429 (fail-closed).
+    response = client.get("/api/v1/auth/me", headers=headers)
     assert response.status_code == 429, response.text
     assert response.json()["error"]["code"] == "rate_limit_storage_down"
+
+    # Sensitive endpoint: scans trigger gets 429 (fail-closed).
+    response = client.post(
+        "/api/v1/scans",
+        json={"domain": "example.com"},
+        headers=headers,
+    )
+    assert response.status_code == 429, response.text
+
+    # Non-sensitive read: assets proceeds unmetered (fail-open).
+    response = client.get("/api/v1/assets", headers=headers)
+    assert response.status_code in (200, 401), response.text
+
+
+def test_rate_limiter_startup_redis_unavailable(client, monkeypatch):
+    """When Redis is unavailable at startup (first request), sensitive
+    endpoints fail closed and non-sensitive endpoints fail open."""
+    from redis.exceptions import RedisError
+    from utils.rate_limiter import limiter
+
+    # Ensure fresh state.
+    limiter._storage_dead = False
+
+    # Make the very first storage call fail.
+    call_count = [0]
+    original_incr = limiter._storage.incr
+
+    def boom(*a, **k):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise RedisError("connection refused")
+        return original_incr(*a, **k)
+
+    monkeypatch.setattr(limiter._storage, "incr", boom)
+
+    # Sensitive endpoint fails closed on first contact.
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "rlstartup", "email": "rlstartup@example.com",
+              "password": "password123", "organization": "RLStartup Org"},
+    )
+    assert reg.status_code == 429, reg.text
+    assert reg.json()["error"]["code"] == "rate_limit_storage_down"
+
+    # After the backend is marked dead, subsequent sensitive requests 429 fast.
+    response = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer bogus"})
+    assert response.status_code == 429, response.text
+
+
+def test_rate_limiter_recovers_when_redis_returns(client, monkeypatch):
+    """Once Redis is back, sensitive endpoints stop failing closed."""
+    from redis.exceptions import RedisError
+    from utils.rate_limiter import limiter, reset_storage_dead
+
+    reset_storage_dead()
+
+    # First call fails.
+    call_count = [0]
+    original_incr = limiter._storage.incr
+
+    def flaky(*a, **k):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise RedisError("connection refused")
+        return original_incr(*a, **k)
+
+    monkeypatch.setattr(limiter._storage, "incr", flaky)
+
+    # First sensitive request: 429.
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"username": "rlrec", "email": "rlrec@example.com",
+              "password": "password123", "organization": "RLRec Org"},
+    )
+    assert response.status_code == 429, response.text
+
+    # Redis recovers: subsequent sensitive requests proceed.
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"username": "rlrec2", "email": "rlrec2@example.com",
+              "password": "password123", "organization": "RLRec2 Org"},
+    )
+    assert reg.status_code == 201, reg.text
 
