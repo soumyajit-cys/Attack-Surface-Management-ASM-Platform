@@ -191,6 +191,7 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
                     request.url.path,
                 )
                 # Retry with rate limiting disabled.
+                limiter._storage_dead = False
                 limiter.enabled = False
                 try:
                     return await call_next(request)
