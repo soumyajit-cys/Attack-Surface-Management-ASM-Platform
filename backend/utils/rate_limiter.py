@@ -1,8 +1,10 @@
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import _find_route_handler
 from fastapi import Request, FastAPI
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.routing import Match
 from urllib.parse import urlsplit
 from config import settings
 import logging
@@ -93,6 +95,18 @@ def _probe_backend() -> bool:
         return False
 
 
+def _find_handler(routes, scope):
+    """Find the route endpoint function for *scope* (mirrors slowapi's
+    internal helper so per-route ``@limiter.limit`` decorators still work
+    without SlowAPIMiddleware)."""
+    handler = None
+    for route in routes:
+        match, _ = route.matches(scope)
+        if match == Match.FULL and hasattr(route, "endpoint"):
+            handler = route.endpoint
+    return handler
+
+
 class _FailClosedMiddleware(BaseHTTPMiddleware):
     """Fail-closed for sensitive endpoints only when Redis is down.
 
@@ -100,7 +114,8 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
     not used, so Redis/storage errors propagate cleanly to our except block
     instead of being swallowed by SlowAPI's internal exception handler).
 
-    1. Before ``call_next``, check the default rate limit manually.
+    1. Before ``call_next``, check the default rate limit and any per-route
+       limit (from ``@limiter.limit`` decorators) manually.
     2. If Redis is down: sensitive endpoints get 429 (fail-closed);
        non-sensitive endpoints proceed unmetered (fail-open).
     3. If limit exceeded (Redis up): return 429 normally.
@@ -113,13 +128,15 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.fail_closed = fail_closed
 
-    _EXEMPT_PATHS = frozenset({"/health", "/metrics", "/"})
+    _NO_LIMIT_PATHS = frozenset({"/health", "/"})
+    # Rate-limited but never blocked by a Redis storage failure.
+    _FAIL_CLOSED_EXEMPT_PATHS = frozenset({"/metrics"})
 
     async def dispatch(self, request: Request, call_next):
         global _last_backend_check
         if not self.fail_closed:
             return await call_next(request)
-        if request.url.path in self._EXEMPT_PATHS:
+        if request.url.path in self._NO_LIMIT_PATHS:
             return await call_next(request)
         sensitive = _is_sensitive_path(request.url.path)
 
@@ -145,12 +162,14 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
                         }
                     },
                 )
-            # Non-sensitive: proceed unmetered (fail-open).
+            # Non-sensitive (including /metrics): proceed unmetered
+            # (fail-open) when Redis is down.
             return await call_next(request)
 
-        # Check the default rate limit manually (no SlowAPIMiddleware).
+        # Check rate limits manually (default + per-route decorators).
+        handler = _find_handler(request.app.routes, request.scope)
         try:
-            limiter._check_request_limit(request, None, True)
+            limiter._check_request_limit(request, handler, True)
         except RateLimitExceeded as exc:
             return _rate_limit_exceeded_handler(request, exc)
         except Exception as exc:  # noqa: BLE001
@@ -173,7 +192,8 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
                             }
                         },
                     )
-                # Non-sensitive path: log and proceed unmetered (fail-open).
+                # Non-sensitive path (including /metrics): log and proceed
+                # unmetered (fail-open) when Redis is down.
                 logger.warning(
                     "Rate-limit backend unreachable; failing open for %s",
                     request.url.path,
