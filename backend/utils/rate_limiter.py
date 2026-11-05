@@ -67,7 +67,8 @@ def _is_sensitive_path(path: str) -> bool:
 def _redis_down_handler(request: Request, exc: Exception) -> JSONResponse:
     """429 when the rate-limit backend (Redis) is unreachable on a sensitive
     endpoint.  Marks the backend dead so subsequent sensitive requests fail
-    closed until Redis recovers.  Non-sensitive endpoints are NOT affected."""
+    closed until Redis recovers (probed periodically by the middleware).
+    Non-sensitive endpoints are NOT affected."""
     limiter._storage_dead = True
     logger.warning(
         "Rate-limit backend unreachable (%s); failing closed for %s",
@@ -85,12 +86,22 @@ def _redis_down_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+def _probe_backend() -> bool:
+    """Quickly check whether Redis is back. Returns True if reachable."""
+    try:
+        limiter._storage.check()
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class _FailClosedMiddleware(BaseHTTPMiddleware):
     """Fail-closed for sensitive endpoints only when Redis is down.
 
     Two detection paths:
-    1. ``limiter._storage_dead`` is already True -- answer 429 immediately
-       for sensitive paths.
+    1. ``limiter._storage_dead`` is already True -- probe Redis first (at most
+       once per _BACKEND_CHECK_INTERVAL); if it's back, clear the dead flag
+       and proceed normally.  Otherwise answer 429 for sensitive paths.
     2. A Redis/storage exception reaches this middleware -- catch it and
        answer 429 for sensitive paths.
 
@@ -110,23 +121,33 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.url.path in self._EXEMPT_PATHS:
             return await call_next(request)
-        # Fast path: backend already known dead -- sensitive paths only.
-        if getattr(limiter, "_storage_dead", False) and _is_sensitive_path(
-            request.url.path
-        ):
-            logger.warning(
-                "Rate-limit backend dead; failing closed for %s",
-                request.url.path,
-            )
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "error": {
-                        "message": "Rate limit service unavailable",
-                        "code": "rate_limit_storage_down",
-                    }
-                },
-            )
+        sensitive = _is_sensitive_path(request.url.path)
+        # Fast path: backend already known dead -- probe before 429.
+        if getattr(limiter, "_storage_dead", False):
+            now = time.monotonic()
+            global _last_backend_check
+            if now - _last_backend_check >= _BACKEND_CHECK_INTERVAL:
+                _last_backend_check = now
+                if _probe_backend():
+                    limiter._storage_dead = False
+                    logger.info("Rate-limit backend recovered")
+                    return await call_next(request)
+            if sensitive:
+                logger.warning(
+                    "Rate-limit backend dead; failing closed for %s",
+                    request.url.path,
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "error": {
+                            "message": "Rate limit service unavailable",
+                            "code": "rate_limit_storage_down",
+                        }
+                    },
+                )
+            # Non-sensitive within interval: proceed unmetered.
+            return await call_next(request)
         try:
             return await call_next(request)
         except Exception as exc:  # noqa: BLE001
@@ -134,7 +155,9 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
 
             if isinstance(exc, RedisError) or "redis" in type(exc).__module__:
                 limiter._storage_dead = True
-                if _is_sensitive_path(request.url.path):
+                global _last_backend_check
+                _last_backend_check = time.monotonic()
+                if sensitive:
                     logger.warning(
                         "Rate-limit backend unreachable; failing closed for %s",
                         request.url.path,

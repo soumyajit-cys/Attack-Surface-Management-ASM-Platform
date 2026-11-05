@@ -304,7 +304,8 @@ def test_rate_limiter_recovers_when_redis_returns(client, monkeypatch):
     )
     assert response.status_code == 429, response.text
 
-    # Redis recovers: subsequent sensitive requests proceed.
+    # Redis recovers: reset dead flag and subsequent sensitive requests proceed.
+    reset_storage_dead()
     reg = client.post(
         "/api/v1/auth/register",
         json={"username": "rlrec2", "email": "rlrec2@example.com",
