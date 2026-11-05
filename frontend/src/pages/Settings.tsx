@@ -15,19 +15,6 @@ import {
   Globe,
   Loader2,
   AlertTriangle,
-} from 'lucide-react'
-
-import {
-  User,
-  Lock,
-  Bell,
-  Shield,
-  Palette,
-  Moon,
-  Sun,
-  Globe,
-  Loader2,
-  AlertTriangle,
   Sliders,
   Trash2,
   Eye,
@@ -38,12 +25,7 @@ export function Settings() {
   const { user } = useAuth()
   const { addToast } = useToast()
   const [activeTab, setActiveTab] = useState<
-    | 'profile'
-    | 'security'
-    | 'notifications'
-    | 'appearance'
-    | 'danger'
-    | 'providers'
+    'profile' | 'security' | 'notifications' | 'appearance' | 'danger' | 'providers'
   >('profile')
   const [profileData, setProfileData] = useState({
     username: user?.username || '',
@@ -63,12 +45,14 @@ export function Settings() {
   }
 
   // ── enrichment provider state ─────────────────────────────────────────
-  const [providers, setProviders] = useState<{
-    name: string
-    provider_type: string
-    has_key: boolean
-    is_active: boolean
-  }[]>([])
+  const [providers, setProviders] = useState<
+    {
+      name: string
+      provider_type: string
+      has_key: boolean
+      is_active: boolean
+    }[]
+  >([])
   const [providersLoading, setProvidersLoading] = useState(false)
   const [providerForm, setProviderForm] = useState<{
     name: string
@@ -88,8 +72,7 @@ export function Settings() {
   const [editMode, setEditMode] = useState(false)
   const [editingName, setEditingName] = useState<string | null>(null)
 
-  const hasEnrichmentManage = () =>
-    user?.permissions?.includes('enrichment:manage') ?? false
+  const hasEnrichmentManage = () => user?.permissions?.includes('enrichment:manage') ?? false
 
   const loadProviders = async () => {
     if (!hasEnrichmentManage()) return
@@ -110,8 +93,7 @@ export function Settings() {
       addToast({
         type: 'error',
         title: 'Data sharing acknowledgement required',
-        message:
-          'Enabling a third-party provider requires acknowledge_data_sharing.',
+        message: 'Enabling a third-party provider requires acknowledge_data_sharing.',
       })
       return
     }
@@ -190,9 +172,7 @@ export function Settings() {
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'danger', label: 'Danger Zone', icon: Shield },
-    ...(hasEnrichmentManage()
-      ? [{ id: 'providers', label: 'Providers', icon: Sliders }]
-      : []),
+    ...(hasEnrichmentManage() ? [{ id: 'providers', label: 'Providers', icon: Sliders }] : []),
   ]
 
   return (
@@ -432,9 +412,7 @@ export function Settings() {
               aria-label="Enrichment providers"
             >
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Enrichment Providers
-                </h3>
+                <h3 className="text-lg font-semibold text-gray-900">Enrichment Providers</h3>
                 <button
                   className="btn-secondary text-sm"
                   onClick={() => {
@@ -442,24 +420,19 @@ export function Settings() {
                   }}
                   data-testid="providers-refresh"
                 >
-                  {providersLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    'Refresh'
-                  )}
+                  {providersLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
                 </button>
               </div>
 
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                Enabling a third-party provider sends registered domain names
-                to that provider. The API key is Fernet-encrypted at rest and
-                is never returned by the API or written to logs.
+                Enabling a third-party provider sends registered domain names to that provider. The
+                API key is Fernet-encrypted at rest and is never returned by the API or written to
+                logs.
                 <br />
                 <br />
-                <strong>Stored keys are not yet consumed by any active
-                provider.</strong> Enabling a provider here records its config;
-                actual enrichment calls are implemented per-provider in a
-                future release.
+                <strong>Stored keys are not yet consumed by any active provider.</strong> Enabling a
+                provider here records its config; actual enrichment calls are implemented
+                per-provider in a future release.
               </div>
 
               {/* Provider list */}
@@ -484,9 +457,7 @@ export function Settings() {
                     <div className="flex items-center gap-2">
                       <span
                         className={`text-xs px-2 py-1 rounded ${
-                          p.is_active
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-600'
+                          p.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                         }`}
                       >
                         {p.is_active ? 'active' : 'inactive'}
@@ -517,28 +488,28 @@ export function Settings() {
                 data-testid="provider-form"
               >
                 <h4 className="font-medium text-gray-900">
-                  {editMode && editingName
-                    ? `Edit provider: ${editingName}`
-                    : 'Add provider'}
+                  {editMode && editingName ? `Edit provider: ${editingName}` : 'Add provider'}
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="label" htmlFor="provider-name">Provider name</label>
+                    <label className="label" htmlFor="provider-name">
+                      Provider name
+                    </label>
                     <input
                       id="provider-name"
                       type="text"
                       className="input"
                       value={providerForm.name}
-                      onChange={(e) =>
-                        setProviderForm({ ...providerForm, name: e.target.value })
-                      }
+                      onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })}
                       required
                       disabled={editMode}
                       data-testid="provider-name-input"
                     />
                   </div>
                   <div>
-                    <label className="label" htmlFor="provider-type">Provider type</label>
+                    <label className="label" htmlFor="provider-type">
+                      Provider type
+                    </label>
                     <input
                       id="provider-type"
                       type="text"
@@ -556,7 +527,9 @@ export function Settings() {
                   </div>
                 </div>
                 <div>
-                  <label className="label" htmlFor="provider-api-key">API key</label>
+                  <label className="label" htmlFor="provider-api-key">
+                    API key
+                  </label>
                   <div className="relative">
                     <input
                       id="provider-api-key"
@@ -578,11 +551,7 @@ export function Settings() {
                       onClick={() => setShowKey(!showKey)}
                       aria-label={showKey ? 'Hide key' : 'Show key'}
                     >
-                      {showKey ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
+                      {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -615,8 +584,8 @@ export function Settings() {
                       data-testid="provider-ack-checkbox"
                     />
                     <span>
-                      I acknowledge that enabling this third-party provider
-                      will send registered domain names to it.
+                      I acknowledge that enabling this third-party provider will send registered
+                      domain names to it.
                     </span>
                   </label>
                 </div>
@@ -627,11 +596,7 @@ export function Settings() {
                     disabled={upsertSaving}
                     data-testid="provider-save-button"
                   >
-                    {upsertSaving ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      'Save Provider'
-                    )}
+                    {upsertSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Provider'}
                   </button>
                 </div>
               </form>

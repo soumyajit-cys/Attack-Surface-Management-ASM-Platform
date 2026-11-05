@@ -55,8 +55,8 @@ describe('Settings page — enrichment providers (Phase 2.1)', () => {
 
   it('renders provider rows with edit and delete actions', async () => {
     vi.mocked(api.listEnrichmentProviders).mockResolvedValue([
-      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true },
-      { name: 'censys', provider_type: 'censys', has_key: false, is_active: false },
+      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true, created_at: null, updated_at: null },
+      { name: 'censys', provider_type: 'censys', has_key: false, is_active: false, created_at: null, updated_at: null },
     ])
     renderSettings({ permissions: ['enrichment:manage'] })
     fireEvent.click(screen.getByRole('tab', { name: /providers/i }))
@@ -71,15 +71,21 @@ describe('Settings page — enrichment providers (Phase 2.1)', () => {
   it('add provider submit sends correct payload and clears key from state', async () => {
     vi.mocked(api.listEnrichmentProviders).mockResolvedValue([])
     vi.mocked(api.upsertEnrichmentProvider).mockResolvedValue({
-      name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true,
-      created_at: null, updated_at: null,
+      name: 'shodan',
+      provider_type: 'shodan',
+      has_key: true,
+      is_active: true,
+      created_at: null,
+      updated_at: null,
     })
     renderSettings({ permissions: ['enrichment:manage'] })
     fireEvent.click(screen.getByRole('tab', { name: /providers/i }))
 
     fireEvent.change(screen.getByTestId('provider-name-input'), { target: { value: 'shodan' } })
     fireEvent.change(screen.getByTestId('provider-type-input'), { target: { value: 'shodan' } })
-    fireEvent.change(screen.getByTestId('provider-key-input'), { target: { value: 'super-secret-key' } })
+    fireEvent.change(screen.getByTestId('provider-key-input'), {
+      target: { value: 'super-secret-key' },
+    })
     fireEvent.click(screen.getByTestId('provider-ack-checkbox'))
     fireEvent.click(screen.getByTestId('provider-save-button'))
 
@@ -109,7 +115,7 @@ describe('Settings page — enrichment providers (Phase 2.1)', () => {
 
   it('edit provider does not prefill the stored key', async () => {
     vi.mocked(api.listEnrichmentProviders).mockResolvedValue([
-      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true },
+      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true, created_at: null, updated_at: null },
     ])
     renderSettings({ permissions: ['enrichment:manage'] })
     fireEvent.click(screen.getByRole('tab', { name: /providers/i }))
@@ -125,7 +131,7 @@ describe('Settings page — enrichment providers (Phase 2.1)', () => {
   it('delete provider calls window.confirm and the API', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.mocked(api.listEnrichmentProviders).mockResolvedValue([
-      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true },
+      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true, created_at: null, updated_at: null },
     ])
     renderSettings({ permissions: ['enrichment:manage'] })
     fireEvent.click(screen.getByRole('tab', { name: /providers/i }))
@@ -141,7 +147,7 @@ describe('Settings page — enrichment providers (Phase 2.1)', () => {
   it('delete provider does not call API when user cancels confirmation', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
     vi.mocked(api.listEnrichmentProviders).mockResolvedValue([
-      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true },
+      { name: 'shodan', provider_type: 'shodan', has_key: true, is_active: true, created_at: null, updated_at: null },
     ])
     renderSettings({ permissions: ['enrichment:manage'] })
     fireEvent.click(screen.getByRole('tab', { name: /providers/i }))
@@ -154,8 +160,11 @@ describe('Settings page — enrichment providers (Phase 2.1)', () => {
   })
 
   it('refresh button reloads providers', async () => {
-    vi.mocked(api.listEnrichmentProviders).mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ name: 'crt_sh', provider_type: 'crt_sh', has_key: false, is_active: true }])
+    vi.mocked(api.listEnrichmentProviders)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { name: 'crt_sh', provider_type: 'crt_sh', has_key: false, is_active: true },
+      ])
     renderSettings({ permissions: ['enrichment:manage'] })
     fireEvent.click(screen.getByRole('tab', { name: /providers/i }))
 
