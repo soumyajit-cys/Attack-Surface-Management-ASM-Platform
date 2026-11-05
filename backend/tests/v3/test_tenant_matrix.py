@@ -51,6 +51,12 @@ COVERED_ELSEWHERE = {
     ("POST", "/api/v1/auth/login/2fa"),
     ("POST", "/api/v1/organizations/2fa-requirement"),
     ("POST", "/api/v1/auth/admin/reset-2fa"),
+    # Enrichment provider management is org-scoped (principal.organization_id)
+    # and name-keyed (not id-keyed); cross-org isolation is tested in
+    # test_enrichment_providers_api.py.
+    ("GET", "/api/v1/enrichment/providers"),
+    ("PUT", "/api/v1/enrichment/providers/{name}"),
+    ("DELETE", "/api/v1/enrichment/providers/{name}"),
 }
 COVERED_ID_ROUTES = {
     ("GET", "/api/v1/scans/{scan_id}"),
