@@ -454,6 +454,12 @@ export function Settings() {
                 Enabling a third-party provider sends registered domain names
                 to that provider. The API key is Fernet-encrypted at rest and
                 is never returned by the API or written to logs.
+                <br />
+                <br />
+                <strong>Stored keys are not yet consumed by any active
+                provider.</strong> Enabling a provider here records its config;
+                actual enrichment calls are implemented per-provider in a
+                future release.
               </div>
 
               {/* Provider list */}

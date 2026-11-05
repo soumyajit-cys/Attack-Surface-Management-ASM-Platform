@@ -275,6 +275,39 @@ class TestProviderUpsert:
         assert raw != "new-plaintext-key"
 
 
+class TestProviderKeyRotation:
+    """Key rotation: encrypt with K1, rotate key list to [K2, K1], and verify
+    decryption still succeeds (MultiFernet: first key encrypts, all decrypt)."""
+
+    def test_encrypt_with_k1_decrypt_with_k2_k1_list(self, monkeypatch):
+        import app.core.config as config_mod
+        from app.core.crypto import encrypt_value, decrypt_value
+
+        KEY_A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        KEY_B = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
+
+        # Encrypt with KEY_A only.
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
+        stored = encrypt_value("provider-secret-key")
+        assert stored.startswith("enc:v1:")
+
+        # Rotate to [KEY_B, KEY_A]: KEY_B encrypts new values, both decrypt.
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key",
+                            f"{KEY_B},{KEY_A}")
+        assert decrypt_value(stored) == "provider-secret-key"
+
+        # New encryption uses KEY_B (first in list).
+        rotated = encrypt_value("provider-secret-key")
+        assert rotated != stored
+        assert decrypt_value(rotated) == "provider-secret-key"
+
+        # KEY_A alone can no longer decrypt the newly-encrypted value.
+        monkeypatch.setattr(config_mod.settings, "secrets_encryption_key", KEY_A)
+        from app.core.crypto import DecryptFailedError
+        with pytest.raises(DecryptFailedError):
+            decrypt_value(rotated)
+
+
 # ── DELETE ────────────────────────────────────────────────────────────────
 
 
