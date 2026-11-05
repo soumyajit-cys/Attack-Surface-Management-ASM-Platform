@@ -7,6 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from urllib.parse import urlsplit
 from config import settings
 import logging
+import time
 
 logger = logging.getLogger("sentinelasm")
 
@@ -53,6 +54,10 @@ _SENSITIVE_PATH_PREFIXES = (
     "/api/v1/scans",
     "/api/v1/enrichment/providers",
 )
+
+# How often (seconds) to probe whether Redis is back after an outage.
+_BACKEND_CHECK_INTERVAL = 5.0
+_last_backend_check: float = 0.0
 
 
 def _is_sensitive_path(path: str) -> bool:
