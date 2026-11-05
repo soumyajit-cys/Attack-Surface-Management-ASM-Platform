@@ -206,6 +206,9 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
                 "Rate-limit backend down; failing open for %s",
                 request.url.path,
             )
+            # Temporarily clear the dead flag so the retry isn't blocked by
+            # the fast-path, and disable the limiter so SlowAPI skips checks.
+            limiter._storage_dead = False
             limiter.enabled = False
             try:
                 return await call_next(request)
