@@ -127,7 +127,7 @@ async def discover_subdomains(domain: str) -> list[dict]:
                 "sources": [h.source],
                 "first_seen": h.first_seen,
                 "last_seen": h.last_seen,
-                "truncated": truncation.get(h.source, False),
+                "truncated": bool(truncation.get(h.source, False)),
                 "truncated_count": truncation.get(h.source, 0),
             }
         else:

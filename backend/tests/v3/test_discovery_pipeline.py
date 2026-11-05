@@ -198,6 +198,99 @@ class TestScopeGating:
         assert summary["ports_total"] == 0
 
 
+# ── max_subdomains_per_source_per_scan + truncated flag ─────────────────────
+
+
+class TestMaxSubdomainsPerSource:
+    """Per-source cap and truncated flag propagate from the coordinator
+    through discover_subdomains to the scan API response."""
+
+    @pytest.mark.asyncio
+    async def test_cap_applied_per_source(self, monkeypatch):
+        """When a provider returns more hosts than
+        max_subdomains_per_source_per_scan, excess hosts are dropped and
+        truncated=True + truncated_count are set on the result."""
+        from services.discovery.providers.base import (
+            DiscoveredHost,
+            ProviderResult,
+        )
+        from services.discovery.providers.crt_sh import CrtShProvider
+        from services.discovery.subdomain_service import discover_subdomains
+
+        now = datetime(2026, 11, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        async def fake_lookup(self, domain):
+            # Return 7 hosts but cap is 3.
+            hosts = [
+                DiscoveredHost(
+                    host=f"h{i}.example.com",
+                    source="crt_sh",
+                    first_seen=now,
+                    last_seen=now,
+                )
+                for i in range(7)
+            ]
+            return ProviderResult(
+                provider="crt_sh",
+                hosts=hosts,
+                hosts_returned=len(hosts),
+            )
+
+        monkeypatch.setattr(CrtShProvider, "lookup", fake_lookup)
+        monkeypatch.setattr(
+            "app.core.config.settings.max_subdomains_per_source_per_scan", 3
+        )
+
+        results = await discover_subdomains("example.com")
+
+        # Only 3 hosts kept.
+        kept = [r for r in results if r["source"] == "crt_sh"]
+        assert len(kept) == 3, kept
+        # Truncation flag on every entry from the capped source.
+        for r in kept:
+            assert r["truncated"] is True, r
+            assert r["truncated_count"] == 4, r  # 7 - 3 = 4 dropped
+
+    @pytest.mark.asyncio
+    async def test_no_cap_when_under_limit(self, monkeypatch):
+        """When a provider returns fewer hosts than the cap, no truncation."""
+        from services.discovery.providers.base import (
+            DiscoveredHost,
+            ProviderResult,
+        )
+        from services.discovery.providers.crt_sh import CrtShProvider
+        from services.discovery.subdomain_service import discover_subdomains
+
+        now = datetime(2026, 11, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        async def fake_lookup(self, domain):
+            hosts = [
+                DiscoveredHost(
+                    host="www.example.com",
+                    source="crt_sh",
+                    first_seen=now,
+                    last_seen=now,
+                )
+            ]
+            return ProviderResult(
+                provider="crt_sh",
+                hosts=hosts,
+                hosts_returned=1,
+            )
+
+        monkeypatch.setattr(CrtShProvider, "lookup", fake_lookup)
+        monkeypatch.setattr(
+            "app.core.config.settings.max_subdomains_per_source_per_scan", 500
+        )
+
+        results = await discover_subdomains("example.com")
+
+        www = next((r for r in results if r["subdomain"] == "www.example.com"), None)
+        assert www is not None
+        assert www["truncated"] is False
+        assert www["truncated_count"] == 0
+
+
 # ── migration safety: subdomain dedupe before unique constraint ─────────────
 
 
@@ -494,3 +587,5 @@ class TestDnsBruteGating:
         assert calls == [], f"active probing must not run without pin: {calls}"
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
+
+
