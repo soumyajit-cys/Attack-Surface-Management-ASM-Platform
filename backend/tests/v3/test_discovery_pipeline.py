@@ -193,7 +193,7 @@ class TestScopeGating:
             db, scan, persisted, "example.com", None, "full"
         )
 
-        assert calls == [], f"active probing must not run without pin: {calls}"
+        assert calls == [[ScanPhase.DNS]], f"only passive DNS may run without pin: {calls}"
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
 
@@ -584,7 +584,7 @@ class TestDnsBruteGating:
             db, scan, persisted, "example.com", None, "full"
         )
 
-        assert calls == [], f"active probing must not run without pin: {calls}"
+        assert calls == [[ScanPhase.DNS]], f"only passive DNS may run without pin: {calls}"
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
 
