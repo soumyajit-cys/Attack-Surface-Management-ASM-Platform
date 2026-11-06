@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 
 from services.discovery.subdomain_service import discover_subdomains
+from app.scanning.registry import ScanPhase
 
 
 # ── discover_subdomains: sources + timestamps ─────────────────────────────
