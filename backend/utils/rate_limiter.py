@@ -166,7 +166,9 @@ class _FailClosedMiddleware(BaseHTTPMiddleware):
             # (fail-open) when Redis is down.
             return await call_next(request)
 
-        # Check rate limits manually (default + per-route decorators).
+        # Check rate limits manually (default limits).  Per-route
+        # @limiter.limit decorators are enforced by the decorator wrapper
+        # inside the endpoint itself.
         handler = _find_handler(request.app.routes, request.scope)
         try:
             limiter._check_request_limit(request, handler, True)
