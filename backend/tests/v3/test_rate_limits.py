@@ -385,11 +385,24 @@ def test_every_limited_route_is_rate_limited(client, monkeypatch):
                 headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
 
         hit_429 = False
-        for _ in range(20):  # plenty to exceed any per-route limit
+        for i in range(25):  # plenty to exceed any per-route limit
             if method == "GET":
                 resp = client.get(path, headers=headers)
             elif method == "POST":
-                resp = client.post(path, json={}, headers=headers)
+                # Use a complete, unique body per request so validation passes
+                # and the per-route limit decorator actually runs.
+                if "register" in path:
+                    body = {
+                        "username": f"rli{i}",
+                        "email": f"rli{i}@example.com",
+                        "password": "password123",
+                        "organization": "RLRoute Org",
+                    }
+                elif path.endswith("/login"):
+                    body = {"username": "rli", "password": "wrong"}
+                else:
+                    body = {}
+                resp = client.post(path, json=body, headers=headers)
             else:
                 continue
             if resp.status_code == 429:
