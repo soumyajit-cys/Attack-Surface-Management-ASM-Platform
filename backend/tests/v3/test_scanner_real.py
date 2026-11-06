@@ -819,7 +819,7 @@ class TestSubdomainService:
         result = _run(ssd.discover_subdomains("demo-corp.example"))
 
         by_sub = {r["subdomain"]: r["source"] for r in result}
-        assert by_sub["wiki.demo-corp.example"] == "crt.sh"
+        assert by_sub["wiki.demo-corp.example"] == "crt_sh"
         assert by_sub["www.demo-corp.example"] == "dns_brute"
         assert by_sub["api.demo-corp.example"] == "dns_brute"
 
