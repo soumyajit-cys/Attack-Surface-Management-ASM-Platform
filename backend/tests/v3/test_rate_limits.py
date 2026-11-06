@@ -324,6 +324,7 @@ def test_slowapi_private_api_present():
     review and utils/rate_limiter.py needs updating."""
     from slowapi import Limiter
 
+    lim = Limiter(key_func=lambda r: "test", storage_uri="redis://localhost:6379/15")
     required_attrs = [
         "_check_request_limit",
         "_storage",
@@ -332,7 +333,7 @@ def test_slowapi_private_api_present():
         "_swallow_errors",
         "enabled",
     ]
-    missing = [a for a in required_attrs if not hasattr(Limiter, a)]
+    missing = [a for a in required_attrs if not hasattr(lim, a)]
     assert not missing, (
         f"slowapi is missing private attributes: {missing}. "
         f"Update utils/rate_limiter.py and repin slowapi in pyproject.toml."
