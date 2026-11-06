@@ -752,7 +752,7 @@ class TestSubdomainService:
     def test_crt_sh_parsing(self, monkeypatch):
         import json
 
-        from services.discovery import subdomain_service as ssd
+        from services.discovery.providers.crt_sh import CrtShProvider
 
         body = json.dumps([
             {"name_value": "www.demo-corp.example\n*.demo-corp.example\n"},
@@ -764,29 +764,38 @@ class TestSubdomainService:
             return FetchResult(status_code=200, headers={}, body=body)
 
         monkeypatch.setattr("utils.egress.fetch_url_validated", fake_fetch)
-        subs = _run(ssd._crt_sh_discovery("demo-corp.example"))
+        provider = CrtShProvider()
+        result = _run(provider.lookup("demo-corp.example"))
+        assert result.error is None, result.error
+        subs = [h.host for h in result.hosts]
 
         assert "www.demo-corp.example" in subs
         assert "api.demo-corp.example" in subs  # lowercased, trailing dot gone
         assert not any("*" in s for s in subs)
 
     def test_crt_sh_malformed_json_yields_empty(self, monkeypatch):
-        from services.discovery import subdomain_service as ssd
+        from services.discovery.providers.crt_sh import CrtShProvider
 
         async def fake_fetch(url, **kw):
             return FetchResult(status_code=200, headers={}, body=b"{nope")
 
         monkeypatch.setattr("utils.egress.fetch_url_validated", fake_fetch)
-        assert _run(ssd._crt_sh_discovery("demo-corp.example")) == []
+        provider = CrtShProvider()
+        result = _run(provider.lookup("demo-corp.example"))
+        assert result.error is not None
+        assert result.hosts == []
 
     def test_crt_sh_http_error_yields_empty(self, monkeypatch):
-        from services.discovery import subdomain_service as ssd
+        from services.discovery.providers.crt_sh import CrtShProvider
 
         async def fake_fetch(url, **kw):
             return FetchResult(status_code=503, headers={}, body=b"")
 
         monkeypatch.setattr("utils.egress.fetch_url_validated", fake_fetch)
-        assert _run(ssd._crt_sh_discovery("demo-corp.example")) == []
+        provider = CrtShProvider()
+        result = _run(provider.lookup("demo-corp.example"))
+        assert result.error is not None
+        assert result.hosts == []
 
     def test_discover_subdomains_combines_sources(self, monkeypatch):
         import json
