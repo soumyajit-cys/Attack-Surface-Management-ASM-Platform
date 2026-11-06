@@ -313,3 +313,86 @@ def test_rate_limiter_recovers_when_redis_returns(client, monkeypatch):
     )
     assert reg.status_code == 201, reg.text
 
+
+# ── slowapi private API contract ───────────────────────────────────────────
+
+
+def test_slowapi_private_api_present():
+    """Fail loudly if slowapi removes or renames any private attribute our
+    fail-closed middleware depends on.  This test is the canary: if it
+    starts failing after a slowapi bump, the pin in pyproject.toml needs
+    review and utils/rate_limiter.py needs updating."""
+    from slowapi import Limiter
+
+    required_attrs = [
+        "_check_request_limit",
+        "_storage",
+        "_storage_dead",
+        "_in_memory_fallback",
+        "_swallow_errors",
+        "enabled",
+    ]
+    missing = [a for a in required_attrs if not hasattr(Limiter, a)]
+    assert not missing, (
+        f"slowapi is missing private attributes: {missing}. "
+        f"Update utils/rate_limiter.py and repin slowapi in pyproject.toml."
+    )
+
+
+# ── every @limiter.limit-decorated route is rate-limited ─────────────────
+
+
+def test_every_limited_route_is_rate_limited(client, monkeypatch):
+    """Every route decorated with @limiter.limit returns 429 when over its
+    per-route limit.  Introspects app routes for slowapi limit decorators
+    and hammers each one."""
+    from main import app
+
+    from utils.rate_limiter import limiter
+
+    _public_dns(monkeypatch)
+
+    # Find routes with per-route limits (slowapi stores them in
+    # limiter._route_lists keyed by endpoint function name).
+    limited_routes = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/"):
+            continue
+        endpoint = getattr(route, "endpoint", None)
+        if endpoint is None:
+            continue
+        name = f"{endpoint.__module__}.{endpoint.__name__}"
+        if name in limiter._route_limits:
+            methods = getattr(route, "methods", set()) or set()
+            for method in sorted(methods - {"HEAD", "OPTIONS"}):
+                limited_routes.append((method, path))
+
+    assert limited_routes, "no @limiter.limit-decorated routes found"
+
+    # Hammer each limited route until it 429s.
+    for method, path in limited_routes:
+        # Register/login as needed to get a token for auth routes.
+        headers = {}
+        if "/auth/" in path:
+            reg = client.post(
+                "/api/v1/auth/register",
+                json={"username": "rlroute", "email": "rlroute@example.com",
+                      "password": "password123", "organization": "RLRoute Org"},
+            )
+            if reg.status_code == 201:
+                headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+        hit_429 = False
+        for _ in range(20):  # plenty to exceed any per-route limit
+            if method == "GET":
+                resp = client.get(path, headers=headers)
+            elif method == "POST":
+                resp = client.post(path, json={}, headers=headers)
+            else:
+                continue
+            if resp.status_code == 429:
+                hit_429 = True
+                break
+        assert hit_429, f"{method} {path} never returned 429"
+
