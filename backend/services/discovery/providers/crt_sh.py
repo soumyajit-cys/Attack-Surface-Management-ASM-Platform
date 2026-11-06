@@ -313,6 +313,4 @@ async def _fetch_crt(url: str, timeout: float, max_bytes: int):
     Runs the async fetch on the current event loop; callers run this inside
     an asyncio context (the provider coordinator).
     """
-    from utils.egress import fetch_url_validated
-
     return await fetch_url_validated(url, timeout=timeout, max_bytes=max_bytes)

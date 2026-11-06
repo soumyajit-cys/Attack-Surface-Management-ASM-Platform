@@ -29,7 +29,7 @@ class TestScannerModuleDiscovery:
     def test_discovers_port_ssl_header_modules(self):
         mods = registry.get_modules()
         names = {m.name for m in mods}
-        assert names == {"port_scan", "ssl_scan", "header_scan"}
+        assert names == {"port_scan", "ssl_scan", "header_scan", "email_security"}
 
     def test_phase_assignment(self):
         by_phase = {
@@ -39,10 +39,15 @@ class TestScannerModuleDiscovery:
         assert by_phase["port_scan"] == ScanPhase.PORT
         assert by_phase["ssl_scan"] == ScanPhase.SSL
         assert by_phase["header_scan"] == ScanPhase.HEADER
+        assert by_phase["email_security"] == ScanPhase.DNS
 
     def test_phase_filter(self):
         port_mods = registry.get_modules(phase=ScanPhase.PORT)
         assert [m.name for m in port_mods] == ["port_scan"]
+
+    def test_dns_phase_filter(self):
+        dns_mods = registry.get_modules(phase=ScanPhase.DNS)
+        assert [m.name for m in dns_mods] == ["email_security"]
 
     def test_scan_context_contract(self):
         """Modules accept a single ScanContext positional arg (no persistence)."""
@@ -57,7 +62,9 @@ class TestScannerModuleDiscovery:
         import scanner_modules.port_scan as port_module
         import scanner_modules.ssl_scan as ssl_module
         import scanner_modules.header_scan as header_module
+        import scanner_modules.email_security as email_module
 
         assert "scan_ports" in dir(port_module)
         assert "analyze_ssl" in dir(ssl_module)
         assert "analyze_headers" in dir(header_module)
+        assert "email_security_module" in dir(email_module)

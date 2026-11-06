@@ -61,6 +61,19 @@ DISCOVERY_SUBDOMAINS_RETURNED_TOTAL = Counter(
     ["provider"],
 )
 
+# Email-security scanner metrics. Labels: module and outcome only -- never
+# a domain or hostname.
+EMAIL_SECURITY_REQUESTS_TOTAL = Counter(
+    "sentinelasm_email_security_requests_total",
+    "Total email-security DNS lookups",
+    ["module", "outcome"],
+)
+EMAIL_SECURITY_FINDINGS_TOTAL = Counter(
+    "sentinelasm_email_security_findings_total",
+    "Total email-security findings generated",
+    ["module"],
+)
+
 PORTS_SCANNED = Counter(
     "sentinelasm_ports_scanned_total",
     "Total ports scanned",

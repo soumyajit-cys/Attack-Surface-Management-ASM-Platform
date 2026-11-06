@@ -35,9 +35,11 @@ logger = logging.getLogger(__name__)
 class ScanPhase(str, Enum):
     """Ordered pipeline phases. Execution follows enum definition order."""
     DISCOVERY = "discovery"
+    DNS = "dns"
     PORT = "port"
     SSL = "ssl"
     HEADER = "header"
+    FINGERPRINT = "fingerprint"
 
 
 @dataclass(frozen=True)
@@ -59,9 +61,11 @@ class ScannerRegistry:
     #: Phases the scan pipeline executes through this registry. Discovery
     #: runs through services (resolve_domain etc.), not via registry modules.
     _PIPELINED_SCANNER_PHASES: tuple[ScanPhase, ...] = (
+        ScanPhase.DNS,
         ScanPhase.PORT,
         ScanPhase.SSL,
         ScanPhase.HEADER,
+        ScanPhase.FINGERPRINT,
     )
 
     def __init__(self) -> None:

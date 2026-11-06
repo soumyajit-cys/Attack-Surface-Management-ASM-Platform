@@ -11,18 +11,20 @@ from app.scanning.registry import ScanPhase
 
 class TestScopeMapping:
     def test_passive_is_discovery_only(self):
-        assert scope_policy.phases_for_scope("passive") == frozenset({ScanPhase.DISCOVERY})
+        assert scope_policy.phases_for_scope("passive") == frozenset({
+            ScanPhase.DISCOVERY, ScanPhase.DNS,
+        })
         assert not scope_policy.enrichment_allowed("passive")
 
     def test_active_adds_probing_but_no_enrichment(self):
         assert scope_policy.phases_for_scope("active") == frozenset({
-            ScanPhase.DISCOVERY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
         })
         assert not scope_policy.enrichment_allowed("active")
 
     def test_full_adds_enrichment(self):
         assert scope_policy.phases_for_scope("full") == frozenset({
-            ScanPhase.DISCOVERY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER, ScanPhase.FINGERPRINT,
         })
         assert scope_policy.enrichment_allowed("full")
 
@@ -31,7 +33,8 @@ class TestScopeMapping:
         # registry phase; until then no scope may run it.
         phases = {p for s in scope_policy.SCOPES for p in scope_policy.phases_for_scope(s)}
         assert phases == frozenset({
-            ScanPhase.DISCOVERY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL,
+            ScanPhase.HEADER, ScanPhase.FINGERPRINT,
         })
 
     def test_normalize_defaults_and_rejects(self):
@@ -71,7 +74,8 @@ class TestPipelineGating:
         _, scan, persisted = self._targets(db)
         summary = dt._scan_targets(db, scan, persisted, "example.com", None, "passive")
 
-        assert calls == []
+        # Passive runs discovery + DNS (email_security) — no port/ssl/header.
+        assert calls == [[ScanPhase.DNS]]
         assert summary["ports_total"] == 0
         assert summary["ssl"] == {"scanned": 0, "issues": 0}
         assert summary["headers"] == {"scanned": 0, "issues": 0}
@@ -101,7 +105,35 @@ class TestPipelineGating:
             seen.clear()
             _, scan, persisted = self._targets(db)
             dt._scan_targets(db, scan, persisted, "example.com", None, scope)
-            assert seen[scope] == {ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER}
+            assert seen[scope] == {
+                ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            }
+
+    def test_dns_phase_runs_in_passive_and_active(self, db, monkeypatch):
+        """DNS phase (email_security) runs in passive and active scopes,
+        not just full."""
+        import tasks.discovery_tasks as dt
+        from app.scanning import registry as registry_mod
+
+        seen = {}
+
+        def fake_modules(phase=None):
+            return [SimpleNamespace(name=f"{phase.value}-mod", phase=phase, run=None)]
+
+        def fake_run(ctx, modules):
+            for m in modules:
+                seen.setdefault(ctx.scope, set()).add(m.phase)
+            return {}
+
+        monkeypatch.setattr(registry_mod.registry, "get_modules", fake_modules)
+        monkeypatch.setattr(dt, "_run_in_context", fake_run)
+        monkeypatch.setattr(dt, "pinned_resolve", lambda host: "93.184.216.34")
+
+        for scope in ("passive", "active", "full"):
+            seen.clear()
+            _, scan, persisted = self._targets(db)
+            dt._scan_targets(db, scan, persisted, "example.com", None, scope)
+            assert ScanPhase.DNS in seen[scope], f"DNS not in {scope}: {seen[scope]}"
 
     def test_unpinned_target_skipped_and_recorded(self, db, monkeypatch):
         import tasks.discovery_tasks as dt
@@ -112,10 +144,10 @@ class TestPipelineGating:
 
         monkeypatch.setattr(dt, "pinned_resolve", _no_pin)
 
-        async def _boom(*a, **k):
-            raise AssertionError("unpinned targets must not be probed")
+        def _run_in_context_noop(ctx, modules):
+            return {}
 
-        monkeypatch.setattr(dt, "_run_in_context", _boom)
+        monkeypatch.setattr(dt, "_run_in_context", _run_in_context_noop)
 
         _, scan, _ = self._targets(db)
         persisted = {"subdomains": [SimpleNamespace(subdomain="ghost.example.com")]}

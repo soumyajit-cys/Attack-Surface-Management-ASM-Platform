@@ -763,7 +763,7 @@ class TestSubdomainService:
         async def fake_fetch(url, **kw):
             return FetchResult(status_code=200, headers={}, body=body)
 
-        monkeypatch.setattr("utils.egress.fetch_url_validated", fake_fetch)
+        monkeypatch.setattr("services.discovery.providers.crt_sh.fetch_url_validated", fake_fetch)
         provider = CrtShProvider()
         result = _run(provider.lookup("demo-corp.example"))
         assert result.error is None, result.error
@@ -779,7 +779,7 @@ class TestSubdomainService:
         async def fake_fetch(url, **kw):
             return FetchResult(status_code=200, headers={}, body=b"{nope")
 
-        monkeypatch.setattr("utils.egress.fetch_url_validated", fake_fetch)
+        monkeypatch.setattr("services.discovery.providers.crt_sh.fetch_url_validated", fake_fetch)
         provider = CrtShProvider()
         result = _run(provider.lookup("demo-corp.example"))
         assert result.error is not None
@@ -791,7 +791,7 @@ class TestSubdomainService:
         async def fake_fetch(url, **kw):
             return FetchResult(status_code=503, headers={}, body=b"")
 
-        monkeypatch.setattr("utils.egress.fetch_url_validated", fake_fetch)
+        monkeypatch.setattr("services.discovery.providers.crt_sh.fetch_url_validated", fake_fetch)
         provider = CrtShProvider()
         result = _run(provider.lookup("demo-corp.example"))
         assert result.error is not None
@@ -808,7 +808,7 @@ class TestSubdomainService:
                 {"name_value": "wiki.demo-corp.example"},
             ]).encode())
 
-        monkeypatch.setattr("utils.egress.fetch_url_validated", fake_fetch)
+        monkeypatch.setattr("services.discovery.providers.crt_sh.fetch_url_validated", fake_fetch)
 
         def fake_gethostbyname(name):
             if name.startswith(("www.", "api.")):

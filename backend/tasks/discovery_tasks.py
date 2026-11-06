@@ -465,8 +465,10 @@ def _new_summary(scan_registry) -> dict:
         "open_port_numbers": [],
         "ssl": {"scanned": 0, "issues": 0},
         "headers": {"scanned": 0, "issues": 0},
+        "dns": {"scanned": 0},
         "ssl_findings": [],
         "header_findings": [],
+        "email_security_findings": [],
         "unpinned_skipped": [],
         # Template scanning is unwired until Phase 4 (see
         # services/findings/finding_engine.run_nuclei_scan): always skipped.
@@ -495,6 +497,31 @@ def _scan_targets(
     can_port = scope_policy.phase_allowed(scope, ScanPhase.PORT)
     can_ssl = scope_policy.phase_allowed(scope, ScanPhase.SSL)
     can_headers = scope_policy.phase_allowed(scope, ScanPhase.HEADER)
+    can_dns = scope_policy.phase_allowed(scope, ScanPhase.DNS)
+
+    # ── Passive email-security DNS lookups (runs once per domain,
+    #    not per subdomain; allowed even in passive scope). ─────────────
+    if can_dns:
+        publish_scan_event(scan.id, "phase_started", phase="dns")
+        dns_ctx = ScanContext(
+            domain=domain_name,
+            pinned_ip=resolved_ip or "",
+            org_id=scan.organization_id,
+            scan_id=scan.id,
+            db=db,
+            scope=scope,
+        )
+        dns_results = _run_in_context(
+            dns_ctx, registry.get_modules(phase=ScanPhase.DNS)
+        )
+        if dns_results.get("findings"):
+            summary["email_security_findings"] = dns_results["findings"]
+        summary["dns"]["scanned"] += 1
+        publish_scan_event(
+            scan.id, "phase_finished", phase="dns",
+            counts={"findings": len(dns_results.get("findings", []))},
+        )
+
     if not (can_port or can_ssl or can_headers):
         logger.debug(
             "Skipping active probing for %s targets (scope=%s)",
@@ -598,6 +625,10 @@ def _generate_and_persist_findings(
         ssl_findings=summary.get("ssl_findings", []),
         header_findings=summary.get("header_findings", []),
     )
+    # Email-security findings are already in finding-dict shape; merge them
+    # directly (they carry their own confidence field which is stored in
+    # description if the Finding model gains a confidence column later).
+    findings_data.extend(summary.get("email_security_findings", []))
 
     new_findings: list[Finding] = []
 

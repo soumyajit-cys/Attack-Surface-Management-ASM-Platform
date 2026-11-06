@@ -4,9 +4,11 @@ Single source of truth for scope semantics (Phase 1, task 1.2). The pipeline
 consults this mapping instead of scattering ``if scope == ...`` checks:
 
 - ``passive`` — third-party/normal-DNS discovery only (crt.sh, DNS records,
-  DNS brute-force resolution, WHOIS). Zero packets to target ports/services.
+  DNS brute-force resolution, WHOIS, passive email-security DNS lookups).
+  Zero packets to target ports/services.
 - ``active`` — adds port scanning, TLS inspection, and HTTP header checks.
-- ``full`` — active plus CVE enrichment (OSV.dev banner matching).
+- ``full`` — active plus CVE enrichment (OSV.dev banner matching) and
+  passive tech fingerprinting.
 
 NOTE (Phase 4): the nuclei template scanner slots into ``full`` as a new
 registry phase (e.g. ``ScanPhase.VULN``) added to ``SCOPE_PHASES["full"]``
@@ -27,9 +29,9 @@ SCOPES = (SCOPE_PASSIVE, SCOPE_ACTIVE, SCOPE_FULL)
 DEFAULT_SCOPE = SCOPE_FULL
 
 SCOPE_PHASES: dict[str, frozenset[ScanPhase]] = {
-    SCOPE_PASSIVE: frozenset({ScanPhase.DISCOVERY}),
-    SCOPE_ACTIVE: frozenset({ScanPhase.DISCOVERY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER}),
-    SCOPE_FULL: frozenset({ScanPhase.DISCOVERY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER}),
+    SCOPE_PASSIVE: frozenset({ScanPhase.DISCOVERY, ScanPhase.DNS}),
+    SCOPE_ACTIVE: frozenset({ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER}),
+    SCOPE_FULL: frozenset({ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER, ScanPhase.FINGERPRINT}),
 }
 
 #: Scopes allowed to run post-scan CVE enrichment (OSV.dev).
