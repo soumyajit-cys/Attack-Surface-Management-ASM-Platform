@@ -96,7 +96,7 @@ class TestRegistryUnavailablePhases:
 
         for phase in (
             ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
-            ScanPhase.DNS, ScanPhase.FINGERPRINT,
+            ScanPhase.EMAIL_SECURITY, ScanPhase.FINGERPRINT,
         ):
             fresh_registry.register(
                 ScannerEntry(name=phase.value, phase=phase, run=noop))
@@ -216,10 +216,10 @@ class TestScanDetailSurfacesUnavailablePhases:
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        # Only PORT is mounted; DNS (email_security), FINGERPRINT, SSL,
-        # HEADER are unavailable (enum order: DNS, PORT, SSL, HEADER, FINGERPRINT).
+        # Only PORT is mounted; EMAIL_SECURITY (email_security),
+        # FINGERPRINT, SSL, HEADER are unavailable.
         assert body["unavailable_phases"] == [
-            "dns", "ssl", "header", "fingerprint"]
+            "email_security", "ssl", "header", "fingerprint"]
 
     def test_scan_detail_api_reports_no_unavailable_when_all_mounted(
             self, client, scan_detail, monkeypatch):
@@ -233,7 +233,7 @@ class TestScanDetailSurfacesUnavailablePhases:
                 name=f"{phase.value}_scan", phase=phase, run=noop)
             for phase in (
                 ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
-                ScanPhase.DNS, ScanPhase.FINGERPRINT,
+                ScanPhase.EMAIL_SECURITY, ScanPhase.FINGERPRINT,
             )
         }
         monkeypatch.setattr(registry, "_discovered", True)
