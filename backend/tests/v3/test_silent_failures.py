@@ -104,13 +104,13 @@ class TestRegistryUnavailablePhases:
         # modules on fresh_registry (auto-discovery doesn't register
         # on fresh_registry in test context).
         assert fresh_registry.unavailable_phases() == [
-            "dns", "ssl", "header", "fingerprint"]
+            "email_security", "ssl", "header", "fingerprint"]
 
     def test_empty_registry_lists_every_pipeline_phase(self, fresh_registry):
         # No modules registered on fresh_registry; all pipelined phases
         # are unavailable.
         assert fresh_registry.unavailable_phases() == [
-            "dns", "port", "ssl", "header", "fingerprint"]
+            "email_security", "port", "ssl", "header", "fingerprint"]
 
     def test_all_registered_means_no_unavailable(self, fresh_registry):
         from app.scanning.registry import ScannerEntry, ScanPhase
@@ -186,7 +186,7 @@ class TestRegistryUnavailablePhases:
         with caplog.at_level(logging.WARNING, logger=REGISTRY_LOGGER):
             phases = fresh_registry.warmup()
 
-        assert phases == ["dns", "ssl", "header", "fingerprint"]
+        assert phases == ["email_security", "ssl", "header", "fingerprint"]
         warnings = [
             r for r in caplog.records
             if "unavailable" in r.getMessage().lower()
@@ -215,7 +215,7 @@ class TestScanSummaryIncludesUnavailablePhases:
         # SSL registered manually; DNS/PORT/HEADER/FINGERPRINT have no
         # modules on fresh_registry.
         assert summary["unavailable_phases"] == [
-            "dns", "port", "header", "fingerprint"]
+            "email_security", "port", "header", "fingerprint"]
         # the rest of the summary shape is unchanged
         assert summary["ports_open"] == 0
         assert summary["nuclei_skipped"] is True
