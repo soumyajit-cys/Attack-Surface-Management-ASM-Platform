@@ -45,12 +45,14 @@ class TestDiscoveryMetricsLabels:
         DISCOVERY_HOSTS_FOUND_TOTAL.labels(provider="crt_sh").inc(1)
         DISCOVERY_CACHE_HITS_TOTAL.labels(provider="crt_sh").inc()
         DISCOVERY_SUBDOMAINS_RETURNED_TOTAL.labels(provider="crt_sh").inc(1)
+        SCANNER_MODULE_RUNS_TOTAL.labels(module="email_security", outcome="ok").inc()
 
         expected = {
             "sentinelasm_discovery_provider_requests": {"provider", "outcome"},
             "sentinelasm_discovery_provider_hosts_found": {"provider"},
             "sentinelasm_discovery_provider_cache_hits": {"provider"},
             "sentinelasm_discovery_subdomains_returned": {"provider"},
+            "sentinelasm_scanner_module_runs": {"module", "outcome"},
         }
         found = {}
         for metric in REGISTRY.collect():
