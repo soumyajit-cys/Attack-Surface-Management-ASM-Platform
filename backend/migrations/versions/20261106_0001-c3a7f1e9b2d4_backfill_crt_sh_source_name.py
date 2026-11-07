@@ -51,12 +51,12 @@ def downgrade() -> None:
     # Best-effort reverse: rename crt_sh back to crt.sh where present.
     op.execute(
         sa.text(
-            f"UPDATE subdomains SET source = :old WHERE source = :new"
+            "UPDATE subdomains SET source = :old WHERE source = :new"
         ).bindparams(old=_OLD, new=_NEW)
     )
     op.execute(
         sa.text(
-            f"""
+            """
             UPDATE subdomains
             SET sources = ARRAY(
                 SELECT DISTINCT CASE WHEN unnest = :new THEN :old ELSE unnest END
