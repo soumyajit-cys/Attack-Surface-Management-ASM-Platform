@@ -201,7 +201,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
     queries += 1
 
     # ── BIMI ─────────────────────────────────────────────────────────
-    bimi_txt = _query_txt(ctx.domain, f"default._bimi.{ctx.domain}")
+    bimi_txt = _query_txt(ctx.domain, f"default._bimi.{ctx.domain}") if mail_evidence else []
     records["bimi"] = bool(bimi_txt)
     queries += 1
 
@@ -315,7 +315,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "dedupe_key": "email_security:dmarc_pct_under_100",
             })
 
-    if not dkim_selectors_found:
+    if not dkim_selectors_found and mail_evidence:
         findings.append({
             "title": "No DKIM selectors found",
             "severity": "info",
@@ -333,7 +333,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
             "dedupe_key": "email_security:dkim_missing",
         })
 
-    if not mta_sts_available:
+    if not mta_sts_available and mail_evidence:
         findings.append({
             "title": "MTA-STS not published",
             "severity": "info",
@@ -351,7 +351,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
             "dedupe_key": "email_security:mta_sts_missing",
         })
 
-    if not records["bimi"]:
+    if not records["bimi"] and mail_evidence:
         findings.append({
             "title": "BIMI record not published",
             "severity": "info",
