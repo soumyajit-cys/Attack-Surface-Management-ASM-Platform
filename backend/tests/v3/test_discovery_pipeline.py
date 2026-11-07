@@ -797,6 +797,12 @@ class TestCrtShBackfillMigration:
         try:
             conn.cursor().execute(
                 """
+                CREATE TABLE IF NOT EXISTS domains (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL UNIQUE,
+                    organization_id INTEGER NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
                 CREATE TABLE IF NOT EXISTS subdomains (
                     id SERIAL PRIMARY KEY,
                     domain_id INTEGER NOT NULL,
@@ -810,7 +816,10 @@ class TestCrtShBackfillMigration:
                 );
                 """
             )
-            # Insert duplicates with old source name.
+            # Insert a domain first, then duplicate subdomain rows with old source name.
+            conn.cursor().execute(
+                "INSERT INTO domains (id, name, organization_id) VALUES (1, 'example.com', 1)"
+            )
             conn.cursor().execute(
                 """
                 INSERT INTO subdomains (domain_id, subdomain, source, sources, first_seen, last_seen)
