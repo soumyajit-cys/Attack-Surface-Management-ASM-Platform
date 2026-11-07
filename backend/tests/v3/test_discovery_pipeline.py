@@ -826,15 +826,15 @@ class TestCrtShBackfillMigration:
         conn.autocommit = True
         try:
             rows = conn.cursor().execute(
-                "SELECT id, source, sources FROM subdomains ORDER BY id"
+                "SELECT id, subdomain, source, sources FROM subdomains ORDER BY id"
             ).fetchall()
-            assert rows[0][1] == "crt_sh", f"row 0 source: {rows[0][1]}"
-            assert rows[1][1] == "crt_sh", f"row 1 source: {rows[1][1]}"
-            assert rows[2][1] == "crt_sh", f"row 2 source: {rows[2][1]}"
-            assert rows[3][1] == "dns_brute", f"row 3 source: {rows[3][1]}"
+            row_map = {r[1]: r for r in rows}
+            assert row_map['www.example.com'][2] == "crt_sh", f"www: {row_map['www.example.com']}"
+            assert row_map['api.example.com'][2] == "crt_sh", f"api: {row_map['api.example.com']}"
+            assert row_map['blog.example.com'][2] == "dns_brute", f"blog: {row_map['blog.example.com']}"
             # sources array should also be updated.
-            assert "crt.sh" not in rows[0][2], f"row 0 sources: {rows[0][2]}"
-            assert "crt.sh" not in rows[1][2], f"row 1 sources: {rows[1][2]}"
+            assert "crt.sh" not in row_map['www.example.com'][3], f"www sources: {row_map['www.example.com'][3]}"
+            assert "crt.sh" not in row_map['api.example.com'][3], f"api sources: {row_map['api.example.com'][3]}"
         finally:
             conn.close()
 
