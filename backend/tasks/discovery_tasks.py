@@ -499,7 +499,7 @@ def _scan_targets(
     can_port = scope_policy.phase_allowed(scope, ScanPhase.PORT)
     can_ssl = scope_policy.phase_allowed(scope, ScanPhase.SSL)
     can_headers = scope_policy.phase_allowed(scope, ScanPhase.HEADER)
-    can_dns = scope_policy.phase_allowed(scope, ScanPhase.DNS)
+    can_dns = scope_policy.phase_allowed(scope, ScanPhase.EMAIL_SECURITY)
 
     # ── Passive email-security DNS lookups (runs once per domain,
     #    not per subdomain; allowed even in passive scope). ─────────────
@@ -514,7 +514,7 @@ def _scan_targets(
             scope=scope,
         )
         dns_results = _run_in_context(
-            dns_ctx, registry.get_modules(phase=ScanPhase.DNS)
+            dns_ctx, registry.get_modules(phase=ScanPhase.EMAIL_SECURITY)
         )
         if dns_results.get("findings"):
             summary["email_security_findings"] = dns_results["findings"]
