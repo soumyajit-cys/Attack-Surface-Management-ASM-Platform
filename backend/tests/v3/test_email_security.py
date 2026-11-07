@@ -186,12 +186,12 @@ class TestEmailSecurityModule:
             if rdtype == "MX":
                 if str(qname) in mx_map:
                     return mx_map[str(qname)]
-                raise dns.exception.NoAnswer()
+                raise dns.resolver.NoAnswer()
             if rdtype == "TXT":
                 if str(qname) in txt_map:
                     return txt_map[str(qname)]
-                raise dns.exception.NoAnswer()
-            raise dns.exception.NoAnswer()
+                raise dns.resolver.NoAnswer()
+            raise dns.resolver.NoAnswer()
 
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
 
