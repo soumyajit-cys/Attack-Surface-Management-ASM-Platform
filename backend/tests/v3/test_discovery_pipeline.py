@@ -559,10 +559,6 @@ class TestRateLimitFailClosed:
 
 
 class TestDnsBruteGating:
-# ── DNS brute-force gating: active discovery requires scope + verification ─
-
-
-class TestDnsBruteGating:
     def test_dns_brute_no_active_probe_without_pin(self, db, org_factory, monkeypatch):
         """DNS brute-force (active) runs NO scanner modules when the
         domain has no pinned IP (unverified)."""
