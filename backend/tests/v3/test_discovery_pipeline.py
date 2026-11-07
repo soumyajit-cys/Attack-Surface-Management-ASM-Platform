@@ -808,9 +808,8 @@ class TestCrtShBackfillMigration:
                 INSERT INTO subdomains (domain_id, subdomain, source, sources, first_seen, last_seen)
                 VALUES
                     (1, 'www.example.com', 'crt.sh', ARRAY['crt.sh'], NOW(), NOW()),
-                    (2, 'www.example.com', 'crt.sh', ARRAY['crt.sh'], NOW(), NOW()),
-                    (3, 'api.example.com', 'crt.sh', ARRAY['crt.sh'], NOW(), NOW()),
-                    (4, 'blog.example.com', 'dns_brute', ARRAY['dns_brute'], NOW(), NOW());
+                    (1, 'api.example.com', 'crt.sh', ARRAY['crt.sh'], NOW(), NOW()),
+                    (1, 'blog.example.com', 'dns_brute', ARRAY['dns_brute'], NOW(), NOW());
                 """
             )
         finally:
