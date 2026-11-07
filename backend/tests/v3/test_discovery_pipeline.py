@@ -849,10 +849,11 @@ class TestCrtShBackfillMigration:
         conn.autocommit = True
         try:
             rows = conn.cursor().execute(
-                "SELECT id, source FROM subdomains WHERE subdomain = 'www.example.com' ORDER BY id"
+                "SELECT id, subdomain, source FROM subdomains ORDER BY id"
             ).fetchall()
-            assert rows[0][1] == "crt.sh", f"downgrade row 0: {rows[0][1]}"
-            assert rows[1][1] == "crt.sh", f"downgrade row 1: {rows[1][1]}"
+            row_map = {r[1]: r for r in rows}
+            assert row_map['www.example.com'][2] == "crt.sh", f"downgrade www: {row_map['www.example.com']}"
+            assert row_map['api.example.com'][2] == "crt.sh", f"downgrade api: {row_map['api.example.com']}"
         finally:
             conn.close()
 
@@ -866,10 +867,11 @@ class TestCrtShBackfillMigration:
         conn.autocommit = True
         try:
             rows = conn.cursor().execute(
-                "SELECT id, source FROM subdomains WHERE subdomain = 'www.example.com' ORDER BY id"
+                "SELECT id, subdomain, source FROM subdomains ORDER BY id"
             ).fetchall()
-            assert rows[0][1] == "crt_sh", f"re-upgrade row 0: {rows[0][1]}"
-            assert rows[1][1] == "crt_sh", f"re-upgrade row 1: {rows[1][1]}"
+            row_map = {r[1]: r for r in rows}
+            assert row_map['www.example.com'][2] == "crt_sh", f"re-upgrade www: {row_map['www.example.com']}"
+            assert row_map['api.example.com'][2] == "crt_sh", f"re-upgrade api: {row_map['api.example.com']}"
         finally:
             conn.close()
 
