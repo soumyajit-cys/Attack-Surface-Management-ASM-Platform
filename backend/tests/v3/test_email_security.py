@@ -95,21 +95,21 @@ class TestDnsQueries:
 
     def test_query_txt_nxdomain(self, monkeypatch):
         def fake_resolve(qname, rdtype, lifetime):
-            raise dns.exception.NXDOMAIN()
+            raise dns.resolver.NXDOMAIN()
 
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_txt("example.com", "example.com") == []
 
     def test_query_txt_noanswer(self, monkeypatch):
         def fake_resolve(qname, rdtype, lifetime):
-            raise dns.exception.NoAnswer()
+            raise dns.resolver.NoAnswer()
 
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_txt("example.com", "example.com") == []
 
     def test_query_txt_timeout(self, monkeypatch):
         def fake_resolve(qname, rdtype, lifetime):
-            raise dns.exception.Timeout()
+            raise dns.resolver.Timeout()
 
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_txt("example.com", "example.com") == []
@@ -131,7 +131,7 @@ class TestDnsQueries:
 
     def test_query_mx_nxdomain(self, monkeypatch):
         def fake_resolve(qname, rdtype, lifetime):
-            raise dns.exception.NXDOMAIN()
+            raise dns.resolver.NXDOMAIN()
 
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_mx("example.com") == []
