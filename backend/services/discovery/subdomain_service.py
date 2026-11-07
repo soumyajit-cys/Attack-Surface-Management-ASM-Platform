@@ -103,17 +103,30 @@ async def discover_subdomains(domain: str) -> list[dict]:
     # to the same scope gating as other active discovery downstream.
     brute = await _dns_brute_force(domain)
     now = _now()
+
+    # Apply per-source cap to brute-force results, same as provider results.
+    brute_kept = 0
+    brute_truncated = 0
     for sub in brute:
         normalized = _normalize_hostname(sub)
-        if normalized and (normalized == domain or normalized.endswith("." + domain)):
-            hosts.append(
-                DiscoveredHostView(
-                    host=normalized,
-                    source="dns_brute",
-                    first_seen=now,
-                    last_seen=now,
-                )
+        if not normalized or not (
+            normalized == domain or normalized.endswith("." + domain)
+        ):
+            continue
+        if brute_kept >= settings.max_subdomains_per_source_per_scan:
+            brute_truncated += 1
+            continue
+        brute_kept += 1
+        hosts.append(
+            DiscoveredHostView(
+                host=normalized,
+                source="dns_brute",
+                first_seen=now,
+                last_seen=now,
             )
+        )
+    if brute_truncated > 0:
+        truncation["dns_brute"] = brute_truncated
 
     # Dedup across sources: keep earliest first_seen, latest last_seen,
     # merge sources.
