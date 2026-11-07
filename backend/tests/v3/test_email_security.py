@@ -116,15 +116,15 @@ class TestDnsQueries:
 
     def test_query_mx_success(self, monkeypatch):
         class _Mx:
-            def __init__(self, exchange):
-                self.exchange = exchange
+            def __init__(self, text):
+                self._text = text
 
-            def __str__(self):
-                return str(self.exchange)
+            def to_text(self):
+                return self._text
 
         def fake_resolve(qname, rdtype, lifetime):
             assert rdtype == "MX"
-            return [_Mx("mx1.example.com.")]
+            return [_Mx("10 mx1.example.com.")]
 
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_mx("example.com") == ["mx1.example.com"]

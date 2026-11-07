@@ -46,6 +46,7 @@ logger = logging.getLogger("sentinelasm.scanner.email_security")
 DKIM_SELECTORS: tuple[str, ...] = (
     "default", "selector1", "selector2", "google", "k1", "k2",
     "mail", "mta", "smtp", "esmtp", "dkim", "prod",
+    "s1", "s2", "k3", "key1", "key2",
 )
 
 #: DNS query timeout per record type (seconds).
