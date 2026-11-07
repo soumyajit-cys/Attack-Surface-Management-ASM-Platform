@@ -60,8 +60,8 @@ def _query_txt(domain: str, record: str) -> list[str]:
     try:
         answers = dns.resolver.resolve(record, "TXT", lifetime=DNS_TIMEOUT)
         return [r.to_text().strip('"') for r in answers]
-    except (dns.exception.NoAnswer, dns.exception.NXDOMAIN,
-            dns.exception.NoNameservers, dns.exception.Timeout,
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
+            dns.resolver.NoNameservers, dns.resolver.Timeout,
             dns.exception.DNSException):
         return []
 
@@ -71,8 +71,8 @@ def _query_mx(domain: str) -> list[str]:
     try:
         answers = dns.resolver.resolve(domain, "MX", lifetime=DNS_TIMEOUT)
         return [str(r.exchange).rstrip(".") for r in answers]
-    except (dns.exception.NoAnswer, dns.exception.NXDOMAIN,
-            dns.exception.NoNameservers, dns.exception.Timeout,
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
+            dns.resolver.NoNameservers, dns.resolver.Timeout,
             dns.exception.DNSException):
         return []
 
