@@ -26,14 +26,38 @@ REGISTRY_LOGGER = "app.scanning.registry"
 
 @pytest.fixture()
 def fresh_registry():
-    """Reset the global registry before AND after each test."""
+    """Snapshot and restore the global registry before AND after each test.
+
+    Prevents registry/sys.modules state from leaking between tests (e.g.
+    email_security registration from test_scanner_modules.py bleeding into
+    silent-failure tests).
+    """
     from app.scanning.registry import registry
 
+    # Snapshot
+    old_entries = dict(registry._entries)
+    old_discovered = registry._discovered
+    old_failed = dict(registry._failed_imports)
+
+    # Clear for isolated test
     registry._entries.clear()
     registry._discovered = True  # unit tests manage registration manually
+    registry._failed_imports.clear()
+
+    # Drop cached scanner modules so discovery re-executes module bodies
+    # (and their @scanner_module registrations) on next access.
+    for name in list(sys.modules):
+        if name == "scanner_modules" or name.startswith("scanner_modules."):
+            del sys.modules[name]
+
     yield registry
+
+    # Restore
     registry._entries.clear()
-    registry._discovered = False
+    registry._entries.update(old_entries)
+    registry._discovered = old_discovered
+    registry._failed_imports.clear()
+    registry._failed_imports.update(old_failed)
 
 
 @pytest.fixture()

@@ -52,6 +52,11 @@ class Finding(Base):
 
     cvss_score = Column(Float, nullable=True)
 
+    # Stable dedupe key for rescan deduplication (e.g. "email_security:spf_missing").
+    # Rescans update the existing finding by dedupe_key instead of creating a
+    # duplicate. Populated by discovery/scanner modules at finding creation.
+    dedupe_key = Column(String, nullable=True, index=True)
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()

@@ -635,17 +635,39 @@ def _generate_and_persist_findings(
     new_findings: list[Finding] = []
 
     for finding in findings_data:
-        existing = (
-            db.query(Finding)
-            .filter(
-                Finding.organization_id == scan.organization_id,
-                Finding.asset_id == asset_id,
-                Finding.title == finding["title"],
+        dedupe_key = finding.get("dedupe_key")
+        if dedupe_key:
+            # Upsert by dedupe_key: rescan updates the same finding instead of
+            # creating a duplicate.
+            existing = (
+                db.query(Finding)
+                .filter(
+                    Finding.organization_id == scan.organization_id,
+                    Finding.asset_id == asset_id,
+                    Finding.dedupe_key == dedupe_key,
+                )
+                .first()
             )
-            .first()
-        )
-        if existing is not None:
-            continue
+            if existing is not None:
+                existing.severity = finding["severity"]
+                existing.category = finding.get("category", "general")
+                existing.description = finding.get("description")
+                existing.recommendation = finding.get("recommendation")
+                existing.confidence = finding.get("confidence")
+                continue
+        else:
+            # Legacy findings without dedupe_key: upsert by title.
+            existing = (
+                db.query(Finding)
+                .filter(
+                    Finding.organization_id == scan.organization_id,
+                    Finding.asset_id == asset_id,
+                    Finding.title == finding["title"],
+                )
+                .first()
+            )
+            if existing is not None:
+                continue
         f = Finding(
             organization_id=scan.organization_id,
             asset_id=asset_id,
@@ -654,6 +676,8 @@ def _generate_and_persist_findings(
             category=finding.get("category", "general"),
             description=finding.get("description"),
             recommendation=finding.get("recommendation"),
+            confidence=finding.get("confidence"),
+            dedupe_key=dedupe_key,
         )
         db.add(f)
         new_findings.append(f)

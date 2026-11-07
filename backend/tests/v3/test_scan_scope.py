@@ -145,7 +145,9 @@ class TestPipelineGating:
             seen.clear()
             _, scan, persisted = self._targets(db)
             dt._scan_targets(db, scan, persisted, "example.com", None, scope)
-            assert ScanPhase.DNS in seen[scope], f"DNS not in {scope}: {seen[scope]}"
+            assert ScanPhase.EMAIL_SECURITY in seen[scope], (
+                f"EMAIL_SECURITY not in {scope}: {seen[scope]}"
+            )
 
     def test_unpinned_target_skipped_and_recorded(self, db, monkeypatch):
         import tasks.discovery_tasks as dt
