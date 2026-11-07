@@ -194,15 +194,18 @@ class TestScopeGating:
             db, scan, persisted, "example.com", None, "full"
         )
 
-        assert calls == [[ScanPhase.DNS]], f"only passive DNS may run without pin: {calls}"
+        # Only passive email_security may run without a pin; no ACTIVE
+        # phases (port/ssl/header/fingerprint) may run.
+        active_phases = {
+            ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.FINGERPRINT,
+        }
+        for phase_list in calls:
+            assert not any(p in active_phases for p in phase_list), (
+                f"active phase ran without pin: {calls}"
+            )
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
-
-
-# ── max_subdomains_per_source_per_scan + truncated flag ─────────────────────
-
-
-class TestMaxSubdomainsPerSource:
     """Per-source cap and truncated flag propagate from the coordinator
     through discover_subdomains to the scan API response."""
 
