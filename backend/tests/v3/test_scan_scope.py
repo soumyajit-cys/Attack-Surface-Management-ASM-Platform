@@ -12,19 +12,22 @@ from app.scanning.registry import ScanPhase
 class TestScopeMapping:
     def test_passive_is_discovery_only(self):
         assert scope_policy.phases_for_scope("passive") == frozenset({
-            ScanPhase.DISCOVERY, ScanPhase.DNS,
+            ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY,
         })
         assert not scope_policy.enrichment_allowed("passive")
 
     def test_active_adds_probing_but_no_enrichment(self):
         assert scope_policy.phases_for_scope("active") == frozenset({
-            ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY,
+            ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
         })
         assert not scope_policy.enrichment_allowed("active")
 
     def test_full_adds_enrichment(self):
         assert scope_policy.phases_for_scope("full") == frozenset({
-            ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER, ScanPhase.FINGERPRINT,
+            ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY,
+            ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.FINGERPRINT,
         })
         assert scope_policy.enrichment_allowed("full")
 
@@ -33,7 +36,8 @@ class TestScopeMapping:
         # registry phase; until then no scope may run it.
         phases = {p for s in scope_policy.SCOPES for p in scope_policy.phases_for_scope(s)}
         assert phases == frozenset({
-            ScanPhase.DISCOVERY, ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL,
+            ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY,
+            ScanPhase.PORT, ScanPhase.SSL,
             ScanPhase.HEADER, ScanPhase.FINGERPRINT,
         })
 
