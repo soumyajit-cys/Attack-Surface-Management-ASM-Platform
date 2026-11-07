@@ -262,6 +262,9 @@ Settings field without documenting it fails `make check`.
 | `CRT_SH_CACHE_TTL_SECONDS` | `3600` | No | Per-domain cache TTL for crt.sh CT-log responses (seconds). |
 | `CRT_SH_TIMEOUT_SECONDS` | `15.0` | No | crt.sh connect/read timeout (seconds). |
 | `CRT_SH_MAX_RETRIES` | `3` | No | crt.sh max retries on transient failure (502/503/504 / network), with exponential backoff. |
+| `EMAIL_SECURITY_ENABLED` | `true` | No | Enable the passive email-security scanner module (SPF/DKIM/DMARC/MTA-STS/BIMI DNS lookups). |
+| `EMAIL_SECURITY_TIMEOUT_SECONDS` | `5.0` | No | DNS query timeout per record type for email-security lookups (seconds). |
+| `EMAIL_SECURITY_MAX_QUERIES` | `12` | No | Max DNS queries per domain for email-security lookups (bounds selector probing). |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
