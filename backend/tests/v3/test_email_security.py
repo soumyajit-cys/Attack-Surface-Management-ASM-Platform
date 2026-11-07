@@ -145,10 +145,11 @@ class TestSettingsWiring:
         assert isinstance(settings.email_security_timeout_seconds, float)
         assert isinstance(settings.email_security_max_queries, int)
 
-    def test_max_queries_bounds_dkim_loop(self, monkeypatch):
-        """MAX_DNS_QUERIES caps DKIM selector probing."""
+    def test_max_queries_bounds_dkim_loop(self):
+        """MAX_DNS_QUERIES caps DKIM selector probing (bounded)."""
         assert MAX_DNS_QUERIES == settings.email_security_max_queries
-        assert len(DKIM_SELECTORS) > MAX_DNS_QUERIES
+        assert MAX_DNS_QUERIES < len(DKIM_SELECTORS)
+        assert DNS_TIMEOUT == settings.email_security_timeout_seconds
 
 
 # ── module: end-to-end via mocked DNS ─────────────────────────────────

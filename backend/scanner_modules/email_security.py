@@ -104,6 +104,20 @@ def _dmarc_policy(dmarc_record: str | None) -> str:
     return "none"
 
 
+def _dmarc_pct(dmarc_record: str | None) -> int | None:
+    """Extract the DMARC 'pct' value, or None if not set."""
+    if not dmarc_record:
+        return None
+    for part in dmarc_record.split(";"):
+        part = part.strip()
+        if part.startswith("pct="):
+            try:
+                return int(part[4:])
+            except ValueError:
+                return None
+    return None
+
+
 def _has_mail_evidence(mx_records: list[str], spf: str | None,
                        dmarc: str | None) -> bool:
     """True if the domain has any evidence of handling mail.
