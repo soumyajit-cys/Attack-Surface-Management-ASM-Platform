@@ -57,6 +57,9 @@ class Finding(Base):
     # duplicate. Populated by discovery/scanner modules at finding creation.
     dedupe_key = Column(String, nullable=True, index=True)
 
+    # Confidence score (0.0-1.0) for fingerprint-derived findings.
+    confidence = Column(Float, nullable=True)
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
