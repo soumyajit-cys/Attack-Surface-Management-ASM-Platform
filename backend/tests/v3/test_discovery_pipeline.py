@@ -711,3 +711,188 @@ class TestDnsBruteGating:
             assert h["truncated_count"] > 0, h
 
 
+# ── migration dedupe: backfill crt.sh → crt_sh source name ──
+
+
+class TestCrtShBackfillMigration:
+    """Upgrade/downgrade/upgrade idempotency for the crt.sh source-name
+    backfill migration, run against a scratch_ database via alembic."""
+
+    @staticmethod
+    def _run(cmd: list[str], env: dict) -> None:
+        import subprocess
+
+        result = subprocess.run(
+            cmd, env=env, capture_output=True, text=True, check=False
+        )
+        assert result.returncode == 0, (
+            f"command failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
+        )
+
+    def test_crt_sh_source_backfill_round_trip(self, monkeypatch, tmp_path):
+        import os
+
+        db_url = os.environ.get(
+            "SCRATCH_DB_URL",
+            "postgresql://sentinel:sentinelpass@localhost:5432/scratch_crt_sh_backfill",
+        )
+        env = dict(os.environ)
+        env["DATABASE_URL"] = db_url
+
+        alembic_ini = str(tmp_path / "alembic.ini")
+        from pathlib import Path
+        import shutil
+
+        backend_root = Path(__file__).resolve().parents[2]
+        shutil.copy(backend_root / "alembic.ini", alembic_ini)
+        ini_text = Path(alembic_ini).read_text()
+        ini_text = ini_text.replace(
+            "script_location = migrations",
+            f"script_location = {backend_root}/migrations",
+        )
+        ini_text = ini_text.replace(
+            "sqlalchemy.url =",
+            f"sqlalchemy.url = {db_url}",
+        )
+        ini_text = ini_text.replace(
+            "prepend_sys_path = .",
+            f"prepend_sys_path = {backend_root}",
+        )
+        Path(alembic_ini).write_text(ini_text)
+
+        env["PYTHONPATH"] = str(backend_root)
+
+        import psycopg2
+
+        # Create a fresh scratch DB.
+        conn = psycopg2.connect(
+            "postgresql://postgres:postgres@localhost:5432/postgres"
+        )
+        conn.autocommit = True
+        try:
+            conn.cursor().execute(f'DROP DATABASE IF EXISTS scratch_crt_sh_backfill;')
+            conn.cursor().execute(
+                'CREATE DATABASE scratch_crt_sh_backfill OWNER sentinel;'
+            )
+        finally:
+            conn.close()
+
+        conn = psycopg2.connect(
+            "postgresql://postgres:postgres@localhost:5432/postgres"
+        )
+        conn.autocommit = True
+        try:
+            conn.cursor().execute(
+                'GRANT ALL ON DATABASE scratch_crt_sh_backfill TO sentinel;'
+            )
+        finally:
+            conn.close()
+
+        # Apply migrations up to discovery_meta (before the backfill).
+        self._run(
+            ["alembic", "-c", alembic_ini, "upgrade", "7a8b9c0d1e2f"],
+            env,
+        )
+
+        # Seed duplicate subdomain rows with the OLD source name "crt.sh".
+        conn = psycopg2.connect(db_url)
+        conn.autocommit = True
+        try:
+            conn.cursor().execute(
+                """
+                CREATE TABLE IF NOT EXISTS subdomains (
+                    id SERIAL PRIMARY KEY,
+                    domain_id INTEGER NOT NULL,
+                    subdomain TEXT NOT NULL,
+                    source TEXT,
+                    sources TEXT[],
+                    first_seen TIMESTAMPTZ,
+                    last_seen TIMESTAMPTZ,
+                    ip_address TEXT,
+                    UNIQUE (domain_id, subdomain)
+                );
+                """
+            )
+            # Insert duplicates with old source name.
+            conn.cursor().execute(
+                """
+                INSERT INTO subdomains (domain_id, subdomain, source, sources, first_seen, last_seen)
+                VALUES
+                    (1, 'www.example.com', 'crt.sh', ARRAY['crt.sh'], NOW(), NOW()),
+                    (2, 'www.example.com', 'crt.sh', ARRAY['crt.sh'], NOW(), NOW()),
+                    (3, 'api.example.com', 'crt.sh', ARRAY['crt.sh'], NOW(), NOW()),
+                    (4, 'blog.example.com', 'dns_brute', ARRAY['dns_brute'], NOW(), NOW());
+                """
+            )
+        finally:
+            conn.close()
+
+        # Upgrade to the backfill migration.
+        self._run(
+            ["alembic", "-c", alembic_ini, "upgrade", "c3a7f1e9b2d4"],
+            env,
+        )
+
+        # Assert all rows use the new source name "crt_sh".
+        conn = psycopg2.connect(db_url)
+        conn.autocommit = True
+        try:
+            rows = conn.cursor().execute(
+                "SELECT id, source, sources FROM subdomains ORDER BY id"
+            ).fetchall()
+            assert rows[0][1] == "crt_sh", f"row 0 source: {rows[0][1]}"
+            assert rows[1][1] == "crt_sh", f"row 1 source: {rows[1][1]}"
+            assert rows[2][1] == "crt_sh", f"row 2 source: {rows[2][1]}"
+            assert rows[3][1] == "dns_brute", f"row 3 source: {rows[3][1]}"
+            # sources array should also be updated.
+            assert "crt.sh" not in rows[0][2], f"row 0 sources: {rows[0][2]}"
+            assert "crt.sh" not in rows[1][2], f"row 1 sources: {rows[1][2]}"
+        finally:
+            conn.close()
+
+        # Downgrade.
+        self._run(
+            ["alembic", "-c", alembic_ini, "downgrade", "7a8b9c0d1e2f"],
+            env,
+        )
+
+        # Assert old source name is restored.
+        conn = psycopg2.connect(db_url)
+        conn.autocommit = True
+        try:
+            rows = conn.cursor().execute(
+                "SELECT id, source FROM subdomains WHERE subdomain = 'www.example.com' ORDER BY id"
+            ).fetchall()
+            assert rows[0][1] == "crt.sh", f"downgrade row 0: {rows[0][1]}"
+            assert rows[1][1] == "crt.sh", f"downgrade row 1: {rows[1][1]}"
+        finally:
+            conn.close()
+
+        # Upgrade again (idempotency).
+        self._run(
+            ["alembic", "-c", alembic_ini, "upgrade", "c3a7f1e9b2d4"],
+            env,
+        )
+
+        conn = psycopg2.connect(db_url)
+        conn.autocommit = True
+        try:
+            rows = conn.cursor().execute(
+                "SELECT id, source FROM subdomains WHERE subdomain = 'www.example.com' ORDER BY id"
+            ).fetchall()
+            assert rows[0][1] == "crt_sh", f"re-upgrade row 0: {rows[0][1]}"
+            assert rows[1][1] == "crt_sh", f"re-upgrade row 1: {rows[1][1]}"
+        finally:
+            conn.close()
+
+        # Clean up.
+        conn = psycopg2.connect(
+            "postgresql://postgres:postgres@localhost:5432/postgres"
+        )
+        conn.autocommit = True
+        try:
+            conn.cursor().execute('DROP DATABASE IF EXISTS scratch_crt_sh_backfill;')
+        finally:
+            conn.close()
+
+
