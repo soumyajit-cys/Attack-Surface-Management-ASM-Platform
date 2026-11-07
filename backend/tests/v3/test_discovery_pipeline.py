@@ -215,6 +215,7 @@ class TestScopeGating:
 # ── max_subdomains_per_source_per_scan + truncated flag ─────────────────────
 
 
+@pytest.mark.asyncio
 class TestMaxSubdomainsPerSource:
     async def test_cap_applied_per_source(self, monkeypatch):
         """When a provider returns more hosts than
