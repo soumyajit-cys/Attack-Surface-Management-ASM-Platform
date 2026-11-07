@@ -85,32 +85,32 @@ class TestDnsQueries:
         return [_Answer(s) for s in strings]
 
     def test_query_txt_success(self, monkeypatch):
-        def fake_resolve(record, rdtype, lifetime):
+        def fake_resolve(qname, rdtype, lifetime):
             assert rdtype == "TXT"
             return self._make_answers(["v=spf1 mx -all"])
 
-        monkeypatch.setattr(dns.resolver.Resolver, "resolve", fake_resolve)
+        monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_txt("example.com", "example.com") == ["v=spf1 mx -all"]
 
     def test_query_txt_nxdomain(self, monkeypatch):
-        def fake_resolve(record, rdtype, lifetime):
+        def fake_resolve(qname, rdtype, lifetime):
             raise dns.exception.NXDOMAIN()
 
-        monkeypatch.setattr(dns.resolver.Resolver, "resolve", fake_resolve)
+        monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_txt("example.com", "example.com") == []
 
     def test_query_txt_noanswer(self, monkeypatch):
-        def fake_resolve(record, rdtype, lifetime):
+        def fake_resolve(qname, rdtype, lifetime):
             raise dns.exception.NoAnswer()
 
-        monkeypatch.setattr(dns.resolver.Resolver, "resolve", fake_resolve)
+        monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_txt("example.com", "example.com") == []
 
     def test_query_txt_timeout(self, monkeypatch):
-        def fake_resolve(record, rdtype, lifetime):
+        def fake_resolve(qname, rdtype, lifetime):
             raise dns.exception.Timeout()
 
-        monkeypatch.setattr(dns.resolver.Resolver, "resolve", fake_resolve)
+        monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_txt("example.com", "example.com") == []
 
     def test_query_mx_success(self, monkeypatch):
@@ -121,18 +121,18 @@ class TestDnsQueries:
             def __str__(self):
                 return str(self.exchange)
 
-        def fake_resolve(record, rdtype, lifetime):
+        def fake_resolve(qname, rdtype, lifetime):
             assert rdtype == "MX"
             return [_Mx("mx1.example.com.")]
 
-        monkeypatch.setattr(dns.resolver.Resolver, "resolve", fake_resolve)
+        monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_mx("example.com") == ["mx1.example.com"]
 
     def test_query_mx_nxdomain(self, monkeypatch):
-        def fake_resolve(record, rdtype, lifetime):
+        def fake_resolve(qname, rdtype, lifetime):
             raise dns.exception.NXDOMAIN()
 
-        monkeypatch.setattr(dns.resolver.Resolver, "resolve", fake_resolve)
+        monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_mx("example.com") == []
 
 
@@ -177,21 +177,21 @@ class TestEmailSecurityModule:
         return [_Answer(s) for s in strings]
 
     def _patch_dns(self, monkeypatch, txt_map, mx_map=None):
-        """Patch dns.resolver.Resolver.resolve with a map of record->txt list."""
+        """Patch dns.resolver.resolve with a map of record->txt list."""
         mx_map = mx_map or {}
 
-        def fake_resolve(self_obj, record, rdtype, lifetime):
+        def fake_resolve(qname, rdtype, lifetime):
             if rdtype == "MX":
-                if record in mx_map:
-                    return mx_map[record]
+                if str(qname) in mx_map:
+                    return mx_map[str(qname)]
                 raise dns.exception.NoAnswer()
             if rdtype == "TXT":
-                if record in txt_map:
-                    return txt_map[record]
+                if str(qname) in txt_map:
+                    return txt_map[str(qname)]
                 raise dns.exception.NoAnswer()
             raise dns.exception.NoAnswer()
 
-        monkeypatch.setattr(dns.resolver.Resolver, "resolve", fake_resolve)
+        monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
 
     def test_spf_and_dmarc_missing_with_mail_evidence(self, monkeypatch):
         """MX present, no SPF/DMARC: low-severity findings."""
