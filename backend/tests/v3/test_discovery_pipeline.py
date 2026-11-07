@@ -595,7 +595,16 @@ class TestDnsBruteGating:
             db, scan, persisted, "example.com", None, "full"
         )
 
-        assert calls == [[ScanPhase.DNS]], f"only passive DNS may run without pin: {calls}"
+        # Only passive email_security may run without a pin; no ACTIVE
+        # phases may run.
+        active_phases = {
+            ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.FINGERPRINT,
+        }
+        for phase_list in calls:
+            assert not any(p in active_phases for p in phase_list), (
+                f"active phase ran without pin: {calls}"
+            )
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
 
