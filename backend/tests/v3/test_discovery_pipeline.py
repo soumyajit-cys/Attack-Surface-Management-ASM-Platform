@@ -795,9 +795,12 @@ class TestCrtShBackfillMigration:
         conn = psycopg2.connect(db_url)
         conn.autocommit = True
         try:
-            # Use existing domains table; insert a domain row.
+            # Use existing domains table; insert org + domain rows.
             conn.cursor().execute(
-                "INSERT INTO domains (id, domain, organization_id, scope) VALUES (1, 'example.com', 1, 'full') ON CONFLICT (id) DO NOTHING"
+                "INSERT INTO organizations (id, name) VALUES (1, 'Test Org') ON CONFLICT (id) DO NOTHING"
+            )
+            conn.cursor().execute(
+                "INSERT INTO domains (id, domain, organization_id) VALUES (1, 'example.com', 1) ON CONFLICT (id) DO NOTHING"
             )
             # Insert duplicate subdomain rows with old source name.
             conn.cursor().execute(
