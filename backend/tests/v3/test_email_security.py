@@ -239,7 +239,7 @@ class TestEmailSecurityModule:
         assert f["dedupe_key"] == "email_security:dmarc_none"
 
     def test_dmarc_pct_under_100(self, monkeypatch):
-        """DMARC pct<100 with reject policy: still low (policy is strong)."""
+        """DMARC p=reject with pct<100: low severity finding."""
         self._patch_dns(
             monkeypatch,
             txt_map={
@@ -250,9 +250,11 @@ class TestEmailSecurityModule:
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
         result = email_security_module(_make_ctx("example.com"))
-        # p=reject means no finding (strong policy); only pct<100 with weak policy would flag.
         dmarc_findings = [f for f in result["findings"] if "DMARC" in f["title"]]
-        assert dmarc_findings == []
+        assert len(dmarc_findings) == 1
+        f = dmarc_findings[0]
+        assert f["severity"] == "low"
+        assert f["dedupe_key"] == "email_security:dmarc_pct_under_100"
 
     def test_split_long_txt_strings(self, monkeypatch):
         """SPF record split across multiple TXT strings (concatenated)."""

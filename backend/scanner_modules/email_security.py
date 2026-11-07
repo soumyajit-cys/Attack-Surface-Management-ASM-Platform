@@ -294,6 +294,23 @@ async def email_security_module(ctx: ScanContext) -> dict:
             "confidence": 0.9,
             "dedupe_key": "email_security:dmarc_none",
         })
+    elif policy in ("quarantine", "reject"):
+        pct = _dmarc_pct(dmarc)
+        if pct is not None and pct < 100:
+            findings.append({
+                "title": "DMARC policy not applied to all mail",
+                "severity": "low",
+                "category": "email_security",
+                "description": (
+                    f"DMARC for {ctx.domain} uses p={policy} but pct={pct}, "
+                    "so the policy is not applied to all messages."
+                ),
+                "recommendation": (
+                    "Increase DMARC pct to 100 so the policy covers all mail."
+                ),
+                "confidence": 0.85,
+                "dedupe_key": "email_security:dmarc_pct_under_100",
+            })
 
     if not dkim_selectors_found:
         findings.append({
