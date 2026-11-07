@@ -25,7 +25,7 @@ def upgrade() -> None:
         "scan_history",
         sa.Column(
             "discovery_meta",
-            postgresql.JSONB(as_text_type=sa.Text()),
+            postgresql.JSONB(astext_type=sa.Text()),
             nullable=True,
         ),
     )
