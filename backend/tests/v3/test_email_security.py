@@ -14,6 +14,7 @@ All DNS is mocked via dns.resolver; no network is used.  Covers:
 from __future__ import annotations
 
 import asyncio
+import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -21,6 +22,15 @@ import dns.exception
 import pytest
 
 from app.core.config import settings
+from app.scanning.registry import registry
+
+# Evict scanner modules so @scanner_module decorators re-run on import,
+# avoiding duplicate registration errors across tests.
+for _name in [n for n in list(sys.modules) if n == "scanner_modules" or n.startswith("scanner_modules.")]:
+    del sys.modules[_name]
+registry._entries.clear()
+registry._discovered = False
+
 from scanner_modules.email_security import (
     DKIM_SELECTORS,
     MAX_DNS_QUERIES,
