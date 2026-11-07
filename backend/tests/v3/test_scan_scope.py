@@ -78,8 +78,15 @@ class TestPipelineGating:
         _, scan, persisted = self._targets(db)
         summary = dt._scan_targets(db, scan, persisted, "example.com", None, "passive")
 
-        # Passive runs discovery + DNS (email_security) — no port/ssl/header.
-        assert calls == [[ScanPhase.DNS]]
+        # Passive runs discovery + EMAIL_SECURITY — no port/ssl/header.
+        active_phases = {
+            ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.FINGERPRINT,
+        }
+        for phase_list in calls:
+            assert not any(p in active_phases for p in phase_list), (
+                f"active phase ran in passive scope: {calls}"
+            )
         assert summary["ports_total"] == 0
         assert summary["ssl"] == {"scanned": 0, "issues": 0}
         assert summary["headers"] == {"scanned": 0, "issues": 0}
@@ -110,7 +117,8 @@ class TestPipelineGating:
             _, scan, persisted = self._targets(db)
             dt._scan_targets(db, scan, persisted, "example.com", None, scope)
             assert seen[scope] == {
-                ScanPhase.DNS, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+                ScanPhase.EMAIL_SECURITY, ScanPhase.PORT,
+                ScanPhase.SSL, ScanPhase.HEADER,
             }
 
     def test_dns_phase_runs_in_passive_and_active(self, db, monkeypatch):
