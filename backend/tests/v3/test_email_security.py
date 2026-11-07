@@ -202,7 +202,7 @@ class TestEmailSecurityModule:
             txt_map={},
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         titles = [f["title"] for f in result["findings"]]
         assert "SPF record not published" in titles
         assert "DMARC record not published" in titles
@@ -217,7 +217,7 @@ class TestEmailSecurityModule:
     def test_no_mail_evidence_no_findings(self, monkeypatch):
         """No MX, no SPF, no DMARC: info note only, never medium."""
         self._patch_dns(monkeypatch, txt_map={}, mx_map={})
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         assert result["findings_total"] == 1
         f = result["findings"][0]
         assert f["title"] == "No mail evidence or SPF record"
@@ -234,7 +234,7 @@ class TestEmailSecurityModule:
             },
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         f = next(f for f in result["findings"] if "DMARC" in f["title"])
         assert f["severity"] == "low"
         assert f["dedupe_key"] == "email_security:dmarc_none"
@@ -250,7 +250,7 @@ class TestEmailSecurityModule:
             },
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         dmarc_findings = [f for f in result["findings"] if "DMARC" in f["title"]]
         assert len(dmarc_findings) == 1
         f = dmarc_findings[0]
@@ -268,7 +268,7 @@ class TestEmailSecurityModule:
             },
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         spf_findings = [f for f in result["findings"] if "SPF" in f["title"]]
         assert spf_findings == []
 
@@ -284,7 +284,7 @@ class TestEmailSecurityModule:
             },
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         spf_findings = [f for f in result["findings"] if "SPF" in f["title"]]
         assert spf_findings == []  # valid SPF present, no finding
 
@@ -299,7 +299,7 @@ class TestEmailSecurityModule:
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
         # No DKIM records for any selector -> all return NoAnswer
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         dkim_f = next(f for f in result["findings"] if "DKIM" in f["title"])
         assert dkim_f["severity"] == "info"  # never medium
         assert dkim_f["confidence"] == 0.5
@@ -328,7 +328,7 @@ class TestEmailSecurityModule:
 
         monkeypatch.setattr(real_socket, "getaddrinfo", fake_getaddrinfo)
 
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         mta_f = next(f for f in result["findings"] if "MTA-STS" in f["title"])
         assert mta_f["severity"] == "info"
         assert mta_f["dedupe_key"] == "email_security:mta_sts_missing"
@@ -346,8 +346,8 @@ class TestEmailSecurityModule:
             },
             mx_map={"example.com": self._make_answers(["mx1.example.com."])},
         )
-        r1 = asyncio.run(email_security_module(_make_ctx("example.com"))
-        r2 = asyncio.run(email_security_module(_make_ctx("example.com"))
+        r1 = asyncio.run(email_security_module(_make_ctx("example.com")))
+        r2 = asyncio.run(email_security_module(_make_ctx("example.com")))
         keys1 = {f["dedupe_key"] for f in r1["findings"] if "dedupe_key" in f}
         keys2 = {f["dedupe_key"] for f in r2["findings"] if "dedupe_key" in f}
         assert keys1 == keys2
@@ -362,6 +362,6 @@ class TestEmailSecurityModule:
             txt_map={},
             mx_map={},
         )
-        result = asyncio.run(email_security_module(_make_ctx("example.com"))
+        result = asyncio.run(email_security_module(_make_ctx("example.com")))
         assert result["findings"] == []
         assert result["findings_total"] == 0
