@@ -76,13 +76,17 @@ class TestRegistryUnavailablePhases:
         fresh_registry.register(
             ScannerEntry(name="p", phase=ScanPhase.PORT, run=noop))
 
-        # Discovery runs via services, not the registry — the pipelined
-        # scanner phases are PORT / SSL / HEADER only.
-        assert fresh_registry.unavailable_phases() == ["ssl", "header"]
+        # PORT registered above; DNS/SSL/HEADER/FINGERPRINT have no
+        # modules on fresh_registry (auto-discovery doesn't register
+        # on fresh_registry in test context).
+        assert fresh_registry.unavailable_phases() == [
+            "dns", "ssl", "header", "fingerprint"]
 
     def test_empty_registry_lists_every_pipeline_phase(self, fresh_registry):
+        # No modules registered on fresh_registry; all pipelined phases
+        # are unavailable.
         assert fresh_registry.unavailable_phases() == [
-            "port", "ssl", "header"]
+            "dns", "port", "ssl", "header", "fingerprint"]
 
     def test_all_registered_means_no_unavailable(self, fresh_registry):
         from app.scanning.registry import ScannerEntry, ScanPhase
@@ -90,7 +94,10 @@ class TestRegistryUnavailablePhases:
         async def noop(ctx):
             return {}
 
-        for phase in (ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER):
+        for phase in (
+            ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.DNS, ScanPhase.FINGERPRINT,
+        ):
             fresh_registry.register(
                 ScannerEntry(name=phase.value, phase=phase, run=noop))
         assert fresh_registry.unavailable_phases() == []
@@ -121,10 +128,11 @@ class TestRegistryUnavailablePhases:
             port_mods = fresh_registry.get_modules(phase=ScanPhase.PORT)
             ssl_mods = fresh_registry.get_modules(phase=ScanPhase.SSL)
 
-        # port and header registered from the re-discovery; ssl did not
+        # port registered from re-discovery; DNS (email_security re-imported)
+        # and header also registered. ssl failed import; fingerprint has no module.
         assert {e.phase.value for e in port_mods} == {"port"}
         assert ssl_mods == []
-        assert fresh_registry.unavailable_phases() == ["ssl"]
+        assert fresh_registry.unavailable_phases() == ["ssl", "fingerprint"]
         assert "scanner_modules.ssl_scan" in fresh_registry.failed_imports
         failures = [
             r for r in caplog.records
@@ -154,7 +162,7 @@ class TestRegistryUnavailablePhases:
         with caplog.at_level(logging.WARNING, logger=REGISTRY_LOGGER):
             phases = fresh_registry.warmup()
 
-        assert phases == ["ssl", "header"]
+        assert phases == ["dns", "ssl", "header", "fingerprint"]
         warnings = [
             r for r in caplog.records
             if "unavailable" in r.getMessage().lower()
@@ -180,7 +188,10 @@ class TestScanSummaryIncludesUnavailablePhases:
         summary = _new_summary(fresh_registry)
 
         assert "unavailable_phases" in summary
-        assert summary["unavailable_phases"] == ["port", "header"]
+        # SSL registered manually; DNS/PORT/HEADER/FINGERPRINT have no
+        # modules on fresh_registry.
+        assert summary["unavailable_phases"] == [
+            "dns", "port", "header", "fingerprint"]
         # the rest of the summary shape is unchanged
         assert summary["ports_open"] == 0
         assert summary["nuclei_skipped"] is True
@@ -205,7 +216,10 @@ class TestScanDetailSurfacesUnavailablePhases:
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["unavailable_phases"] == ["ssl", "header"]
+        # Only PORT is mounted; DNS (email_security), FINGERPRINT, SSL,
+        # HEADER are unavailable (enum order: DNS, PORT, SSL, HEADER, FINGERPRINT).
+        assert body["unavailable_phases"] == [
+            "dns", "ssl", "header", "fingerprint"]
 
     def test_scan_detail_api_reports_no_unavailable_when_all_mounted(
             self, client, scan_detail, monkeypatch):
@@ -217,7 +231,10 @@ class TestScanDetailSurfacesUnavailablePhases:
         entries = {
             f"{phase.value}_scan": ScannerEntry(
                 name=f"{phase.value}_scan", phase=phase, run=noop)
-            for phase in (ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER)
+            for phase in (
+                ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+                ScanPhase.DNS, ScanPhase.FINGERPRINT,
+            )
         }
         monkeypatch.setattr(registry, "_discovered", True)
         monkeypatch.setattr(registry, "_entries", entries)

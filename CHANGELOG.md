@@ -58,6 +58,38 @@ when they disagree).
   status as-is (retry/backoff lives in the provider), slow/hanging responses
   time out — all provider-level concerns, never egress-level blocks.
 
+### Added (Phase 3, module 1: email_security)
+
+- `scanner_modules/email_security.py`: passive email-security discovery
+  module (registry phase `dns`). SPF, DKIM (bounded selector list), DMARC
+  (policy + strength), MTA-STS, BIMI — all read-only DNS lookups, no
+  connections to target services.
+- Mail-evidence gating: SPF/DMARC/DKIM findings require MX, SPF, or DMARC
+  records present; domains without mail evidence receive an info-level note
+  only. DKIM absence is info + low confidence, never medium.
+- `dedupe_key` on every finding for stable rescan deduplication; findings
+  carry `confidence` (0.0–1.0).
+- Severity/CVE mapping flows only through existing OSV/KEV enrichment — no
+  invented EOL or CVE data.
+- `ScanPhase.DNS` and `ScanPhase.FINGERPRINT` added to the pipeline;
+  `SCOPE_PHASES` updated (`passive`: discovery + DNS; `active`: + port/SSL/
+  header; `full`: + fingerprint).
+- `EMAIL_SECURITY_ENABLED`, `EMAIL_SECURITY_TIMEOUT_SECONDS`,
+  `EMAIL_SECURITY_MAX_QUERIES` settings (backend `.env.example`, root
+  `.env.example`, README config table).
+- Single `sentinelasm_scanner_module_runs_total{module,outcome}` counter
+  replaces per-module Prometheus counters; label-restriction test updated.
+- Frontend: email findings displayed on Findings pages with remediation
+  text; vitest coverage (`frontend/src/pages/Settings.test.tsx` +
+  `frontend/src/pages/Findings.test.tsx`).
+
+### Added (Phase 2.1)
+
+- Egress-abuse test suite (`tests/v3/test_egress_abuse.py`): non-JSON crt.sh
+  bodies pass through (parse failure lives in the provider), 5xx returns the
+  status as-is (retry/backoff lives in the provider), slow/hanging responses
+  time out — all provider-level concerns, never egress-level blocks.
+
 - `EnrichmentProvider` ORM model + `enrichment_providers` table: per-org
   provider config with Fernet-encrypted API key (`encrypted_api_key`),
   `is_active`, `created_at`/`updated_at`, unique `(organization_id, name)`.

@@ -100,6 +100,25 @@ password reset just won't deliver.
   subject to the same scope/verification gating as port/SSL scanning: an
   unpinned target (no verified IP) is skipped, never probed via fresh DNS.
 
+## Email-security scanner operations (Phase 3)
+
+- `EMAIL_SECURITY_ENABLED` (default `true`): set `false` to disable the
+  email-security discovery phase entirely. Disabled modules report
+  `outcome=disabled` in `sentinelasm_scanner_module_runs_total` and produce
+  no findings.
+- `EMAIL_SECURITY_TIMEOUT_SECONDS` (default 5.0): per-DNS-query timeout.
+- `EMAIL_SECURITY_MAX_QUERIES` (default 12): caps DKIM selector probing.
+  Increase only if you need to probe more selectors; each additional query
+  adds latency to the discovery phase.
+- All lookups are **passive DNS only** (SPF, DKIM, DMARC, MTA-STS, BIMI).
+  No connections are made to target services. Results are gated by mail
+  evidence: domains with no MX, SPF, or DMARC records receive an info-level
+  note only. SPF/DMARC/DKIM findings require mail evidence.
+- Findings carry `confidence` (0.0–1.0) and `dedupe_key` fields. Rescans
+  update existing findings by `dedupe_key` rather than creating duplicates.
+- Severity/CVE mapping flows only through existing OSV/KEV enrichment — this
+  module never invents EOL or CVE data.
+
 ## Tags and releases
 
 Single branch, tag-cut releases. **Nothing auto-publishes**: `docker-publish`

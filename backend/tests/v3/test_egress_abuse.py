@@ -600,6 +600,12 @@ class TestNoDirectSocketUse:
         "backend/app/core/ssrf.py": {
             "socket.gethostbyname",
         },
+        # Passive email-security DNS lookups (SPF/DKIM/DMARC/MTA-STS/BIMI):
+        # read-only DNS queries, never connections to target services.
+        "backend/scanner_modules/email_security.py": {
+            "dns.resolver.resolve",
+            "socket.getaddrinfo",
+        },
     }
     DENY: ClassVar[set] = {
         "socket.create_connection",

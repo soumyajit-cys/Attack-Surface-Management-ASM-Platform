@@ -20,6 +20,10 @@ export interface Finding {
   cve_ids?: string[] | null
   cvss_score?: number | null
   created_at: string
+  /** Confidence score (0.0-1.0) for fingerprint-derived findings. */
+  confidence?: number | null
+  /** Stable dedupe key for rescan deduplication. */
+  dedupe_key?: string | null
 }
 
 export interface Scan {

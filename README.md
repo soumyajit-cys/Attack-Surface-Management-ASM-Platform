@@ -74,6 +74,7 @@ flowchart TD
 | Domain ownership verification (DNS-TXT) | ✅ works | Block scans until verified; expiry + recheck scheduling |
 | Subdomain / port / DNS / SSL / WHOIS enumeration | ✅ works | Celery pipeline w/ retries + DLQ; per-target enrichment timeouts |
 | Discovery sources: crt.sh CT logs + bounded DNS brute-force | ✅ works | crt.sh passive; DNS brute-force is **active** and scope-gated; per-source cap + truncation surfaced |
+| Email-security discovery (SPF/DKIM/DMARC/MTA-STS/BIMI) | ✅ works | Passive DNS-only lookups; mail-evidence gating; findings with confidence + remediation |
 | Optional key-based enrichment providers (Shodan/Censys/etc.) | 🔜 planned | Provider management API + Fernet-encrypted keys; no provider implementation shipped yet |
 | Findings + risk scoring (KEV/OSV, age, exposure) | ✅ works | KEV cached to disk (named volume in compose); OSV configurable |
 | Scan policies (cron / periodic) | ✅ works | Celery Beat + `run-now`; per-org policies |
@@ -273,6 +274,14 @@ Settings field without documenting it fails `make check`.
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | No | Host ports published by nginx only (in-container it listens 8080/8443, non-root) |
 
 Frontend: set `VITE_API_BASE` (e.g. `https://api.example.com/api/v1`) to point at a remote API instead of the local Vite proxy.
+
+### Scan scopes
+
+| Scope | Registry phases | Description |
+|-------|----------------|-------------|
+| `passive` | `discovery`, `dns` | crt.sh CT logs + passive email-security DNS lookups (SPF/DKIM/DMARC/MTA-STS/BIMI). Zero packets to target ports/services. |
+| `active` | `discovery`, `dns`, `port`, `ssl`, `header` | Passive + port scanning, TLS inspection, HTTP header checks. All active probing requires a verified domain + SSRF-pinned IP. |
+| `full` | `discovery`, `dns`, `port`, `ssl`, `header`, `fingerprint` | Active + passive tech fingerprinting (headers/TLS/HTML mapped to CVE enrichment). CVE enrichment (OSV.dev) enabled. |
 
 ### Security model in one paragraph
 
