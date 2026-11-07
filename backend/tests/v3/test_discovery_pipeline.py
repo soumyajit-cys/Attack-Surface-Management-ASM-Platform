@@ -825,9 +825,11 @@ class TestCrtShBackfillMigration:
         conn = psycopg2.connect(db_url)
         conn.autocommit = True
         try:
-            rows = conn.cursor().execute(
+            cur = conn.cursor()
+            cur.execute(
                 "SELECT id, subdomain, source, sources FROM subdomains ORDER BY id"
-            ).fetchall()
+            )
+            rows = cur.fetchall()
             row_map = {r[1]: r for r in rows}
             assert row_map['www.example.com'][2] == "crt_sh", f"www: {row_map['www.example.com']}"
             assert row_map['api.example.com'][2] == "crt_sh", f"api: {row_map['api.example.com']}"
@@ -848,9 +850,11 @@ class TestCrtShBackfillMigration:
         conn = psycopg2.connect(db_url)
         conn.autocommit = True
         try:
-            rows = conn.cursor().execute(
+            cur = conn.cursor()
+            cur.execute(
                 "SELECT id, subdomain, source FROM subdomains ORDER BY id"
-            ).fetchall()
+            )
+            rows = cur.fetchall()
             row_map = {r[1]: r for r in rows}
             assert row_map['www.example.com'][2] == "crt.sh", f"downgrade www: {row_map['www.example.com']}"
             assert row_map['api.example.com'][2] == "crt.sh", f"downgrade api: {row_map['api.example.com']}"
@@ -866,9 +870,11 @@ class TestCrtShBackfillMigration:
         conn = psycopg2.connect(db_url)
         conn.autocommit = True
         try:
-            rows = conn.cursor().execute(
+            cur = conn.cursor()
+            cur.execute(
                 "SELECT id, subdomain, source FROM subdomains ORDER BY id"
-            ).fetchall()
+            )
+            rows = cur.fetchall()
             row_map = {r[1]: r for r in rows}
             assert row_map['www.example.com'][2] == "crt_sh", f"re-upgrade www: {row_map['www.example.com']}"
             assert row_map['api.example.com'][2] == "crt_sh", f"re-upgrade api: {row_map['api.example.com']}"
