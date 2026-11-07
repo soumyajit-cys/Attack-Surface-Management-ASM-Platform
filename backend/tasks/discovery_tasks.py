@@ -401,7 +401,9 @@ def _persist_discovery(db: Session, scan: ScanHistory, domain_name: str, results
     for item in subdomain_data:
         if isinstance(item, str):
             name = item.strip().lower().rstrip(".")
-            source = "crt.sh" if name != domain_name else "primary"
+            # One source constant everywhere: provider name is `crt_sh`
+            # (never `crt.sh`).
+            source = "crt_sh" if name != domain_name else "primary"
         else:
             name = item.get("subdomain", "").strip().lower().rstrip(".")
             source = item.get("source", "unknown")
