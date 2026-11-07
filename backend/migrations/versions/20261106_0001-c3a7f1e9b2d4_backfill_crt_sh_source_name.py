@@ -29,13 +29,13 @@ def upgrade() -> None:
     # Scalar column.
     op.execute(
         sa.text(
-            f"UPDATE subdomains SET source = :new WHERE source = :old"
+            "UPDATE subdomains SET source = :new WHERE source = :old"
         ).bindparams(old=_OLD, new=_NEW)
     )
     # Array column: replace any element equal to the old name.
     op.execute(
         sa.text(
-            f"""
+            """
             UPDATE subdomains
             SET sources = ARRAY(
                 SELECT DISTINCT CASE WHEN unnest = :old THEN :new ELSE unnest END
