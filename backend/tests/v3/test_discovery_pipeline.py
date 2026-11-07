@@ -688,7 +688,7 @@ class TestDnsBruteGating:
         # Cap at 3 brute-force results per source.
         monkeypatch.setattr(
             config_mod.settings,
-            "max_hosts_per_source_per_scan",
+            "max_subdomains_per_source_per_scan",
             3,
         )
 
