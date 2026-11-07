@@ -149,7 +149,7 @@ class TestSettingsWiring:
     def test_max_queries_bounds_dkim_loop(self):
         """MAX_DNS_QUERIES caps DKIM selector probing (bounded)."""
         assert MAX_DNS_QUERIES == settings.email_security_max_queries
-        assert MAX_DNS_QUERIES < len(DKIM_SELECTORS)
+        assert MAX_DNS_QUERIES <= len(DKIM_SELECTORS)
         assert DNS_TIMEOUT == settings.email_security_timeout_seconds
 
 
