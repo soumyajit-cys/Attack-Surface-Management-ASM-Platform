@@ -208,10 +208,6 @@ class TestScopeGating:
         assert summary["ports_total"] == 0
 
 
-class TestScopeGating:
-    """Scope gating: active probing requires a pinned IP."""
-
-
 # ── max_subdomains_per_source_per_scan + truncated flag ─────────────────────
 
 
@@ -767,7 +763,7 @@ class TestCrtShBackfillMigration:
         )
         conn.autocommit = True
         try:
-            conn.cursor().execute(f'DROP DATABASE IF EXISTS scratch_crt_sh_backfill;')
+            conn.cursor().execute('DROP DATABASE IF EXISTS scratch_crt_sh_backfill;')
             conn.cursor().execute(
                 'CREATE DATABASE scratch_crt_sh_backfill OWNER sentinel;'
             )
