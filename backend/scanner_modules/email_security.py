@@ -130,7 +130,7 @@ def _has_mail_evidence(mx_records: list[str], spf: str | None,
     return bool(mx_records or spf or dmarc)
 
 
-@scanner_module("email_security", phase="dns", order=1)
+@scanner_module("email_security", phase="email_security", order=1)
 async def email_security_module(ctx: ScanContext) -> dict:
     """Passive email-security DNS lookups for *ctx.domain*.
 

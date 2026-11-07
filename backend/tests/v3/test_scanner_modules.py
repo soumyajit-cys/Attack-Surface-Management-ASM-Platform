@@ -39,15 +39,15 @@ class TestScannerModuleDiscovery:
         assert by_phase["port_scan"] == ScanPhase.PORT
         assert by_phase["ssl_scan"] == ScanPhase.SSL
         assert by_phase["header_scan"] == ScanPhase.HEADER
-        assert by_phase["email_security"] == ScanPhase.DNS
+        assert by_phase["email_security"] == ScanPhase.EMAIL_SECURITY
 
     def test_phase_filter(self):
         port_mods = registry.get_modules(phase=ScanPhase.PORT)
         assert [m.name for m in port_mods] == ["port_scan"]
 
-    def test_dns_phase_filter(self):
-        dns_mods = registry.get_modules(phase=ScanPhase.DNS)
-        assert [m.name for m in dns_mods] == ["email_security"]
+    def test_email_security_phase_filter(self):
+        email_mods = registry.get_modules(phase=ScanPhase.EMAIL_SECURITY)
+        assert [m.name for m in email_mods] == ["email_security"]
 
     def test_scan_context_contract(self):
         """Modules accept a single ScanContext positional arg (no persistence)."""
