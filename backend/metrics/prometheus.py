@@ -61,17 +61,14 @@ DISCOVERY_SUBDOMAINS_RETURNED_TOTAL = Counter(
     ["provider"],
 )
 
-# Email-security scanner metrics. Labels: module and outcome only -- never
-# a domain or hostname.
-EMAIL_SECURITY_REQUESTS_TOTAL = Counter(
-    "sentinelasm_email_security_requests_total",
-    "Total email-security DNS lookups",
+# Scanner module run metrics. Labels: module and outcome only -- never a
+# domain or hostname.  All Phase 3 scanner modules (email_security,
+# subdomain_takeover, tech_fingerprint, exposed_services, tls_depth) use
+# this single counter instead of per-module counters.
+SCANNER_MODULE_RUNS_TOTAL = Counter(
+    "sentinelasm_scanner_module_runs_total",
+    "Total scanner module executions",
     ["module", "outcome"],
-)
-EMAIL_SECURITY_FINDINGS_TOTAL = Counter(
-    "sentinelasm_email_security_findings_total",
-    "Total email-security findings generated",
-    ["module"],
 )
 
 PORTS_SCANNED = Counter(

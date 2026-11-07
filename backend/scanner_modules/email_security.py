@@ -2,7 +2,7 @@
 
 Passive, read-only DNS lookups against the target domain's published
 email-security records.  No connections are made to the target's services;
-only DNS TXT/HTTPS queries for well-known record names:
+only DNS TXT/MX queries for well-known record names:
 
 - SPF  (v=spf1) at the domain apex
 - DKIM for a bounded set of common selectors
@@ -10,9 +10,19 @@ only DNS TXT/HTTPS queries for well-known record names:
 - MTA-STS policy at _mta-sts.domain (HTTPS well-known)
 - BIMI at default._bimi.domain
 
-All findings carry a ``confidence`` field (0.0–1.0).  Severity/CVE mapping
-for any fingerprint-derived finding flows only through the existing OSV/KEV
-enrichment — this module never invents EOL or CVE data.
+False-positive guard: SPF/DMARC/DKIM findings only apply when the domain has
+mail evidence (an MX record, or an existing SPF or DMARC record).  Domains
+with no mail evidence receive at most an info-level note.  DKIM absence
+under guessed selectors is always info + low confidence, never medium.
+SPF-missing severity is low unless justified otherwise (no MX + no SPF +
+no DMARC = info note only).
+
+All findings carry a ``confidence`` field (0.0–1.0) and a ``dedupe_key``
+field (stable per finding type) so rescans update rather than duplicate.
+
+Severity/CVE mapping for any fingerprint-derived finding flows only through
+the existing OSV/KEV enrichment — this module never invents EOL or CVE
+data.
 
 Labels: module and outcome only — never a domain or hostname.
 """
@@ -21,16 +31,13 @@ from __future__ import annotations
 
 import logging
 
-import dns.resolver
 import dns.exception
+import dns.resolver
 
 from app.scanning.context import ScanContext
 from app.scanning.registry import scanner_module, ScanPhase
 
-from metrics.prometheus import (
-    EMAIL_SECURITY_REQUESTS_TOTAL,
-    EMAIL_SECURITY_FINDINGS_TOTAL,
-)
+from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
 
 logger = logging.getLogger("sentinelasm.scanner.email_security")
 
@@ -52,6 +59,17 @@ def _query_txt(domain: str, record: str) -> list[str]:
     try:
         answers = dns.resolver.resolve(record, "TXT", lifetime=DNS_TIMEOUT)
         return [r.to_text().strip('"') for r in answers]
+    except (dns.exception.NoAnswer, dns.exception.NXDOMAIN,
+            dns.exception.NoNameservers, dns.exception.Timeout,
+            dns.exception.DNSException):
+        return []
+
+
+def _query_mx(domain: str) -> list[str]:
+    """Query MX records for *domain*.  Returns a list of MX targets."""
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=DNS_TIMEOUT)
+        return [str(r.exchange).rstrip(".") for r in answers]
     except (dns.exception.NoAnswer, dns.exception.NXDOMAIN,
             dns.exception.NoNameservers, dns.exception.Timeout,
             dns.exception.DNSException):
@@ -85,18 +103,35 @@ def _dmarc_policy(dmarc_record: str | None) -> str:
     return "none"
 
 
+def _has_mail_evidence(mx_records: list[str], spf: str | None,
+                       dmarc: str | None) -> bool:
+    """True if the domain has any evidence of handling mail.
+
+    Evidence: at least one MX record, or an existing SPF/DMARC record.
+    Domains without mail evidence get info-level notes only.
+    """
+    return bool(mx_records or spf or dmarc)
+
+
 @scanner_module("email_security", phase="dns", order=1)
 async def email_security_module(ctx: ScanContext) -> dict:
     """Passive email-security DNS lookups for *ctx.domain*.
 
     Returns a dict with per-record results and a list of finding dicts
     (each with ``title``, ``severity``, ``category``, ``description``,
-    ``recommendation``, ``confidence``).
+    ``recommendation``, ``confidence``, ``dedupe_key``).
     """
     findings: list[dict] = []
     records: dict[str, str | list[str]] = {}
 
     queries = 0
+
+    # ── MX (mail-evidence gate) ──────────────────────────────────────
+    mx_records = _query_mx(ctx.domain)
+    records["mx"] = mx_records
+    queries += 1
+
+    # ── SPF ──────────────────────────────────────────────────────────
     spf_txt = _query_txt(ctx.domain, ctx.domain)
     spf = _parse_spf(spf_txt)
     records["spf"] = spf
@@ -109,6 +144,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
     queries += 1
 
     policy = _dmarc_policy(dmarc)
+    mail_evidence = _has_mail_evidence(mx_records, spf, dmarc)
 
     # ── DKIM (bounded selector list) ─────────────────────────────────
     dkim_selectors_found: list[str] = []
@@ -130,7 +166,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
         import socket
         socket.getaddrinfo(f"mta-sts.{ctx.domain}", 443)
         mta_sts_available = True
-    except (OSError, socket.gaierror):
+    except (OSError, dns.exception.DNSException):
         pass
     records["mta_sts"] = mta_sts_available
     queries += 1
@@ -142,21 +178,40 @@ async def email_security_module(ctx: ScanContext) -> dict:
 
     # ── Findings ─────────────────────────────────────────────────────
     if not spf:
-        findings.append({
-            "title": "SPF record not published",
-            "severity": "medium",
-            "category": "email_security",
-            "description": (
-                f"No SPF (v=spf1) TXT record found for {ctx.domain}. "
-                "Receiving mail servers cannot verify that senders are "
-                "authorized, enabling email spoofing."
-            ),
-            "recommendation": (
-                "Publish an SPF TXT record at the domain apex authorizing "
-                "your legitimate mail sources (e.g. v=spf1 mx -all)."
-            ),
-            "confidence": 0.95,
-        })
+        if mail_evidence:
+            findings.append({
+                "title": "SPF record not published",
+                "severity": "low",
+                "category": "email_security",
+                "description": (
+                    f"No SPF (v=spf1) TXT record found for {ctx.domain}. "
+                    "Receiving mail servers cannot verify that senders are "
+                    "authorized, enabling email spoofing."
+                ),
+                "recommendation": (
+                    "Publish an SPF TXT record at the domain apex authorizing "
+                    "your legitimate mail sources (e.g. v=spf1 mx -all)."
+                ),
+                "confidence": 0.95,
+                "dedupe_key": "email_security:spf_missing",
+            })
+        else:
+            findings.append({
+                "title": "No mail evidence or SPF record",
+                "severity": "info",
+                "category": "email_security",
+                "description": (
+                    f"No MX, SPF, or DMARC records found for {ctx.domain}; "
+                    "the domain does not appear to send or receive mail. "
+                    "No email-security configuration is required."
+                ),
+                "recommendation": (
+                    "No action required unless the domain begins sending "
+                    "mail; then publish SPF, DKIM, and DMARC records."
+                ),
+                "confidence": 0.7,
+                "dedupe_key": "email_security:no_mail_evidence",
+            })
     else:
         # SPF exists but may be overly permissive.
         if "+all" in spf or "?all" in spf:
@@ -174,25 +229,29 @@ async def email_security_module(ctx: ScanContext) -> dict:
                     "'~all' (soft fail) to reject or flag unauthorized mail."
                 ),
                 "confidence": 0.9,
+                "dedupe_key": "email_security:spf_permissive",
             })
 
     if not dmarc:
-        findings.append({
-            "title": "DMARC record not published",
-            "severity": "medium",
-            "category": "email_security",
-            "description": (
-                f"No DMARC (v=DMARC1) TXT record found at "
-                f"_dmarc.{ctx.domain}. Receivers cannot enforce alignment "
-                "or receive aggregate/forensic reports."
-            ),
-            "recommendation": (
-                f"Publish a DMARC TXT record at _dmarc.{ctx.domain} starting "
-                "with p=none;rua=mailto:dmarc-reports@{ctx.domain}, then "
-                "progress to p=quarantine and p=reject."
-            ),
-            "confidence": 0.95,
-        })
+        if mail_evidence:
+            findings.append({
+                "title": "DMARC record not published",
+                "severity": "low",
+                "category": "email_security",
+                "description": (
+                    f"No DMARC (v=DMARC1) TXT record found at "
+                    f"_dmarc.{ctx.domain}. Receivers cannot enforce "
+                    "alignment or receive aggregate/forensic reports."
+                ),
+                "recommendation": (
+                    f"Publish a DMARC TXT record at _dmarc.{ctx.domain} "
+                    "starting with p=none;rua=mailto:dmarc-reports@"
+                    f"{ctx.domain}, then progress to p=quarantine and "
+                    "p=reject."
+                ),
+                "confidence": 0.95,
+                "dedupe_key": "email_security:dmarc_missing",
+            })
     elif policy == "none":
         findings.append({
             "title": "DMARC policy is monitor-only",
@@ -207,12 +266,13 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "p=reject as legitimate mail sources are confirmed aligned."
             ),
             "confidence": 0.9,
+            "dedupe_key": "email_security:dmarc_none",
         })
 
     if not dkim_selectors_found:
         findings.append({
             "title": "No DKIM selectors found",
-            "severity": "low",
+            "severity": "info",
             "category": "email_security",
             "description": (
                 f"No DKIM public keys found for any of {len(DKIM_SELECTORS)} "
@@ -223,7 +283,8 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "Configure DKIM signing for your outbound mail and publish "
                 "the public key under at least one common selector."
             ),
-            "confidence": 0.85,
+            "confidence": 0.5,
+            "dedupe_key": "email_security:dkim_missing",
         })
 
     if not mta_sts_available:
@@ -241,6 +302,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "add the corresponding TXT record at _mta-sts.{ctx.domain}."
             ),
             "confidence": 0.8,
+            "dedupe_key": "email_security:mta_sts_missing",
         })
 
     if not records["bimi"]:
@@ -257,16 +319,13 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "pointing to your verified SVG logo."
             ),
             "confidence": 0.75,
+            "dedupe_key": "email_security:bimi_missing",
         })
 
     # ── Metrics (module + outcome only) ────────────────────────────
-    outcome = "ok"
-    EMAIL_SECURITY_REQUESTS_TOTAL.labels(
-        module="email_security", outcome=outcome
+    SCANNER_MODULE_RUNS_TOTAL.labels(
+        module="email_security", outcome="ok"
     ).inc()
-    EMAIL_SECURITY_FINDINGS_TOTAL.labels(
-        module="email_security"
-    ).inc(len(findings))
 
     return {
         "host": ctx.domain,
