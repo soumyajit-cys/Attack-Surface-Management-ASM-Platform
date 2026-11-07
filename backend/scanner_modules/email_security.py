@@ -70,7 +70,7 @@ def _query_mx(domain: str) -> list[str]:
     """Query MX records for *domain*.  Returns a list of MX targets."""
     try:
         answers = dns.resolver.resolve(domain, "MX", lifetime=DNS_TIMEOUT)
-        return [str(r.exchange).rstrip(".") for r in answers]
+        return [r.to_text().split(" ")[-1].rstrip(".") for r in answers]
     except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
             dns.resolver.NoNameservers, dns.resolver.Timeout,
             dns.exception.DNSException):
