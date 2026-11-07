@@ -122,6 +122,17 @@ async def email_security_module(ctx: ScanContext) -> dict:
     (each with ``title``, ``severity``, ``category``, ``description``,
     ``recommendation``, ``confidence``, ``dedupe_key``).
     """
+    if not settings.email_security_enabled:
+        SCANNER_MODULE_RUNS_TOTAL.labels(
+            module="email_security", outcome="disabled"
+        ).inc()
+        return {
+            "host": ctx.domain,
+            "records": {},
+            "findings": [],
+            "findings_total": 0,
+            "queries": 0,
+        }
     findings: list[dict] = []
     records: dict[str, str | list[str]] = {}
 
