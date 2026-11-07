@@ -175,13 +175,14 @@ async def email_security_module(ctx: ScanContext) -> dict:
 
     # ── DKIM (bounded selector list) ─────────────────────────────────
     dkim_selectors_found: list[str] = []
-    for selector in DKIM_SELECTORS:
-        if queries >= MAX_DNS_QUERIES:
-            break
-        dkim_txt = _query_txt(ctx.domain, f"{selector}._domainkey.{ctx.domain}")
-        if dkim_txt:
-            dkim_selectors_found.append(selector)
-        queries += 1
+    if mail_evidence:
+        for selector in DKIM_SELECTORS:
+            if queries >= MAX_DNS_QUERIES:
+                break
+            dkim_txt = _query_txt(ctx.domain, f"{selector}._domainkey.{ctx.domain}")
+            if dkim_txt:
+                dkim_selectors_found.append(selector)
+            queries += 1
     records["dkim_selectors"] = dkim_selectors_found
 
     # ── MTA-STS ──────────────────────────────────────────────────────
@@ -189,12 +190,13 @@ async def email_security_module(ctx: ScanContext) -> dict:
     # The policy file lives at https://mta-sts.domain/.well-known/mta-sts.txt
     # We do a lightweight DNS resolution check only (no body read).
     mta_sts_available = False
-    try:
-        import socket
-        socket.getaddrinfo(f"mta-sts.{ctx.domain}", 443)
-        mta_sts_available = True
-    except (OSError, dns.exception.DNSException):
-        pass
+    if mail_evidence:
+        try:
+            import socket
+            socket.getaddrinfo(f"mta-sts.{ctx.domain}", 443)
+            mta_sts_available = True
+        except (OSError, dns.exception.DNSException):
+            pass
     records["mta_sts"] = mta_sts_available
     queries += 1
 
