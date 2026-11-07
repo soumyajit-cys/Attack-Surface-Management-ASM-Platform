@@ -559,15 +559,19 @@ class TestRateLimitFailClosed:
 
 
 class TestDnsBruteGating:
-    def test_dns_brute_is_active_and_gated(self, db, org_factory, monkeypatch):
-        """DNS brute-force is active discovery: it is skipped when the
-        domain is not pinned (unverified), just like port/SSL scanning."""
+# ── DNS brute-force gating: active discovery requires scope + verification ─
+
+
+class TestDnsBruteGating:
+    def test_dns_brute_no_active_probe_without_pin(self, db, org_factory, monkeypatch):
+        """DNS brute-force (active) runs NO scanner modules when the
+        domain has no pinned IP (unverified)."""
         import tasks.discovery_tasks as dt
 
         org, _ = org_factory("Gate2 Org", "gateuser2", "gateuser2@example.com")
         scan = SimpleNamespace(organization_id=org.id, id=2)
 
-        # No pinned IP for the subdomain → active probing skipped.
+        # No pinned IP for any subdomain → active probing skipped.
         calls = []
 
         def fake_run(ctx, modules):
@@ -596,7 +600,7 @@ class TestDnsBruteGating:
         )
 
         # Only passive email_security may run without a pin; no ACTIVE
-        # phases may run.
+        # phases (port/ssl/header/fingerprint) may run.
         active_phases = {
             ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
             ScanPhase.FINGERPRINT,
@@ -607,5 +611,103 @@ class TestDnsBruteGating:
             )
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
+
+    def test_dns_brute_wordlist_bounded(self, monkeypatch):
+        """DNS brute-force wordlist is bounded: only DNS_BRUTE_WORDLIST
+        prefixes are resolved, even when all resolve successfully."""
+        import socket as sock
+
+        from services.discovery import subdomain_service as ssd
+
+        # All brute-force prefixes resolve successfully.
+        resolved = set()
+
+        def fake_gethostbyname(name):
+            # Only the registered domain and its brute-force subdomains
+            # resolve; anything else fails.
+            if name.endswith(".example.com"):
+                resolved.add(name)
+                return "93.184.216.34"
+            raise OSError("does not resolve")
+
+        monkeypatch.setattr(sock, "gethostbyname", fake_gethostbyname)
+
+        # Also mock crt.sh to return no results so we only see brute force.
+        async def fake_fetch(url, **kw):
+            from utils.egress import FetchResult
+            return FetchResult(status_code=200, headers={}, body=b"[]")
+
+        monkeypatch.setattr(
+            "services.discovery.providers.crt_sh.fetch_url_validated", fake_fetch
+        )
+
+        import asyncio
+
+        results = asyncio.run(ssd.discover_subdomains("example.com"))
+
+        brute_hosts = [
+            r for r in results if r.get("source") == "dns_brute"
+        ]
+        brute_names = {r["subdomain"] for r in brute_hosts}
+
+        # Only wordlist prefixes that resolve are returned.
+        expected_prefixes = {
+            "www", "mail", "ftp", "localhost", "webmail", "smtp", "pop",
+            "ns1", "ns2", "dns1", "dns2", "mx1", "mx2", "api", "admin",
+            "app", "dev", "staging", "test", "vpn", "portal", "blog",
+            "shop", "support", "gitlab", "jenkins",
+        }
+        # "dev" appears twice in the wordlist but deduped to one result.
+        expected_hosts = {f"{p}.example.com" for p in expected_prefixes}
+        assert brute_names == expected_hosts, (
+            f"brute force hosts {brute_names} != expected {expected_hosts}"
+        )
+        # Bounded by wordlist size, not unlimited.
+        assert len(brute_hosts) <= len(ssd.DNS_BRUTE_WORDLIST)
+
+    def test_dns_brute_respects_max_hosts_cap(self, monkeypatch):
+        """DNS brute-force results are capped by
+        max_hosts_per_source_per_scan."""
+        import socket as sock
+
+        from services.discovery import subdomain_service as ssd
+        from app.core import config as config_mod
+
+        # All brute-force prefixes resolve.
+        def fake_gethostbyname(name):
+            if name.endswith(".example.com"):
+                return "93.184.216.34"
+            raise OSError("does not resolve")
+
+        monkeypatch.setattr(sock, "gethostbyname", fake_gethostbyname)
+
+        async def fake_fetch(url, **kw):
+            from utils.egress import FetchResult
+            return FetchResult(status_code=200, headers={}, body=b"[]")
+
+        monkeypatch.setattr(
+            "services.discovery.providers.crt_sh.fetch_url_validated", fake_fetch
+        )
+
+        # Cap at 3 brute-force results per source.
+        monkeypatch.setattr(
+            config_mod.settings,
+            "max_hosts_per_source_per_scan",
+            3,
+        )
+
+        import asyncio
+
+        results = asyncio.run(ssd.discover_subdomains("example.com"))
+
+        brute_hosts = [
+            r for r in results if r.get("source") == "dns_brute"
+        ]
+        # Only 3 of the resolving hosts are kept; the rest are truncated.
+        assert len(brute_hosts) == 3, f"expected 3 capped hosts, got {len(brute_hosts)}"
+        # Every kept host is truncated.
+        for h in brute_hosts:
+            assert h["truncated"] is True, h
+            assert h["truncated_count"] > 0, h
 
 
