@@ -37,6 +37,7 @@ import dns.resolver
 from app.scanning.context import ScanContext
 from app.scanning.registry import scanner_module, ScanPhase
 
+from app.core.config import settings
 from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
 
 logger = logging.getLogger("sentinelasm.scanner.email_security")
@@ -48,10 +49,10 @@ DKIM_SELECTORS: tuple[str, ...] = (
 )
 
 #: DNS query timeout per record type (seconds).
-DNS_TIMEOUT = 5.0
+DNS_TIMEOUT = settings.email_security_timeout_seconds
 
 #: Max DNS queries per domain (bounded to prevent abuse).
-MAX_DNS_QUERIES = 12
+MAX_DNS_QUERIES = settings.email_security_max_queries
 
 
 def _query_txt(domain: str, record: str) -> list[str]:

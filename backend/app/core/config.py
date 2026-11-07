@@ -152,6 +152,11 @@ class Settings(BaseSettings):
     # crt.sh max retries on transient failure (502/503/504 / network).
     crt_sh_max_retries: int = 3
 
+    # Scanner module toggles and per-module bounds (Phase 3).
+    email_security_enabled: bool = True
+    email_security_timeout_seconds: float = 5.0
+    email_security_max_queries: int = 12
+
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
     # and the direct peer is used. Set behind nginx/traefik so the limiter,
