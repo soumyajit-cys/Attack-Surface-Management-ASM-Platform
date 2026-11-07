@@ -24,12 +24,22 @@ import pytest
 from app.core.config import settings
 from app.scanning.registry import registry
 
-# Evict scanner modules so @scanner_module decorators re-run on import,
-# avoiding duplicate registration errors across tests.
-for _name in [n for n in list(sys.modules) if n == "scanner_modules" or n.startswith("scanner_modules.")]:
-    del sys.modules[_name]
-registry._entries.clear()
-registry._discovered = False
+
+@pytest.fixture(autouse=True)
+def _evict_email_security_module():
+    """Evict scanner modules before each test so @scanner_module decorators
+    re-run cleanly, avoiding duplicate-registration errors."""
+    for _name in [
+        n for n in list(sys.modules)
+        if n == "scanner_modules" or n.startswith("scanner_modules.")
+    ]:
+        del sys.modules[_name]
+    registry._entries.clear()
+    registry._discovered = False
+    yield
+    registry._entries.clear()
+    registry._discovered = False
+
 
 from scanner_modules.email_security import (
     DKIM_SELECTORS,
