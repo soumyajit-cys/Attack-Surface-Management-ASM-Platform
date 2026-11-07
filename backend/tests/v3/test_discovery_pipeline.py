@@ -795,31 +795,11 @@ class TestCrtShBackfillMigration:
         conn = psycopg2.connect(db_url)
         conn.autocommit = True
         try:
+            # Use existing domains table; insert a domain row.
             conn.cursor().execute(
-                """
-                CREATE TABLE IF NOT EXISTS domains (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    organization_id INTEGER NOT NULL,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                );
-                CREATE TABLE IF NOT EXISTS subdomains (
-                    id SERIAL PRIMARY KEY,
-                    domain_id INTEGER NOT NULL,
-                    subdomain TEXT NOT NULL,
-                    source TEXT,
-                    sources TEXT[],
-                    first_seen TIMESTAMPTZ,
-                    last_seen TIMESTAMPTZ,
-                    ip_address TEXT,
-                    UNIQUE (domain_id, subdomain)
-                );
-                """
+                "INSERT INTO domains (id, domain, organization_id, scope) VALUES (1, 'example.com', 1, 'full') ON CONFLICT (id) DO NOTHING"
             )
-            # Insert a domain first, then duplicate subdomain rows with old source name.
-            conn.cursor().execute(
-                "INSERT INTO domains (id, name, organization_id) VALUES (1, 'example.com', 1)"
-            )
+            # Insert duplicate subdomain rows with old source name.
             conn.cursor().execute(
                 """
                 INSERT INTO subdomains (domain_id, subdomain, source, sources, first_seen, last_seen)
