@@ -667,6 +667,7 @@ class TestDnsBruteGating:
         import socket as sock
 
         from services.discovery import subdomain_service as ssd
+        from app.core import config as config_mod
         from services.discovery.enrichment_coordinator import DiscoveryCoordinator
 
         # All brute-force prefixes resolve.
@@ -685,25 +686,16 @@ class TestDnsBruteGating:
             "services.discovery.providers.crt_sh.fetch_url_validated", fake_fetch
         )
 
-        # Cap the coordinator at 3 brute-force results per source.
-        real_discover = ssd.discover_subdomains
-
-        async def capped_discover(domain):
-            # Patch the coordinator's cap before calling.
-            orig_init = DiscoveryCoordinator.__init__
-
-            def patched_init(self, providers, max_hosts_per_source_per_scan=500):
-                orig_init(self, providers, max_hosts_per_source_per_scan=3)
-
-            DiscoveryCoordinator.__init__ = patched_init
-            try:
-                return await real_discover(domain)
-            finally:
-                DiscoveryCoordinator.__init__ = orig_init
+        # Cap brute-force results at 3 per source.
+        monkeypatch.setattr(
+            config_mod.settings,
+            "max_subdomains_per_source_per_scan",
+            3,
+        )
 
         import asyncio
 
-        results = asyncio.run(capped_discover("example.com"))
+        results = asyncio.run(ssd.discover_subdomains("example.com"))
 
         brute_hosts = [
             r for r in results if r.get("source") == "dns_brute"
