@@ -206,10 +206,16 @@ class TestScopeGating:
             )
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
-    """Per-source cap and truncated flag propagate from the coordinator
-    through discover_subdomains to the scan API response."""
 
-    @pytest.mark.asyncio
+
+class TestScopeGating:
+    """Scope gating: active probing requires a pinned IP."""
+
+
+# ── max_subdomains_per_source_per_scan + truncated flag ─────────────────────
+
+
+class TestMaxSubdomainsPerSource:
     async def test_cap_applied_per_source(self, monkeypatch):
         """When a provider returns more hosts than
         max_subdomains_per_source_per_scan, excess hosts are dropped and
