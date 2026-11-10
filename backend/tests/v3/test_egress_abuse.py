@@ -606,6 +606,13 @@ class TestNoDirectSocketUse:
             "dns.resolver.resolve",
             "socket.getaddrinfo",
         },
+        # Subdomain takeover: passive DNS lookups (cname lookups) plus
+        # optional SSRF-pinned HTTP fetch (Host=<subdomain>, size-capped).
+        "backend/scanner_modules/subdomain_takeover.py": {
+            "dns.resolver.resolve",
+            "socket.getaddrinfo",
+            "httpx.Client",
+        },
     }
     DENY: ClassVar[set] = {
         "socket.create_connection",

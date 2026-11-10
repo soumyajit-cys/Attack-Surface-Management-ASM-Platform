@@ -29,7 +29,7 @@ class TestScannerModuleDiscovery:
     def test_discovers_port_ssl_header_modules(self):
         mods = registry.get_modules()
         names = {m.name for m in mods}
-        assert names == {"port_scan", "ssl_scan", "header_scan", "email_security"}
+        assert names == {"port_scan", "ssl_scan", "header_scan", "email_security", "subdomain_takeover"}
 
     def test_phase_assignment(self):
         by_phase = {
@@ -40,6 +40,7 @@ class TestScannerModuleDiscovery:
         assert by_phase["ssl_scan"] == ScanPhase.SSL
         assert by_phase["header_scan"] == ScanPhase.HEADER
         assert by_phase["email_security"] == ScanPhase.EMAIL_SECURITY
+        assert by_phase["subdomain_takeover"] == ScanPhase.EMAIL_SECURITY
 
     def test_phase_filter(self):
         port_mods = registry.get_modules(phase=ScanPhase.PORT)
@@ -47,9 +48,11 @@ class TestScannerModuleDiscovery:
 
     def test_email_security_phase_filter(self):
         email_mods = registry.get_modules(phase=ScanPhase.EMAIL_SECURITY)
-        assert [m.name for m in email_mods] == ["email_security"]
+        assert sorted([m.name for m in email_mods]) == ["email_security", "subdomain_takeover"]
 
-    def test_scan_context_contract(self):
+    def test_takeover_phase_filter(self):
+        takeover_mods = registry.get_modules(phase=ScanPhase.EMAIL_SECURITY)
+        assert any(m.name == "subdomain_takeover" for m in takeover_mods)
         """Modules accept a single ScanContext positional arg (no persistence)."""
         import inspect
 
