@@ -83,6 +83,51 @@ when they disagree).
   text; vitest coverage (`frontend/src/pages/Settings.test.tsx` +
   `frontend/src/pages/Findings.test.tsx`).
 
+### Added (Phase 3, module 2: subdomain_takeover)
+
+- `scanner_modules/subdomain_takeover.py`: subdomain takeover detection
+  (registry phase `email_security`; passive DNS + active HTTP confirmation).
+  Two detection paths:
+  - Path A (DNS only): CNAME target resolves to NXDOMAIN, confirmed by a
+    second query after a short delay. No HTTP request is made.
+  - Path B (HTTP confirmation): GET / against the subdomain's own resolved
+    + SSRF-pinned address with `Host=<subdomain>`; response body matched
+    against provider-specific "unclaimed" literal substrings (case
+    sensitive).
+  - Both paths gated on verified domain + scope. Path A requires no pinned
+    IP; Path B does its own SSRF-pinned resolution.
+  - CNAME chain walked with depth cap (~8) and loop detection; every hop
+    matched against provider fingerprint list.
+  - Fingerprint data in `scanner_modules/takeover_fingerprints.json`,
+    sourced from can-i-take-over-xyz (source URL, commit hash, import date
+    in file header). Providers with `verified_claimable: false` are carried
+    through but never produce findings.
+  - Label-boundary suffix matching (`host == suffix` or
+    `host.endswith("." + suffix)`); no regex for CNAME matching. Body
+    matching uses literal, case-sensitive substrings.
+  - Findings carry `confidence` (≤ 0.85) and `dedupe_key`
+    (`subdomain_takeover:<provider_id>:<hostname>`). Severity is static per
+    provider type (`high` for claimable, `medium` for edge-case) — no
+    invented EOL/CVE data.
+  - Stores only fingerprint ID, matched literal, CNAME chain, status code
+    — never the full response body.
+- Settings: `SUBDOMAIN_TAKEOVER_ENABLED`,
+  `SUBDOMAIN_TAKEOVER_TIMEOUT_SECONDS`,
+  `SUBDOMAIN_TAKEOVER_MAX_CONCURRENCY`,
+  `SUBDOMAIN_TAKEOVER_MAX_HOSTS_PER_SCAN`,
+  `SUBDOMAIN_TAKEOVER_MAX_REDIRECTS`,
+  `SUBDOMAIN_TAKEOVER_MAX_BODY_BYTES` (backend `.env.example`, root
+  `.env.example`, README config table).
+- `dedupe_key` uniqueness enforced per `(organization_id, asset_id,
+  dedupe_key)`; rescan updates existing finding rather than duplicating.
+- Prometheus: `sentinelasm_scanner_module_runs_total{module,outcome}`
+  counter includes takeover module; `truncated` outcome when per-scan host
+  cap is hit, surfaced in `discovery_meta`.
+- Threat model: TLS verification relaxed for takeover HTTP probe (documented
+  as T13); no cookies/credentials; size cap.
+- Frontend: takeover findings displayed on Findings pages with remediation
+  text ("remove dangling DNS record first"); vitest coverage.
+
 ### Added (Phase 2.1)
 
 - Egress-abuse test suite (`tests/v3/test_egress_abuse.py`): non-JSON crt.sh
