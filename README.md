@@ -75,6 +75,7 @@ flowchart TD
 | Subdomain / port / DNS / SSL / WHOIS enumeration | ✅ works | Celery pipeline w/ retries + DLQ; per-target enrichment timeouts |
 | Discovery sources: crt.sh CT logs + bounded DNS brute-force | ✅ works | crt.sh passive; DNS brute-force is **active** and scope-gated; per-source cap + truncation surfaced |
 | Email-security discovery (SPF/DKIM/DMARC/MTA-STS/BIMI) | ✅ works | Passive DNS-only lookups; mail-evidence gating; findings with confidence + remediation |
+| Subdomain takeover (CNAME → claimable provider) | ✅ works | Passive DNS + active HTTP confirmation of dangling CNAMEs; mail-evidence gating; findings with confidence + remediation |
 | Optional key-based enrichment providers (Shodan/Censys/etc.) | 🔜 planned | Provider management API + Fernet-encrypted keys; no provider implementation shipped yet |
 | Findings + risk scoring (KEV/OSV, age, exposure) | ✅ works | KEV cached to disk (named volume in compose); OSV configurable |
 | Scan policies (cron / periodic) | ✅ works | Celery Beat + `run-now`; per-org policies |
