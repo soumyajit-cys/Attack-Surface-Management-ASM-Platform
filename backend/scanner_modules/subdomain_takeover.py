@@ -54,15 +54,19 @@ def _load_fingerprints() -> list[dict[str, Any]]:
     for entry in data.get("providers", []):
         cname_list = entry.get("cname", [])
         if not cname_list:
+            suffix = entry.get("cname_suffix", "")
+            if suffix:
+                cname_list = [suffix]
+        if not cname_list:
             continue
-        fingerprint = entry.get("fingerprint", "")
+        fingerprint = entry.get("fingerprint", "") or entry.get("unclaimed_body", "")
         if not fingerprint:
             continue
         providers.append({
-            "name": entry.get("service", "unknown"),
+            "name": entry.get("service", entry.get("name", "unknown")),
             "cname_suffixes": [c.lower().rstrip(".") for c in cname_list],
             "unclaimed_body": fingerprint,
-            "verified_claimable": bool(entry.get("vulnerable", False)),
+            "verified_claimable": bool(entry.get("verified_claimable", entry.get("vulnerable", False))),
         })
     return providers
 
