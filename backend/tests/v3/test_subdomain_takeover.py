@@ -101,7 +101,8 @@ def _patch_dns(monkeypatch, txt_map=None, mx_map=None, cname_map=None, a_map=Non
 
 
 def _patch_http(monkeypatch, http_map=None):
-    """Patch httpx.Client.get to return canned responses."""
+    """Patch httpx.Client.get and utils.egress.resolve_validated_ips to
+    return canned responses."""
     http_map = http_map or {}
     import httpx
 
@@ -119,6 +120,12 @@ def _patch_http(monkeypatch, http_map=None):
         return _Response(404, "Not Found")
 
     monkeypatch.setattr(httpx.Client, "get", lambda self, url, headers=None, **kwargs: fake_get(url, headers))
+
+    def fake_resolve_validated_ips(host, port=80):
+        # Return the pinned IP for any host
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr("utils.egress.resolve_validated_ips", fake_resolve_validated_ips)
 
 
 # ── Unit tests: parsing/matching helpers ───────────────────────────────
