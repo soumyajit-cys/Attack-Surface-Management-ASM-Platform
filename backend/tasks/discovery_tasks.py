@@ -655,6 +655,8 @@ def _generate_and_persist_findings(
     # directly (they carry their own confidence field which is stored in
     # description if the Finding model gains a confidence column later).
     findings_data.extend(summary.get("email_security_findings", []))
+    # Takeover findings are also in finding-dict shape; merge them directly.
+    findings_data.extend(summary.get("takeover_findings", []))
 
     new_findings: list[Finding] = []
 
