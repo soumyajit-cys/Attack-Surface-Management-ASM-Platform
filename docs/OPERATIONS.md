@@ -119,6 +119,39 @@ password reset just won't deliver.
 - Severity/CVE mapping flows only through existing OSV/KEV enrichment — this
   module never invents EOL or CVE data.
 
+## Subdomain takeover scanner operations (Phase 3, module 2)
+
+- `SUBDOMAIN_TAKEOVER_ENABLED` (default `true`): set `false` to disable the
+  takeover discovery phase entirely. Disabled modules report
+  `outcome=disabled` in `sentinelasm_scanner_module_runs_total` and produce
+  no findings.
+- `SUBDOMAIN_TAKEOVER_TIMEOUT_SECONDS` (default `10.0`): per-DNS/HTTP query
+  timeout for takeover lookups.
+- `SUBDOMAIN_TAKEOVER_MAX_CONCURRENCY` (default `10`): max concurrent
+  takeover lookups per scan.
+- `SUBDOMAIN_TAKEOVER_MAX_HOSTS_PER_SCAN` (default `100`): max subdomains
+  checked for takeover per scan; exceeded hosts are truncated and reported
+  via `truncated=true` on the scan record.
+- `SUBDOMAIN_TAKEOVER_MAX_REDIRECTS` (default `3`): max HTTP redirects
+  followed during takeover confirmation; each hop is re-validated through
+  the SSRF pin.
+- `SUBDOMAIN_TAKEOVER_MAX_BODY_BYTES` (default `65536`): max response body
+  bytes read during takeover confirmation.
+- All outbound connections go through the SSRF pin (`utils.egress`).
+  Path A (DNS-only NXDOMAIN confirmation) makes no connections to target
+  services. Path B (HTTP confirmation) does a GET / to the subdomain's own
+  resolved IP with `Host=<subdomain>`; TLS verification is relaxed — see
+  the threat model for details.
+- Fingerprint data lives in `backend/scanner_modules/takeover_fingerprints.json`,
+  sourced from can-i-take-over-xyz. Providers marked
+  `verified_claimable: false` are carried through from the source but never
+  produce findings.
+- Findings carry `confidence` (≤ 0.85) and `dedupe_key`
+  (`subdomain_takeover:<provider_id>:<hostname>`). Rescans update existing
+  findings by `dedupe_key` rather than creating duplicates.
+- Severity is static per finding type (`high` for claimable providers,
+  `medium` for edge-case providers) — not derived from OSV/KEV enrichment.
+
 ## Tags and releases
 
 Single branch, tag-cut releases. **Nothing auto-publishes**: `docker-publish`
