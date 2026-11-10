@@ -38,6 +38,7 @@ from scanner_modules.subdomain_takeover import (
 )
 
 from app.scanning.context import ScanContext
+from app.scanning.registry import ScanPhase
 
 
 # ── Fixture helpers ──────────────────────────────────────────────────
@@ -60,8 +61,10 @@ def _make_dns_answers(records):
     class _Answer:
         def __init__(self, text):
             self._text = text
+
         def to_text(self):
             return self._text
+
     return [_Answer(s) for s in records]
 
 
@@ -177,9 +180,11 @@ class TestNxDomainConfirmed:
     def test_nxdomain_confirmed(self, monkeypatch):
         """First NXDOMAIN, second NXDOMAIN → True."""
         calls = []
+
         def fake_resolve(qname, rdtype, lifetime):
             calls.append(str(qname))
             raise dns.resolver.NXDOMAIN()
+
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_nxdomain_confirmed("ghost.example.com") is True
         assert len(calls) == 2
@@ -187,11 +192,13 @@ class TestNxDomainConfirmed:
     def test_nxdomain_then_resolves(self, monkeypatch):
         """First NXDOMAIN, second resolves → False (flapping)."""
         calls = []
+
         def fake_resolve(qname, rdtype, lifetime):
             calls.append(str(qname))
             if len(calls) == 1:
                 raise dns.resolver.NXDOMAIN()
             return _make_dns_answers(["93.184.216.34"])
+
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_nxdomain_confirmed("flappy.example.com") is False
 
@@ -199,6 +206,7 @@ class TestNxDomainConfirmed:
         """SERVFAIL is not NXDOMAIN."""
         def fake_resolve(qname, rdtype, lifetime):
             raise dns.exception.DNSException("SERVFAIL")
+
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_nxdomain_confirmed("servfail.example.com") is False
 
@@ -206,6 +214,7 @@ class TestNxDomainConfirmed:
         """Timeout is not NXDOMAIN."""
         def fake_resolve(qname, rdtype, lifetime):
             raise dns.exception.Timeout()
+
         monkeypatch.setattr(dns.resolver, "resolve", fake_resolve)
         assert _query_nxdomain_confirmed("timeout.example.com") is False
 
@@ -214,8 +223,9 @@ class TestNxDomainConfirmed:
 
 
 class TestTakeoverModule:
-    def test_no_active_probe_without_pin(self, monkeypatch):
-        """DNS brute-force runs NO modules when domain has no pinned IP."""
+    def test_no_active_probe_without_pin(self, db, org_factory, monkeypatch):
+        """DNS brute-force / takeover runs NO active modules when domain
+        has no pinned IP (unverified)."""
         import tasks.discovery_tasks as dt
 
         org, _ = org_factory("Takeover Org", "takeoveruser", "takeover@example.com")
@@ -246,7 +256,6 @@ class TestTakeoverModule:
             db, scan, persisted, "example.com", None, "full"
         )
 
-        # Only passive email_security may run without a pin; no ACTIVE phases.
         active_phases = {
             ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
             ScanPhase.FINGERPRINT,
@@ -327,7 +336,7 @@ class TestTakeoverModule:
         results = asyncio.run(ssd.discover_subdomains("example.com"))
 
         brute_hosts = [r for r in results if r.get("source") == "dns_brute"]
-        assert len(brute_hosts) == 3
+        assert len(brute_hosts) == 3, f"expected 3 capped hosts, got {len(brute_hosts)}"
         for h in brute_hosts:
             assert h["truncated"] is True
             assert h["truncated_count"] > 0
@@ -432,7 +441,7 @@ class TestTakeoverModule:
         assert findings1[0]["dedupe_key"] == findings2[0]["dedupe_key"]
         assert findings1[0]["dedupe_key"] == "subdomain_takeover:GitHub Pages:www.example.com"
 
-    def test_scope_gating_no_probe_unverified(self, monkeypatch):
+    def test_scope_gating_no_probe_unverified(self, db, org_factory, monkeypatch):
         """No probe for unverified (unpinned) domains."""
         import tasks.discovery_tasks as dt
 
@@ -474,13 +483,3 @@ class TestTakeoverModule:
             )
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
-
-
-# ── Import org_factory for tests that need it ──────────────────────────
-
-
-def org_factory(name, username, email):
-    from models import Organization, User
-    org = Organization(name=name)
-    from tests.v3.test_discovery_pipeline import _create_org_and_user
-    return _create_org_and_user(org, username, email)
