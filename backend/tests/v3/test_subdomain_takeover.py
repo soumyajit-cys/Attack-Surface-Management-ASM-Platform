@@ -61,6 +61,7 @@ def _make_dns_answers(records):
     class _Answer:
         def __init__(self, text):
             self._text = text
+            self.target = self
 
         def to_text(self):
             return self._text
