@@ -1,4 +1,4 @@
-"""Subdomain takeover scanner module (registry phase ``dns``).
+"""Subdomain takeover scanner module (registry phase ``enrichment``).
 
 Detects dangling CNAMEs pointing to claimable third-party providers
 (e.g. GitHub Pages, Heroku, S3). Two detection paths:
@@ -9,13 +9,14 @@ Detects dangling CNAMEs pointing to claimable third-party providers
   + SSRF-pinned address with Host=<subdomain>. Matches the response body
   against provider-specific "unclaimed" literal substrings.
 
-Both paths are gated on verified domain + scope. The CNAME chain is walked
+Both paths are gated on verified domain + scope. Path A requires no pinned
+IP; Path B does its own SSRF-pinned resolution. The CNAME chain is walked
 with a depth cap (~8) and loop detection; every hop is matched against the
-provider list.
+provider fingerprint list.
 
-Findings carry a ``confidence`` field (0.0-0.85) and a stable
-``dedupe_key``. Severity/CVE mapping flows only through existing OSV/KEV
-enrichment - this module never invents EOL or CVE data.
+Findings carry a ``confidence`` field (<= 0.85) and a stable
+``dedupe_key``. Severity is static per provider type - this module never
+invents EOL or CVE data.
 
 Labels: module and outcome only - never a domain or hostname.
 """
@@ -23,7 +24,6 @@ Labels: module and outcome only - never a domain or hostname.
 from __future__ import annotations
 
 import asyncio
-import time
 import json
 import logging
 import socket
@@ -52,14 +52,17 @@ def _load_fingerprints() -> list[dict[str, Any]]:
         data = json.load(fh)
     providers: list[dict[str, Any]] = []
     for entry in data.get("providers", []):
-        cname_suffix = entry.get("cname_suffix", "")
-        if not cname_suffix:
+        cname_list = entry.get("cname", [])
+        if not cname_list:
+            continue
+        fingerprint = entry.get("fingerprint", "")
+        if not fingerprint:
             continue
         providers.append({
-            "name": entry.get("name", "unknown"),
-            "cname_suffix": cname_suffix.lower(),
-            "unclaimed_body": entry.get("unclaimed_body", ""),
-            "verified_claimable": bool(entry.get("verified_claimable", False)),
+            "name": entry.get("service", "unknown"),
+            "cname_suffixes": [c.lower().rstrip(".") for c in cname_list],
+            "unclaimed_body": fingerprint,
+            "verified_claimable": bool(entry.get("vulnerable", False)),
         })
     return providers
 
@@ -123,24 +126,14 @@ def _cname_matches_provider(host: str, provider: dict[str, Any]) -> bool:
     """Label-boundary suffix match: host == suffix or host.endswith('.' + suffix).
 
     No regex is used, so ``evilgithub.io`` does not match ``github.io``.
+    Host matching is case-insensitive.
     """
-    suffix = provider["cname_suffix"]
     host = host.lower().rstrip(".")
-    suffix = suffix.lower().rstrip(".")
-    return host == suffix or host.endswith("." + suffix)
-
-
-def _query_txt(domain: str, record: str) -> list[str]:
-    """Query a single DNS TXT record."""
-    try:
-        answers = dns.resolver.resolve(record, "TXT", lifetime=DNS_TIMEOUT)
-        return [r.to_text().strip('"') for r in answers]
-    except dns.exception.NoAnswer:
-        return []
-    except dns.resolver.NXDOMAIN:
-        return []
-    except dns.exception.DNSException:
-        return []
+    for suffix in provider["cname_suffixes"]:
+        suffix = suffix.lower().rstrip(".")
+        if host == suffix or host.endswith("." + suffix):
+            return True
+    return False
 
 
 def _query_nxdomain_confirmed(domain: str) -> bool:
@@ -254,7 +247,7 @@ def _match_provider(
         if not matched:
             continue
 
-        # Severity/confidence based on claimable status and signal strength.
+        # Severity/confidence based on claimable status.
         if provider["verified_claimable"]:
             severity = "high"
             confidence = 0.85
