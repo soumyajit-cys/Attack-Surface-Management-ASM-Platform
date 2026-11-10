@@ -1,182 +1,225 @@
 {
-  "source": "https://github.com/EdOverflow/can-i-take-over-xyz",
-  "commit": "0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b",
-  "import_date": "2026-11-07",
+  "source": "https://raw.githubusercontent.com/EdOverflow/can-i-take-over-xyz/master/fingerprints.json",
+  "commit": "6d4a4168552366b5050fff054017db9116873621",
+  "import_date": "2026-11-10",
+  "license": "CC BY 4.0",
   "providers": [
     {
       "name": "GitHub Pages",
       "cname_suffix": "github.io",
       "unclaimed_body": "There isn't a GitHub Pages site here",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "verified_claimable": false,
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Heroku",
       "cname_suffix": "herokuapp.com",
       "unclaimed_body": "No such app",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "verified_claimable": false,
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Amazon S3",
       "cname_suffix": "s3.amazonaws.com",
-      "unclaimed_body": "NoSuchBucket",
+      "unclaimed_body": "The specified bucket does not exist",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Tumblr",
       "cname_suffix": "domains.tumblr.com",
       "unclaimed_body": "We couldn't find what you're looking for.",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Shopify",
       "cname_suffix": "myshopify.com",
       "unclaimed_body": "Sorry, this shop is currently unavailable.",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
-    },
-    {
-      "name": "WordPress",
-      "cname_suffix": "wordpress.com",
-      "unclaimed_body": "Do you want to register .wordpress.com?",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "verified_claimable": false,
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Bitbucket",
       "cname_suffix": "bitbucket.io",
       "unclaimed_body": "Repository not found",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Help Scout",
       "cname_suffix": "helpscoutdocs.com",
       "unclaimed_body": "No settings were found for this company:",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
-    },
-    {
-      "name": "Desk",
-      "cname_suffix": "desk.com",
-      "unclaimed_body": "We do not have a record of this account.",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
-    },
-    {
-      "name": "SurveyMonkey",
-      "cname_suffix": "surveymonkey.com",
-      "unclaimed_body": "Please check your URL or contact support",
-      "verified_claimable": false,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Fastly",
       "cname_suffix": "a.ssl.fastly.net",
       "unclaimed_body": "Fastly error: unknown domain:",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
       "name": "StatusPage",
       "cname_suffix": "statuspage.io",
       "unclaimed_body": "No such status page",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Pantheon",
       "cname_suffix": "pantheonsite.io",
-      "unclaimed_body": "The gods are wise, but they do not speak here.",
+      "unclaimed_body": "404 error unknown site!",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
-      "name": "Acquia",
-      "cname_suffix": "acquia-sites.com",
-      "unclaimed_body": "The site you are looking for is not found.",
+      "name": "Pingdom",
+      "cname_suffix": "",
+      "unclaimed_body": "Sorry, couldn't find the status page",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
-      "name": "CloudFront",
-      "cname_suffix": "cloudfront.net",
-      "unclaimed_body": "Bad request",
+      "name": "Readme.io",
+      "cname_suffix": "readme.io",
+      "unclaimed_body": "The creators of this project are still working on making everything perfect!",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
-      "name": "Cargo",
-      "cname_suffix": "cargocollective.com",
-      "unclaimed_body": "Not found",
+      "name": "Readthedocs",
+      "cname_suffix": "",
+      "unclaimed_body": "The link you have followed or the URL that you entered does not exist.",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
-      "name": "Read the Docs",
-      "cname_suffix": "readthedocs.io",
-      "unclaimed_body": "You've reached a site that has been deleted or has not been set up yet.",
+      "name": "Strikingly",
+      "cname_suffix": "s.strikinglydns.com",
+      "unclaimed_body": "PAGE NOT FOUND.",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "SurveySparrow",
+      "cname_suffix": "surveysparrow.com",
+      "unclaimed_body": "Account not found.",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
     },
     {
       "name": "Surge.sh",
-      "cname_suffix": "surge.sh",
+      "cname_suffix": "na-west1.surge.sh",
       "unclaimed_body": "project not found",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
-      "name": "Freshdesk",
-      "cname_suffix": "freshdesk.com",
-      "unclaimed_body": "Your portal is not yet active",
+      "name": "Uberflip",
+      "cname_suffix": "read.uberflip.com",
+      "unclaimed_body": "The URL you've accessed does not provide a hub.",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Uptimerobot",
+      "cname_suffix": "stats.uptimerobot.com",
+      "unclaimed_body": "page not found",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Vercel",
+      "cname_suffix": "",
+      "unclaimed_body": "DEPLOYMENT_NOT_FOUND.",
+      "verified_claimable": false,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Wordpress",
+      "cname_suffix": "wordpress.com",
+      "unclaimed_body": "Do you want to register .*.wordpress.com?",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Cargo Collective",
+      "cname_suffix": "",
+      "unclaimed_body": "404 Not Found",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Frontify",
+      "cname_suffix": "",
+      "unclaimed_body": "404 - Page Not Found` `Oops\u2026 looks like you got lost",
+      "verified_claimable": false,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Ghost",
+      "cname_suffix": "ghost.io",
+      "unclaimed_body": "Site unavailable\\.&#124;Failed to resolve DNS path for this host",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Help Juice",
+      "cname_suffix": "helpjuice.com",
+      "unclaimed_body": "We could not find what you're looking for.",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "LaunchRock",
+      "cname_suffix": "launchrock.com",
+      "unclaimed_body": "HTTP_STATUS=500",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Ngrok",
+      "cname_suffix": "ngrok.io",
+      "unclaimed_body": "Tunnel .*.ngrok.io not found",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "SmartJobBoard",
+      "cname_suffix": "52.16.160.97",
+      "unclaimed_body": "This job board website is either expired or its domain name is invalid.",
+      "verified_claimable": true,
+      "last_verified": "2026-11-10"
+    },
+    {
+      "name": "Tilda",
+      "cname_suffix": "",
+      "unclaimed_body": "Please renew your subscription",
+      "verified_claimable": false,
+      "last_verified": "2026-11-10"
     },
     {
       "name": "UserVoice",
-      "cname_suffix": "uservoice.com",
+      "cname_suffix": "",
       "unclaimed_body": "This UserVoice subdomain is currently available!",
       "verified_claimable": true,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
-      "name": "Tictail",
-      "cname_suffix": "tictail.com",
-      "unclaimed_body": "Tictail is now part of Stripe",
+      "name": "Webflow",
+      "cname_suffix": "",
+      "unclaimed_body": "The page you are looking for doesn't exist or has been moved.",
       "verified_claimable": false,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     },
     {
-      "name": "Smartling",
-      "cname_suffix": "smartling.com",
-      "unclaimed_body": "This domain is not active on Smartling.",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
-    },
-    {
-      "name": "Teamwork",
-      "cname_suffix": "teamwork.com",
-      "unclaimed_body": "Page not found",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
-    },
-    {
-      "name": "VaultPress",
-      "cname_suffix": "vaultpress.com",
-      "unclaimed_body": "No such blog",
-      "verified_claimable": true,
-      "last_verified": "2026-11-07"
-    },
-    {
-      "name": "Zendesk",
-      "cname_suffix": "zendesk.com",
-      "unclaimed_body": "Help Center Closed",
+      "name": "Wix",
+      "cname_suffix": "",
+      "unclaimed_body": "Looks Like This Domain Isn't Connected To A Website Yet!",
       "verified_claimable": false,
-      "last_verified": "2026-11-07"
+      "last_verified": "2026-11-10"
     }
   ]
 }
