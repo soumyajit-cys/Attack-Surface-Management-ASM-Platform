@@ -121,7 +121,7 @@ def _cname_chain(domain: str) -> list[str]:
             raise
         if not answers:
             break
-        current = answers[0].target.to_text().rstrip(".").lower()
+        current = answers[0].to_text().rstrip(".").lower()
 
     return chain
 
