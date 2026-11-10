@@ -361,7 +361,7 @@ class TestTakeoverModule:
             },
         )
         _patch_http(monkeypatch, http_map={
-            "www.example.com": {"status_code": 200, "body": "There isn't a GitHub Pages site here"},
+            "github.io": {"status_code": 200, "body": "There isn't a GitHub Pages site here"},
         })
         ctx = _make_ctx(domain="www.example.com", subdomains=["www.example.com"])
         result = asyncio.run(subdomain_takeover_module(ctx))
@@ -385,7 +385,7 @@ class TestTakeoverModule:
             },
         )
         _patch_http(monkeypatch, http_map={
-            "shop.example.com": {"status_code": 200, "body": "Sorry, this shop is currently unavailable."},
+            "myshopify.com": {"status_code": 200, "body": "Sorry, this shop is currently unavailable."},
         })
         ctx = _make_ctx(domain="shop.example.com", subdomains=["shop.example.com"])
         result = asyncio.run(subdomain_takeover_module(ctx))
@@ -410,8 +410,8 @@ class TestTakeoverModule:
             },
         )
         _patch_http(monkeypatch, http_map={
-            "www.example.com": {"status_code": 200, "body": "There isn't a GitHub Pages site here"},
-            "shop.example.com": {"status_code": 200, "body": "Sorry, this shop is currently unavailable."},
+            "github.io": {"status_code": 200, "body": "There isn't a GitHub Pages site here"},
+            "myshopify.com": {"status_code": 200, "body": "Sorry, this shop is currently unavailable."},
         })
         ctx = _make_ctx(domain="example.com", subdomains=["www.example.com", "shop.example.com"])
         result = asyncio.run(subdomain_takeover_module(ctx))
@@ -435,7 +435,7 @@ class TestTakeoverModule:
             },
         )
         _patch_http(monkeypatch, http_map={
-            "www.example.com": {"status_code": 200, "body": "There isn't a GitHub Pages site here"},
+            "github.io": {"status_code": 200, "body": "There isn't a GitHub Pages site here"},
         })
         ctx = _make_ctx(domain="example.com", subdomains=["www.example.com"])
 
