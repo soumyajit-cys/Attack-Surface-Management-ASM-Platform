@@ -249,6 +249,15 @@ def run_discovery(self, scan_id: int, scope: str = "full") -> dict:
                 "header_issues": scan_summary["headers"]["issues"],
             },
         )
+        # Add takeover truncation to discovery_meta if the cap was hit.
+        if scan_summary.get("takeover_truncated"):
+            existing_meta = scan.discovery_meta or {}
+            existing_meta.setdefault("truncated_sources", {})
+            existing_meta["truncated_sources"]["subdomain_takeover"] = (
+                scan_summary.get("takeover_truncated_count", 0)
+            )
+            scan.discovery_meta = existing_meta
+            db.flush()
 
         # ── Phase 3: Finding synthesis + risk scoring ─────────────────────
         asset_id = persisted["asset_id"]
