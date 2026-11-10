@@ -134,4 +134,85 @@ describe('Findings page', () => {
 
     await screen.findByText('SPF record not published')
   })
+
+  it('renders subdomain_takeover findings with remediation text', async () => {
+    vi.mocked(api.getFindings).mockResolvedValue({
+      total: 2,
+      page: 1,
+      page_size: 20,
+      items: [
+        {
+          id: 1,
+          title: 'Subdomain takeover: www.example.com → GitHub Pages',
+          severity: 'high',
+          category: 'subdomain_takeover',
+          description:
+            'www.example.com CNAME chain points to GitHub Pages (www.example.com.github.io), which appears unclaimed.',
+          recommendation:
+            'Remove the dangling DNS record first. If the service is still needed, re-provision the resource and re-point the CNAME.',
+          confidence: 0.85,
+          dedupe_key: 'subdomain_takeover:GitHub Pages:www.example.com',
+          asset_id: 1,
+          asset_name: 'example.com',
+          created_at: '2026-11-07T00:00:00Z',
+        },
+        {
+          id: 2,
+          title: 'Subdomain takeover: assets.example.com → Heroku',
+          severity: 'medium',
+          category: 'subdomain_takeover',
+          description:
+            'assets.example.com CNAME chain points to Heroku (assets.example.com.herokuapp.com), which appears unclaimed.',
+          recommendation:
+            'Remove the dangling DNS record first. If the service is still needed, re-provision the resource and re-point the CNAME.',
+          confidence: 0.60,
+          dedupe_key: 'subdomain_takeover:Heroku:assets.example.com',
+          asset_id: 1,
+          asset_name: 'example.com',
+          created_at: '2026-11-07T00:00:00Z',
+        },
+      ],
+    })
+    renderWithRouter(<Findings />)
+
+    await screen.findByText('Subdomain takeover: www.example.com → GitHub Pages')
+    await screen.findByText('Subdomain takeover: assets.example.com → Heroku')
+    expect(await screen.findAllByText('subdomain_takeover')).toHaveLength(2)
+    expect(await screen.findByText('High')).toBeInTheDocument()
+    expect(await screen.findByText('Medium')).toBeInTheDocument()
+  })
+
+  it('displays remediation text for takeover findings', async () => {
+    vi.mocked(api.getFindings).mockResolvedValue({
+      total: 1,
+      page: 1,
+      page_size: 20,
+      items: [
+        {
+          id: 1,
+          title: 'Subdomain takeover: www.example.com → GitHub Pages',
+          severity: 'high',
+          category: 'subdomain_takeover',
+          description:
+            'www.example.com CNAME chain points to GitHub Pages (www.example.com.github.io), which appears unclaimed.',
+          recommendation:
+            'Remove the dangling DNS record first. If the service is still needed, re-provision the resource and re-point the CNAME.',
+          confidence: 0.85,
+          dedupe_key: 'subdomain_takeover:GitHub Pages:www.example.com',
+          asset_id: 1,
+          asset_name: 'example.com',
+          created_at: '2026-11-07T00:00:00Z',
+        },
+      ],
+    })
+    renderWithRouter(<Findings />)
+
+    await screen.findByText('Subdomain takeover: www.example.com → GitHub Pages')
+    expect(
+      await screen.findByText('Remove the dangling DNS record first'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText('re-provision the resource and re-point the CNAME'),
+    ).toBeInTheDocument()
+  })
 })
