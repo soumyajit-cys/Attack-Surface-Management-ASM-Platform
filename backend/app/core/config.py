@@ -157,6 +157,12 @@ class Settings(BaseSettings):
     email_security_timeout_seconds: float = 5.0
     email_security_max_queries: int = 12
 
+    # Subdomain takeover toggles and per-module bounds (Phase 3, module 2).
+    subdomain_takeover_enabled: bool = True
+    subdomain_takeover_timeout_seconds: float = 10.0
+    subdomain_takeover_max_concurrency: int = 10
+    subdomain_takeover_max_hosts_per_scan: int = 100
+
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
     # and the direct peer is used. Set behind nginx/traefik so the limiter,
