@@ -23,6 +23,7 @@ Updated as hardening lands; each row names the control and where it lives.
 | crt.sh CT-log query | Registered domain name sent to crt.sh (public Certificate Transparency log) to enumerate subdomains | SSRF-pinned fetch via `utils.egress.fetch_url_validated`; rate-limited (Redis token bucket, fail-closed); per-domain cache; no credentials sent | Mitigated |
 | Optional third-party provider (Shodan/Censys/etc.) | Domain + API key sent to the provider | Provider management API (`enrichment:manage`, admin-only); key Fernet-encrypted at rest; `acknowledge_data_sharing=true` required to enable; key never returned by API or logged | 🔜 planned (no provider implementation shipped) |
 | Email-security discovery (SPF/DKIM/DMARC/MTA-STS/BIMI) | Domain name sent to public DNS resolvers (read-only TXT/MX queries) | Passive DNS only — no connections to target services; mail-evidence gating (MX/SPF/DMARC present required for medium findings); bounded DKIM selector probing (`EMAIL_SECURITY_MAX_QUERIES`, default 12) | Mitigated |
+| Subdomain takeover (CNAME → claimable provider) | Domain names sent to public DNS resolvers (CNAME lookups); optional GET / to subdomain's own resolved IP with Host=<subdomain> | Passive DNS only for Path A (NXDOMAIN confirmation); Path B uses SSRF-pinned fetch with `Host=<subdomain>`, no cookies/credentials, response size capped at 64 KB, TLS verification relaxed (see T14); fingerprint data from cited upstream (can-i-take-over-xyz); providers not `verified_claimable` are never flagged | Mitigated |
 
 ## Threats and controls
 
