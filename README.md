@@ -266,6 +266,12 @@ Settings field without documenting it fails `make check`.
 | `EMAIL_SECURITY_ENABLED` | `true` | No | Enable the passive email-security scanner module (SPF/DKIM/DMARC/MTA-STS/BIMI DNS lookups). |
 | `EMAIL_SECURITY_TIMEOUT_SECONDS` | `5.0` | No | DNS query timeout per record type for email-security lookups (seconds). |
 | `EMAIL_SECURITY_MAX_QUERIES` | `12` | No | Max DNS queries per domain for email-security lookups (bounds selector probing). |
+| `SUBDOMAIN_TAKEOVER_ENABLED` | `true` | No | Enable the passive/active subdomain takeover scanner module (CNAME → claimable provider detection). |
+| `SUBDOMAIN_TAKEOVER_TIMEOUT_SECONDS` | `10.0` | No | DNS/HTTP query timeout per lookup for takeover scanning (seconds). |
+| `SUBDOMAIN_TAKEOVER_MAX_CONCURRENCY` | `10` | No | Max concurrent takeover lookups per scan. |
+| `SUBDOMAIN_TAKEOVER_MAX_HOSTS_PER_SCAN` | `100` | No | Max subdomains checked for takeover per scan; exceeded hosts are truncated. |
+| `SUBDOMAIN_TAKEOVER_MAX_REDIRECTS` | `3` | No | Max HTTP redirects followed during takeover confirmation (each re-validated via SSRF pin). |
+| `SUBDOMAIN_TAKEOVER_MAX_BODY_BYTES` | `65536` | No | Max response body bytes read during takeover confirmation. |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
@@ -279,9 +285,9 @@ Frontend: set `VITE_API_BASE` (e.g. `https://api.example.com/api/v1`) to point a
 
 | Scope | Registry phases | Description |
 |-------|----------------|-------------|
-| `passive` | `discovery`, `dns` | crt.sh CT logs + passive email-security DNS lookups (SPF/DKIM/DMARC/MTA-STS/BIMI). Zero packets to target ports/services. |
-| `active` | `discovery`, `dns`, `port`, `ssl`, `header` | Passive + port scanning, TLS inspection, HTTP header checks. All active probing requires a verified domain + SSRF-pinned IP. |
-| `full` | `discovery`, `dns`, `port`, `ssl`, `header`, `fingerprint` | Active + passive tech fingerprinting (headers/TLS/HTML mapped to CVE enrichment). CVE enrichment (OSV.dev) enabled. |
+| `passive` | `discovery`, `email_security` | crt.sh CT logs + passive email-security DNS lookups (SPF/DKIM/DMARC/MTA-STS/BIMI). Zero packets to target ports/services. |
+| `active` | `discovery`, `email_security`, `port`, `ssl`, `header` | Passive + port scanning, TLS inspection, HTTP header checks. All active probing requires a verified domain + SSRF-pinned IP. |
+| `full` | `discovery`, `email_security`, `port`, `ssl`, `header`, `fingerprint` | Active + passive tech fingerprinting (headers/TLS/HTML mapped to CVE enrichment). CVE enrichment (OSV.dev) enabled. |
 
 ### Security model in one paragraph
 
