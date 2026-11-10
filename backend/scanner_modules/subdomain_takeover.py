@@ -272,7 +272,7 @@ def _match_provider(
     return None
 
 
-@scanner_module("subdomain_takeover", phase="dns", order=2)
+@scanner_module("subdomain_takeover", phase="email_security", order=2)
 async def subdomain_takeover_module(ctx: ScanContext) -> dict:
     """Passive + active subdomain takeover detection for *ctx.domain*.
 
