@@ -23,9 +23,11 @@ Labels: module and outcome only - never a domain or hostname.
 from __future__ import annotations
 
 import asyncio
+import time
 import json
 import logging
 import socket
+import time
 from pathlib import Path
 from typing import Any
 
@@ -156,7 +158,7 @@ def _query_nxdomain_confirmed(domain: str) -> bool:
     # Re-confirm after a short delay to avoid false positives from
     # transient caching or flapping.
     try:
-        asyncio.sleep(NXDOMAIN_RECONFIRM_DELAY)
+        time.sleep(NXDOMAIN_RECONFIRM_DELAY)
         dns.resolver.resolve(domain, "A", lifetime=DNS_TIMEOUT)
         return False  # resolves on retry
     except dns.resolver.NXDOMAIN:
