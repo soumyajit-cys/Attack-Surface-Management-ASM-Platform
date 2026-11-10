@@ -162,6 +162,8 @@ class Settings(BaseSettings):
     subdomain_takeover_timeout_seconds: float = 10.0
     subdomain_takeover_max_concurrency: int = 10
     subdomain_takeover_max_hosts_per_scan: int = 100
+    subdomain_takeover_max_redirects: int = 3
+    subdomain_takeover_max_body_bytes: int = 65536
 
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
