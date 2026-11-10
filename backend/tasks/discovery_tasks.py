@@ -471,6 +471,7 @@ def _new_summary(scan_registry) -> dict:
         "ssl_findings": [],
         "header_findings": [],
         "email_security_findings": [],
+        "takeover_findings": [],
         "unpinned_skipped": [],
         # Template scanning is unwired until Phase 4 (see
         # services/findings/finding_engine.run_nuclei_scan): always skipped.
@@ -533,6 +534,29 @@ def _scan_targets(
 
     for sub in targets[:MAX_PORT_SUBDOMAINS]:
         host = sub.subdomain
+
+        # ── Subdomain takeover (Phase A: DNS-only NXDOMAIN check;
+        #    Path B: HTTP via SSRF-pinned fetch) ──────────────────────
+        # Path A runs for all subdomains (no pinned IP needed); Path B
+        # does its own SSRF-pinned resolution inside the module.
+        takeover_ctx = ScanContext(
+            domain=host,
+            pinned_ip="",  # takeover does its own SSRF-pinned resolution
+            org_id=scan.organization_id,
+            scan_id=scan.id,
+            db=db,
+            scope=scope,
+            subdomains=[host],
+        )
+        takeover_results = _run_in_context(
+            takeover_ctx,
+            [m for m in registry.get_modules(phase=ScanPhase.EMAIL_SECURITY)
+             if m.name == "subdomain_takeover"],
+        )
+        if takeover_results.get("findings"):
+            summary["takeover_findings"].extend(takeover_results["findings"])
+        if takeover_results.get("truncated"):
+            summary["takeover_truncated"] = True
 
         try:
             pinned_ip = pinned_resolve(host)
