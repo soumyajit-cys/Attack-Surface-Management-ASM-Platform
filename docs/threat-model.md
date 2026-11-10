@@ -41,6 +41,7 @@ Updated as hardening lands; each row names the control and where it lives.
 | T10 | 2FA bypass / replay | TOTP ±1 window, constant-time compare, atomic per-step claim, single-use Redis challenge tokens, recovery codes hashed | Mitigated |
 | T11 | Data at rest exposure after DB theft | Alert integration credentials Fernet-encrypted; passwords bcrypt-hashed; API keys + TOTP secrets hashed | Mitigated |
 | T12 | Host port exposure of backing services | Postgres and Redis publish no host ports; nginx is the only published surface | Mitigated (batch 3) |
+| T13 | Subdomain takeover HTTP probe — TLS verification relaxed | TLS verification disabled for takeover HTTP probe (`verify=False`); no cookies/credentials sent; response body capped at 64 KB; probe targets only the subdomain's own resolved IP via SSRF pin | Mitigated (documented) |
 
 ## Accepted / out of scope
 
