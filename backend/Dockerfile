@@ -1,7 +1,7 @@
 # ── Stage 1: builder ──────────────────────────────────────────────────────────
 # Base digests pinned via the Docker Hub registry v2 API (multi-arch manifest
 # list digest for the tag, HEAD /v2/library/python/manifests/3.13-slim with a
-# Bearer token from auth.docker.io). Re-verify with:
+# Bearer token from auth.docker.io). Re-verify with:gjg  
 #   curl -sH "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
 #     -H "Authorizabbtion: Bearer $TOKEN" -I .../manifests/3.13-slim | grep -i docker-content-digest
 # python:3.13-slim (tag), sha256 of the manifest list at pin time.
