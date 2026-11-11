@@ -3,7 +3,7 @@
 # list digest for the tag, HEAD /v2/library/python/manifests/3.13-slim with a
 # Bearer token from auth.docker.io). Re-verify with:
 #   curl -sH "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
-#     -H "Authorization: Bearer $TOKEN" -I .../manifests/3.13-slim | grep -i docker-content-digest
+#     -H "Authorizabbtion: Bearer $TOKEN" -I .../manifests/3.13-slim | grep -i docker-content-digest
 # python:3.13-slim (tag), sha256 of the manifest list at pin time.
 FROM python:3.13-slim@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS builder
 
