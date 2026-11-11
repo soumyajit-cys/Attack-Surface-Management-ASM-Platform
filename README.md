@@ -13,7 +13,7 @@ OSV data, and pushes what matters to webhooks and email digests — all behind a
 ## Screenshots
 
 *Staged via `scripts/seed_demo.py` (FIXTURE data only, no network) into a
-`demo_` DB — then capture from `http://localhost:5173`. Placeholder until the is or
+`demo_` DB — then capture from `http://localhost:5173`. Placeholder until the 
 maintainer commits the capture.*
 
 <!-- 🚧 Screenshot placeholder dashboard -->
