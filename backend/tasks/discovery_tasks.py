@@ -481,6 +481,7 @@ def _new_summary(scan_registry) -> dict:
         "header_findings": [],
         "email_security_findings": [],
         "takeover_findings": [],
+        "tech_fingerprint_findings": [],
         "unpinned_skipped": [],
         # Template scanning is unwired until Phase 4 (see
         # services/findings/finding_engine.run_nuclei_scan): always skipped.
@@ -510,6 +511,7 @@ def _scan_targets(
     can_ssl = scope_policy.phase_allowed(scope, ScanPhase.SSL)
     can_headers = scope_policy.phase_allowed(scope, ScanPhase.HEADER)
     can_dns = scope_policy.phase_allowed(scope, ScanPhase.EMAIL_SECURITY)
+    can_fingerprint = scope_policy.phase_allowed(scope, ScanPhase.FINGERPRINT)
 
     # ── Passive email-security DNS lookups (runs once per domain,
     #    not per subdomain; allowed even in passive scope). ─────────────
