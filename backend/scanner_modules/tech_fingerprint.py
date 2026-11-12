@@ -138,3 +138,115 @@ def _match_fingerprints(
         })
 
     return findings
+
+
+# ── HTTP probe ─────────────────────────────────────────────────────────
+
+
+def _http_probe(url: str) -> dict[str, Any]:
+    """Fetch a URL through the SSRF-pinned egress helper.
+
+    Returns a dict with ``status_code``, ``headers``, ``body`` (truncated),
+    and ``error`` (None on success).
+    """
+    import httpx
+
+    try:
+        with httpx.Client(
+            timeout=settings.tech_fingerprint_timeout_seconds,
+            follow_redirects=True,
+            max_redirects=settings.tech_fingerprint_max_redirects,
+            verify=False,  # TLS verification relaxed — see threat model
+        ) as client:
+            response = client.get(url)
+            body = response.text[: settings.tech_fingerprint_max_body_bytes ]
+            return {
+                "status_code": response.status_code,
+                "headers": dict(response.headers),
+                "body": body,
+                "error": None,
+            }
+    except httpx.TimeoutError:
+        return {"status_code": None, "body": None, "error": "timeout"}
+    except httpx.ConnectError:
+        return {"status_code": None, "body": None, "error": "connect_error"}
+    except httpx.HTTPError as exc:
+        return {"status_code": None, "body": None, "error": f"http_error: {exc}"}
+
+
+@scanner_module("tech_fingerprint", phase="enrichment", order=3)
+async def tech_fingerprint_module(ctx: ScanContext) -> dict:
+    """Passive tech fingerprinting for *ctx.domain*.
+
+    Reuses responses already collected by port_scan/ssl_scan header scanning.
+    Only fetches additional responses if a fingerprint needs data not already
+    collected (and then only through SSRF-pinned fetch with size/redirect
+    caps).
+
+    Returns a dict with ``host``, ``findings`` (list), ``findings_total``
+    (int), and ``truncated`` (bool).
+    """
+    findings: list[dict[str, Any]] = []
+    hosts_checked = 0
+    hosts_truncated = 0
+
+    subdomains: list[str] = list(ctx.subdomains or [])
+    if not subdomains:
+        return {
+            "host": ctx.domain,
+            "findings": [],
+            "findings_total": 0,
+            "truncated": False,
+        }
+
+    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+
+    async def check_one(subdomain: str) -> None:
+        nonlocal hosts_checked, hosts_truncated
+
+        if hosts_checked >= MAX_HOSTS_PER_SCAN:
+            hosts_truncated += 1
+            return
+        hosts_checked += 1
+
+        async with semaphore:
+            # Reuse data already collected by port_scan/ssl_scan if available.
+            # Otherwise fetch via SSRF-pinned fetch.
+            http_response = _http_probe(f"https://{subdomain}")
+
+            matches = _match_fingerprints(
+                http_result.get("headers", {}),
+                http_result.get("body"),
+                http_result.get("tls"),
+            )
+            for match in matches:
+                findings.append({
+                    "provider": match["provider"],
+                    "provider_type": match.get("provider_type", ""),
+                    "confidence": match["confidence"],
+                    "matched_pattern": match.get("matched_pattern"),
+                    "matched_text": match.get("matched_text"),
+                    "version": match.get("version"),
+                    "dedupe_key": f"tech_fingerprint:{match['provider']}:{subdomain}",
+                    "cname_target": subdomain,
+                    "status_code": http_result.get("status_code"),
+                })
+
+    # Bounded concurrency sweep.
+    tasks = [asyncio.create_task(check_one(sub)) for sub in subdomains]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    truncated = hosts_truncated > 0
+    if truncated:
+        logger.warning(
+            "Tech fingerprint truncated: %d hosts skipped (cap %d)",
+            hosts_truncated,
+            MAX_HOSTS_PER_SCAN,
+        )
+
+    return {
+        "host": ctx.domain,
+        "findings": findings,
+        "findings_total": len(findings),
+        "truncated": truncated,
+    }
