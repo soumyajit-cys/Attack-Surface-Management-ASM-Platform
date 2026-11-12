@@ -630,6 +630,25 @@ def _scan_targets(
                 for issue in issues:
                     summary["header_findings"].append(issue)
 
+        if can_fingerprint:
+            # Tech fingerprint runs per-subdomain (passive identification).
+            fp_ctx = ScanContext(
+                domain=host,
+                pinned_ip=pinned_ip,
+                org_id=scan.organization_id,
+                scan_id=scan.id,
+                db=db,
+                scope=scope,
+                subdomains=[host],
+            )
+            fp_results = _run_in_context(
+                fp_ctx, registry.get_modules(phase=ScanPhase.FINGERPRINT)
+            )
+            for finding in fp_results.get("findings", []):
+                summary["tech_fingerprint_findings"].append(finding)
+            if fp_results.get("truncated"):
+                summary["tech_fingerprint_truncated"] = True
+
     return summary
 
 
@@ -668,6 +687,8 @@ def _generate_and_persist_findings(
     findings_data.extend(summary.get("email_security_findings", []))
     # Takeover findings are also in finding-dict shape; merge them directly.
     findings_data.extend(summary.get("takeover_findings", []))
+    # Tech fingerprint findings are also in finding-dict shape; merge them directly.
+    findings_data.extend(summary.get("tech_fingerprint_findings", []))
 
     new_findings: list[Finding] = []
 
