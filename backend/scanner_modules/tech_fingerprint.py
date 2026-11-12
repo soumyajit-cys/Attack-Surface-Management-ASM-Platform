@@ -30,3 +30,71 @@ from app.scanning.registry import scanner_module, ScanPhase
 from utils.egress import fetch_url_validated
 
 logger = logging.getLogger("sentinelasm.scanner.tech_fingerprint")
+
+# ── Fingerprint data ──────────────────────────────────────────────────
+
+_FINGERPRINTS_PATH = Path(__file__).parent / "tech_fingerprints.json"
+
+
+def _load_fingerprints() -> list[dict[str, Any]]:
+    """Load fingerprint data from tech_fingerprints.json."""
+    with _FINGERPRINTS_PATH.open("r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    providers: list[dict[str, Any]] = []
+    for entry in data.get("providers", []):
+        fp = {
+            "name": entry.get("name", "unknown"),
+            "provider_type": entry.get("provider_type", ""),
+            "header_patterns": entry.get("header_patterns", []),
+            "tls_patterns": entry.get("tls_patterns", []),
+            "html_patterns": entry.get("html_patterns", []),
+            "version_regex": entry.get("version_regex"),
+            "confidence": entry.get("confidence", 0.5),
+        }
+        if fp["provider_type"] and (fp["header_patterns"] or fp.get("tls_patterns") or fp.get("html_patterns")):
+            providers.append(fp)
+    return providers
+
+
+FINGERPRINTS = _load_fingerprints()
+
+# ── Constants ─────────────────────────────────────────────────────────
+
+# DNS/HTTP timeout per request (seconds).
+DNS_TIMEOUT = settings.tech_fingerprint_timeout_seconds
+
+# Maximum concurrent fingerprint lookups.
+MAX_CONCURRENCY = settings.tech_fingerprint_max_concurrency
+
+# Maximum hosts to scan per scan (truncation beyond this).
+MAX_HOSTS_PER_SCAN = settings.tech_fingerprint_max_hosts_per_scan
+
+# Maximum redirects to follow.
+MAX_REDIRECTS = settings.tech_fingerprint_max_redirects
+
+# Maximum body bytes to read per HTTP response.
+MAX_BODY_BYTES = settings.tech_fingerprint_max_body_bytes
+
+# ── DNS helpers ───────────────────────────────────────────────────────
+
+
+def _query_txt(domain: str, record: str) -> list[str]:
+    """Query a single DNS TXT record."""
+    try:
+        answers = dns.resolver.resolve(record, "TXT", lifetime=DNS_TIMEOUT)
+        return [r.to_text().strip('"') for r in answers]
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
+            dns.resolver.NoNameservers, dns.resolver.Timeout,
+            dns.exception.DNSException):
+        return []
+
+
+def _query_mx(domain: str) -> list[str]:
+    """Query MX records for *domain*.  Returns a list of MX targets."""
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=DNS_TIMEOUT)
+        return [r.exchange.to_text().rstrip(".") for r in answers]
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
+            dns.resolver.NoNameservers, dns.resolver.Timeout,
+            dns.exception.DNSException):
+        return []
