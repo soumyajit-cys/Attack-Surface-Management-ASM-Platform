@@ -1,371 +1,501 @@
-"""
-Tech fingerprint signatures for passive identification.
-
-This file is HAND-CURATED and NOT derived from any external database.
-Each entry maps a technology name to detection patterns and an optional
-version regex.
-
-Label semantics:
-  - provider: the name of the technology (e.g. "Apache", "WordPress").
-  - outcome: one of "ok" (detected), "error" (lookup failed).
-  These are the ONLY labels used for Prometheus metrics; never a domain or
-  hostname.
-"""
-
-FINGERPRINTS: list[dict] = [
-    # Web servers
+{
+  "providers": [
     {
-        "name": "Apache HTTP Server",
-        "category": "web_server",
-        "header_patterns": ["Apache/", "Apache/2"],
-        "version_regex": r"Apache/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Apache HTTP Server",
+      "category": "web_server",
+      "header_patterns": [
+        "Apache/",
+        "Apache/2"
+      ],
+      "version_regex": "Apache/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_server"
     },
     {
-        "name": "nginx",
-        "category": "web_server",
-        "header_patterns": ["nginx/", "nginx"],
-        "version_regex": r"nginx/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "nginx",
+      "category": "web_server",
+      "header_patterns": [
+        "nginx/",
+        "nginx"
+      ],
+      "version_regex": "nginx/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_server"
     },
     {
-        "name": "Microsoft IIS",
-        "category": "web_server",
-        "header_patterns": ["Microsoft-IIS/", "Microsoft IIS"],
-        "version_regex": r"Microsoft-IIS/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Microsoft IIS",
+      "category": "web_server",
+      "header_patterns": [
+        "Microsoft-IIS/",
+        "Microsoft IIS"
+      ],
+      "version_regex": "Microsoft-IIS/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_server"
     },
     {
-        "name": "nginx",
-        "category": "web_server",
-        "header_patterns": ["nginx/"],
-        "version_regex": r"nginx/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Application servers / frameworks
-    {
-        "name": "Node.js",
-        "category": "application_server",
-        "header_patterns": ["Express"],
-        "version_regex": r"Express/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "nginx",
+      "category": "web_server",
+      "header_patterns": [
+        "nginx/"
+      ],
+      "version_regex": "nginx/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_server"
     },
     {
-        "name": "Django",
-        "category": "application_server",
-        "html_patterns": ["django", "django-admin"],
-        "version_regex": r"Django/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Node.js",
+      "category": "application_server",
+      "header_patterns": [
+        "Express"
+      ],
+      "version_regex": "Express/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
     },
     {
-        "name": "Ruby on Rails",
-        "category": "application_server",
-        "header_patterns": ["Phusion Passenger"],
-        "version_regex": r"Rails/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Django",
+      "category": "application_server",
+      "html_patterns": [
+        "django",
+        "django-admin"
+      ],
+      "version_regex": "Django/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
     },
     {
-        "name": "PHP",
-        "category": "application_server",
-        "header_patterns": ["PHP/", "X-Powered-By: PHP/"],
-        "version_regex": r"PHP/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Content management systems
-    {
-        "name": "WordPress",
-        "category": "cms",
-        "html_patterns": ["wp-content", "wp-includes", "wordpress"],
-        "version_regex": r"WordPress/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Ruby on Rails",
+      "category": "application_server",
+      "header_patterns": [
+        "Phusion Passenger"
+      ],
+      "version_regex": "Rails/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
     },
     {
-        "name": "Drupal",
-        "category": "cms",
-        "html_patterns": ["drupal", "Drupal.settings"],
-        "version_regex": r"Drupal/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "PHP",
+      "category": "application_server",
+      "header_patterns": [
+        "PHP/",
+        "X-Powered-By: PHP/"
+      ],
+      "version_regex": "PHP/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
     },
     {
-        "name": "Joomla",
-        "category": "cms",
-        "html_patterns": ["joomla", "joomla!"],
-        "version_regex": r"Joomla!/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Java application servers
-    {
-        "name": "Apache Tomcat",
-        "category": "application_server",
-        "header_patterns": ["Apache Tomcat/", "Tomcat/"],
-        "version_regex": r"Apache Tomcat/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "WordPress",
+      "category": "cms",
+      "html_patterns": [
+        "wp-content",
+        "wp-includes",
+        "wordpress"
+      ],
+      "version_regex": "WordPress/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "cms"
     },
     {
-        "name": "Jetty",
-        "category": "application_server",
-        "header_patterns": ["Jetty/"],
-        "version_regex": r"Jetty/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Databases (via banner)
-    {
-        "name": "MySQL",
-        "category": "database",
-        "banner_patterns": ["MySQL"],
-        "version_regex": r"MySQL[^\d]*(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Drupal",
+      "category": "cms",
+      "html_patterns": [
+        "drupal",
+        "Drupal.settings"
+      ],
+      "version_regex": "Drupal/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "cms"
     },
     {
-        "name": "PostgreSQL",
-        "category": "database",
-        "banner_patterns": ["PostgreSQL"],
-        "version_regex": r"PostgreSQL/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Joomla",
+      "category": "cms",
+      "html_patterns": [
+        "joomla",
+        "joomla!"
+      ],
+      "version_regex": "Joomla!/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "cms"
     },
     {
-        "name": "Microsoft SQL Server",
-        "category": "database",
-        "banner_patterns": ["Microsoft SQL Server"],
-        "version_regex": r"(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Caching / proxy
-    {
-        "name": "Redis",
-        "category": "cache",
-        "banner_patterns": ["Redis"],
-        "version_regex": r"Redis\s+v?(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Apache Tomcat",
+      "category": "application_server",
+      "header_patterns": [
+        "Apache Tomcat/",
+        "Tomcat/"
+      ],
+      "version_regex": "Apache Tomcat/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
     },
     {
-        "name": "Memcached",
-        "category": "cache",
-        "banner_patterns": ["Memcached"],
-        "version_regex": r"Memcached/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # CDN / edge
-    {
-        "name": "Cloudflare",
-        "category": "cdn",
-        "header_patterns": ["cloudflare", "__cfduid", "__cf_bm"],
-        "version_regex": None,
-        "confidence": 0.6,
+      "name": "Jetty",
+      "category": "application_server",
+      "header_patterns": [
+        "Jetty/"
+      ],
+      "version_regex": "Jetty/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
     },
     {
-        "name": "Fastly",
-        "category": "cdn",
-        "header_patterns": ["Fastly"],
-        "version_regex": None,
-        "confidence": 0.6,
-    },
-    # Programming languages / runtimes
-    {
-        "name": "Node.js",
-        "category": "runtime",
-        "header_patterns": ["Node.js"],
-        "version_regex": r"Node\.js/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "MySQL",
+      "category": "database",
+      "banner_patterns": [
+        "MySQL"
+      ],
+      "version_regex": "MySQL[^\\d]*(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
     },
     {
-        "name": "Python",
-        "category": "runtime",
-        "header_patterns": ["Python/", "Python/3"],
-        "version_regex": r"Python/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "PostgreSQL",
+      "category": "database",
+      "banner_patterns": [
+        "PostgreSQL"
+      ],
+      "version_regex": "PostgreSQL/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
     },
     {
-        "name": "Ruby",
-        "category": "runtime",
-        "header_patterns": ["Phusion Passenger"],
-        "version_regex": r"Ruby/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Microsoft SQL Server",
+      "category": "database",
+      "banner_patterns": [
+        "Microsoft SQL Server"
+      ],
+      "version_regex": "(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
     },
     {
-        "name": "Go",
-        "category": "runtime",
-        "header_patterns": ["Go-http-server/"],
-        "version_regex": r"Go/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Databases / caching servers (banner-based)
-    {
-        "name": "Redis",
-        "category": "database",
-        "banner_patterns": ["Redis"],
-        "version_regex": r"Redis\s+v?(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Redis",
+      "category": "cache",
+      "banner_patterns": [
+        "Redis"
+      ],
+      "version_regex": "Redis\\s+v?(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "cache"
     },
     {
-        "name": "Memcached",
-        "category": "database",
-        "banner_patterns": ["memcached"],
-        "version_regex": r"memcached\s+(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Web application frameworks
-    {
-        "name": "Ruby on Rails",
-        "category": "web_framework",
-        "header_patterns": ["X-Rack-"],
-        "version_regex": r"Rails/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Memcached",
+      "category": "cache",
+      "banner_patterns": [
+        "Memcached"
+      ],
+      "version_regex": "Memcached/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "cache"
     },
     {
-        "name": "Django",
-        "category": "web_framework",
-        "header_patterns": ["django"],
-        "version_regex": r"Django/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Cloudflare",
+      "category": "cdn",
+      "header_patterns": [
+        "cloudflare",
+        "__cfduid",
+        "__cf_bm"
+      ],
+      "version_regex": null,
+      "confidence": 0.6,
+      "provider_type": "cdn"
     },
     {
-        "name": "Laravel",
-        "category": "web_framework",
-        "header_patterns": ["laravel_session", "X-Powered-By: Laravel"],
-        "version_regex": r"Laravel/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Fastly",
+      "category": "cdn",
+      "header_patterns": [
+        "Fastly"
+      ],
+      "version_regex": null,
+      "confidence": 0.6,
+      "provider_type": "cdn"
     },
     {
-        "name": "Ruby on Rails",
-        "category": "web_framework",
-        "header_patterns": ["X-Runtime"],
-        "version_regex": r"Rails/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Reverse proxies / load balancers
-    {
-        "name": "HAProxy",
-        "category": "reverse_proxy",
-        "header_patterns": ["haproxy"],
-        "version_regex": r"HA-Proxy/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Node.js",
+      "category": "runtime",
+      "header_patterns": [
+        "Node.js"
+      ],
+      "version_regex": "Node\\.js/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "runtime"
     },
     {
-        "name": "Varnish",
-        "category": "reverse_proxy",
-        "header_patterns": ["via: varnish", "X-Varnish"],
-        "version_regex": r"Varnish/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # CDN
-    {
-        "name": "Akamai",
-        "category": "cdn",
-        "header_patterns": ["akamai"],
-        "version_regex": None,
-        "confidence": 0.6,
+      "name": "Python",
+      "category": "runtime",
+      "header_patterns": [
+        "Python/",
+        "Python/3"
+      ],
+      "version_regex": "Python/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "runtime"
     },
     {
-        "name": "Cloudflare",
-        "category": "cdn",
-        "header_patterns": ["__cfduid", "__cf_bm", "cf-ray"],
-        "version_regex": None,
-        "confidence": 0.6,
-    },
-    # Databases
-    {
-        "name": "MySQL",
-        "category": "database",
-        "banner_patterns": ["MySQL"],
-        "version_regex": r"(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Ruby",
+      "category": "runtime",
+      "header_patterns": [
+        "Phusion Passenger"
+      ],
+      "version_regex": "Ruby/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "runtime"
     },
     {
-        "name": "PostgreSQL",
-        "category": "database",
-        "banner_patterns": ["PostgreSQL"],
-        "version_regex": r"(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Go",
+      "category": "runtime",
+      "header_patterns": [
+        "Go-http-server/"
+      ],
+      "version_regex": "Go/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "runtime"
     },
     {
-        "name": "Microsoft SQL Server",
-        "category": "database",
-        "banner_patterns": ["Microsoft SQL Server"],
-        "version_regex": r"(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Message queues
-    {
-        "name": "RabbitMQ",
-        "category": "message_queue",
-        "banner_patterns": ["RabbitMQ"],
-        "version_regex": None,
-        "confidence": 0.6,
+      "name": "Redis",
+      "category": "database",
+      "banner_patterns": [
+        "Redis"
+      ],
+      "version_regex": "Redis\\s+v?(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
     },
     {
-        "name": "Redis",
-        "category": "message_queue",
-        "banner_patterns": ["redis"],
-        "version_regex": None,
-        "confidence": 0.6,
-    },
-    # Version control
-    {
-        "name": "Git",
-        "category": "version_control",
-        "banner_patterns": ["git"],
-        "version_regex": r"git version (\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Container / orchestration
-    {
-        "name": "Docker",
-        "category": "container",
-        "banner_patterns": ["docker"],
-        "version_regex": r"Docker version (\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Memcached",
+      "category": "database",
+      "banner_patterns": [
+        "memcached"
+      ],
+      "version_regex": "memcached\\s+(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
     },
     {
-        "name": "Kubernetes",
-        "category": "container",
-        "header_patterns": ["kubernetes"],
-        "version_regex": None,
-        "confidence": 0.6,
-    },
-    # Web servers (common alternatives)
-    {
-        "name": "Microsoft IIS",
-        "category": "web_server",
-        "header_patterns": ["Microsoft-IIS/"],
-        "version_regex": r"Microsoft-IIS/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Ruby on Rails",
+      "category": "web_framework",
+      "header_patterns": [
+        "X-Rack-"
+      ],
+      "version_regex": "Rails/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_framework"
     },
     {
-        "name": "nginx",
-        "category": "web_server",
-        "header_patterns": ["nginx/"],
-        "version_regex": r"nginx/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # Application servers
-    {
-        "name": "Java",
-        "category": "application_server",
-        "header_patterns": ["Java/"],
-        "version_regex": r"Java/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Django",
+      "category": "web_framework",
+      "header_patterns": [
+        "django"
+      ],
+      "version_regex": "Django/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_framework"
     },
     {
-        "name": "Node.js",
-        "category": "application_server",
-        "header_patterns": ["express"],
-        "version_regex": r"Express/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
-    },
-    # CMS
-    {
-        "name": "Drupal",
-        "category": "cms",
-        "header_patterns": ["drupal"],
-        "version_regex": r"Drupal/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Laravel",
+      "category": "web_framework",
+      "header_patterns": [
+        "laravel_session",
+        "X-Powered-By: Laravel"
+      ],
+      "version_regex": "Laravel/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_framework"
     },
     {
-        "name": "Joomla",
-        "category": "cms",
-        "header_patterns": ["joomla"],
-        "version_regex": r"Joomla!/(\d+\.\d+(?:\.\d+)?)",
-        "confidence": 0.6,
+      "name": "Ruby on Rails",
+      "category": "web_framework",
+      "header_patterns": [
+        "X-Runtime"
+      ],
+      "version_regex": "Rails/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_framework"
     },
-]
+    {
+      "name": "HAProxy",
+      "category": "reverse_proxy",
+      "header_patterns": [
+        "haproxy"
+      ],
+      "version_regex": "HA-Proxy/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "reverse_proxy"
+    },
+    {
+      "name": "Varnish",
+      "category": "reverse_proxy",
+      "header_patterns": [
+        "via: varnish",
+        "X-Varnish"
+      ],
+      "version_regex": "Varnish/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "reverse_proxy"
+    },
+    {
+      "name": "Akamai",
+      "category": "cdn",
+      "header_patterns": [
+        "akamai"
+      ],
+      "version_regex": null,
+      "confidence": 0.6,
+      "provider_type": "cdn"
+    },
+    {
+      "name": "Cloudflare",
+      "category": "cdn",
+      "header_patterns": [
+        "__cfduid",
+        "__cf_bm",
+        "cf-ray"
+      ],
+      "version_regex": null,
+      "confidence": 0.6,
+      "provider_type": "cdn"
+    },
+    {
+      "name": "MySQL",
+      "category": "database",
+      "banner_patterns": [
+        "MySQL"
+      ],
+      "version_regex": "(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
+    },
+    {
+      "name": "PostgreSQL",
+      "category": "database",
+      "banner_patterns": [
+        "PostgreSQL"
+      ],
+      "version_regex": "(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
+    },
+    {
+      "name": "Microsoft SQL Server",
+      "category": "database",
+      "banner_patterns": [
+        "Microsoft SQL Server"
+      ],
+      "version_regex": "(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "database"
+    },
+    {
+      "name": "RabbitMQ",
+      "category": "message_queue",
+      "banner_patterns": [
+        "RabbitMQ"
+      ],
+      "version_regex": null,
+      "confidence": 0.6,
+      "provider_type": "message_queue"
+    },
+    {
+      "name": "Redis",
+      "category": "message_queue",
+      "banner_patterns": [
+        "redis"
+      ],
+      "version_regex": null,
+      "confidence": 0.6,
+      "provider_type": "message_queue"
+    },
+    {
+      "name": "Git",
+      "category": "version_control",
+      "banner_patterns": [
+        "git"
+      ],
+      "version_regex": "git version (\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "version_control"
+    },
+    {
+      "name": "Docker",
+      "category": "container",
+      "banner_patterns": [
+        "docker"
+      ],
+      "version_regex": "Docker version (\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "container"
+    },
+    {
+      "name": "Kubernetes",
+      "category": "container",
+      "header_patterns": [
+        "kubernetes"
+      ],
+      "version_regex": null,
+      "confidence": 0.6,
+      "provider_type": "container"
+    },
+    {
+      "name": "Microsoft IIS",
+      "category": "web_server",
+      "header_patterns": [
+        "Microsoft-IIS/"
+      ],
+      "version_regex": "Microsoft-IIS/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_server"
+    },
+    {
+      "name": "nginx",
+      "category": "web_server",
+      "header_patterns": [
+        "nginx/"
+      ],
+      "version_regex": "nginx/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "web_server"
+    },
+    {
+      "name": "Java",
+      "category": "application_server",
+      "header_patterns": [
+        "Java/"
+      ],
+      "version_regex": "Java/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
+    },
+    {
+      "name": "Node.js",
+      "category": "application_server",
+      "header_patterns": [
+        "express"
+      ],
+      "version_regex": "Express/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "application_server"
+    },
+    {
+      "name": "Drupal",
+      "category": "cms",
+      "header_patterns": [
+        "drupal"
+      ],
+      "version_regex": "Drupal/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "cms"
+    },
+    {
+      "name": "Joomla",
+      "category": "cms",
+      "header_patterns": [
+        "joomla"
+      ],
+      "version_regex": "Joomla!/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "confidence": 0.6,
+      "provider_type": "cms"
+    }
+  ]
+}

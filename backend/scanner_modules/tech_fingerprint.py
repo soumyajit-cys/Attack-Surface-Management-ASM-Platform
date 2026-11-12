@@ -1,16 +1,14 @@
-"""Tech fingerprint scanner module (registry phase ``enrichment``).
+"""Tech fingerprint scanner module (registry phase ``fingerprint``).
 
 Passive identification of technologies from headers/TLS/HTML of already-
-discovered subdomains. Does NOT make its own outbound connections --
-reuses responses already collected by port_scan/ssl_scan header scanning.
-Only new outbound connections (if a fingerprint requires fetching a page
-not already collected) go through the SSRF-pinned egress helper with
-size/redirect/timeouts caps.
+discovered subdomains. Reuses responses already collected by port_scan/ssl_scan
+header scanning where available; otherwise fetches via the SSRF-pinned egress
+helper with size/redirect/timeouts caps.
 
 Findings carry ``confidence`` (<= 0.85) and ``dedupe_key``
-(tech_fingerprint:<technology>:<hostname>). Severity/CVE mapping flows
-only through existing OSV/KEV enrichment -- this module never invents
-EOL or CVE data.
+(tech_fingerprint:<technology>:<hostname>). Severity/CVE mapping flows only
+through existing OSV/KEV enrichment -- this module never invents EOL or
+CVE data.
 
 Labels: module and outcome only -- never a domain or hostname.
 """
@@ -27,7 +25,7 @@ from typing import Any
 from app.core.config import settings
 from app.scanning.context import ScanContext
 from app.scanning.registry import scanner_module, ScanPhase
-from utils.egress import fetch_url_validated
+from utils.egress import fetch_url_validated, fetch_url_validated_sync
 
 logger = logging.getLogger("sentinelasm.scanner.tech_fingerprint")
 
@@ -44,14 +42,14 @@ def _load_fingerprints() -> list[dict[str, Any]]:
     for entry in data.get("providers", []):
         fp = {
             "name": entry.get("name", "unknown"),
-            "provider_type": entry.get("provider_type", ""),
+            "category": entry.get("category", "unknown"),
             "header_patterns": entry.get("header_patterns", []),
-            "tls_patterns": entry.get("tls_patterns", []),
+            "banner_patterns": entry.get("banner_patterns", []),
             "html_patterns": entry.get("html_patterns", []),
             "version_regex": entry.get("version_regex"),
             "confidence": entry.get("confidence", 0.5),
         }
-        if fp["provider_type"] and (fp["header_patterns"] or fp.get("tls_patterns") or fp.get("html_patterns")):
+        if fp["header_patterns"] or fp.get("banner_patterns") or fp.get("html_patterns"):
             providers.append(fp)
     return providers
 
@@ -59,9 +57,6 @@ def _load_fingerprints() -> list[dict[str, Any]]:
 FINGERPRINTS = _load_fingerprints()
 
 # ── Constants ─────────────────────────────────────────────────────────
-
-# DNS/HTTP timeout per request (seconds).
-DNS_TIMEOUT = settings.tech_fingerprint_timeout_seconds
 
 # Maximum concurrent fingerprint lookups.
 MAX_CONCURRENCY = settings.tech_fingerprint_max_concurrency
@@ -73,11 +68,6 @@ MAX_HOSTS_PER_SCAN = settings.tech_fingerprint_max_hosts_per_scan
 MAX_REDIRECTS = settings.tech_fingerprint_max_redirects
 
 # Maximum body bytes to read per HTTP response.
-MAX_BODY_BYTES = settings.tech_fingerprint_max_body_bytes
-
-# ── DNS helpers ───────────────────────────────────────────────────────
-
-
 MAX_BODY_BYTES = settings.tech_fingerprint_max_body_bytes
 
 
@@ -105,8 +95,7 @@ def _match_fingerprints(
     search_text = "\n".join(search_text_parts).lower()
 
     for fp in FINGERPRINTS:
-        provider = fp["name"]
-        patterns = fp.get("header_patterns", []) + fp.get("html_patterns", [])
+        patterns = fp.get("header_patterns", []) + fp.get("html_patterns", []) + fp.get("banner_patterns", [])
         version_regex = fp.get("version_regex")
 
         matched = False
@@ -121,7 +110,6 @@ def _match_fingerprints(
         if not matched:
             continue
 
-        confidence = fp.get("confidence", 0.5)
         version = None
         if version_regex and search_text:
             m = re.search(version_regex, search_text)
@@ -130,9 +118,9 @@ def _match_fingerprints(
 
         findings.append({
             "provider": fp["name"],
-            "provider_type": fp.get("provider_type", ""),
+            "category": fp.get("category", "unknown"),
             "confidence": fp.get("confidence", 0.5),
-            "matched_pattern": pattern,
+            "matched_pattern": matched_text,
             "matched_text": matched_text[:200] if matched_text else "",
             "version": version,
         })
@@ -149,39 +137,31 @@ def _http_probe(url: str) -> dict[str, Any]:
     Returns a dict with ``status_code``, ``headers``, ``body`` (truncated),
     and ``error`` (None on success).
     """
-    import httpx
-
     try:
-        with httpx.Client(
+        result = fetch_url_validated_sync(
+            url,
             timeout=settings.tech_fingerprint_timeout_seconds,
-            follow_redirects=True,
             max_redirects=settings.tech_fingerprint_max_redirects,
-            verify=False,  # TLS verification relaxed — see threat model
-        ) as client:
-            response = client.get(url)
-            body = response.text[: settings.tech_fingerprint_max_body_bytes ]
-            return {
-                "status_code": response.status_code,
-                "headers": dict(response.headers),
-                "body": body,
-                "error": None,
-            }
-    except httpx.TimeoutError:
-        return {"status_code": None, "body": None, "error": "timeout"}
-    except httpx.ConnectError:
-        return {"status_code": None, "body": None, "error": "connect_error"}
-    except httpx.HTTPError as exc:
-        return {"status_code": None, "body": None, "error": f"http_error: {exc}"}
+            max_bytes=settings.tech_fingerprint_max_body_bytes,
+            verify_tls=True,
+        )
+        body = result.body.decode("utf-8", errors="replace") if result.body else ""
+        return {
+            "status_code": result.status_code,
+            "headers": dict(result.headers),
+            "body": body,
+            "error": None,
+        }
+    except Exception as exc:
+        return {"status_code": None, "headers": {}, "body": "", "error": str(exc)}
 
 
-@scanner_module("tech_fingerprint", phase="enrichment", order=3)
+# ── Module entry point ─────────────────────────────────────────────────
+
+
+@scanner_module("tech_fingerprint", phase="fingerprint", order=1)
 async def tech_fingerprint_module(ctx: ScanContext) -> dict:
     """Passive tech fingerprinting for *ctx.domain*.
-
-    Reuses responses already collected by port_scan/ssl_scan header scanning.
-    Only fetches additional responses if a fingerprint needs data not already
-    collected (and then only through SSRF-pinned fetch with size/redirect
-    caps).
 
     Returns a dict with ``host``, ``findings`` (list), ``findings_total``
     (int), and ``truncated`` (bool).
@@ -210,9 +190,8 @@ async def tech_fingerprint_module(ctx: ScanContext) -> dict:
         hosts_checked += 1
 
         async with semaphore:
-            # Reuse data already collected by port_scan/ssl_scan if available.
-            # Otherwise fetch via SSRF-pinned fetch.
-            http_response = _http_probe(f"https://{subdomain}")
+            url = f"https://{subdomain}"
+            http_result = _http_probe(url)
 
             matches = _match_fingerprints(
                 http_result.get("headers", {}),
@@ -222,7 +201,7 @@ async def tech_fingerprint_module(ctx: ScanContext) -> dict:
             for match in matches:
                 findings.append({
                     "provider": match["provider"],
-                    "provider_type": match.get("provider_type", ""),
+                    "category": match.get("category", "unknown"),
                     "confidence": match["confidence"],
                     "matched_pattern": match.get("matched_pattern"),
                     "matched_text": match.get("matched_text"),
