@@ -116,10 +116,13 @@ class TestPipelineGating:
             seen.clear()
             _, scan, persisted = self._targets(db)
             dt._scan_targets(db, scan, persisted, "example.com", None, scope)
-            assert seen[scope] == {
+            expected = {
                 ScanPhase.EMAIL_SECURITY, ScanPhase.PORT,
                 ScanPhase.SSL, ScanPhase.HEADER,
             }
+            if scope == "full":
+                expected.add(ScanPhase.FINGERPRINT)
+            assert seen[scope] == expected
 
     def test_dns_phase_runs_in_passive_and_active(self, db, monkeypatch):
         """DNS phase (email_security) runs in passive and active scopes,
