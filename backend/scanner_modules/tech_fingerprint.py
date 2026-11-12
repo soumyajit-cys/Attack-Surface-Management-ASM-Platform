@@ -78,23 +78,63 @@ MAX_BODY_BYTES = settings.tech_fingerprint_max_body_bytes
 # ── DNS helpers ───────────────────────────────────────────────────────
 
 
-def _query_txt(domain: str, record: str) -> list[str]:
-    """Query a single DNS TXT record."""
-    try:
-        answers = dns.resolver.resolve(record, "TXT", lifetime=DNS_TIMEOUT)
-        return [r.to_text().strip('"') for r in answers]
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
-            dns.resolver.NoNameservers, dns.resolver.Timeout,
-            dns.exception.DNSException):
-        return []
+MAX_BODY_BYTES = settings.tech_fingerprint_max_body_bytes
 
 
-def _query_mx(domain: str) -> list[str]:
-    """Query MX records for *domain*.  Returns a list of MX targets."""
-    try:
-        answers = dns.resolver.resolve(domain, "MX", lifetime=DNS_TIMEOUT)
-        return [r.exchange.to_text().rstrip(".") for r in answers]
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
-            dns.resolver.NoNameservers, dns.resolver.Timeout,
-            dns.exception.DNSException):
-        return []
+# ── Fingerprint matching ────────────────────────────────────────────────
+
+
+def _match_fingerprints(
+    headers: dict[str, str] | None,
+    body: str | None,
+    tls_info: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Match HTTP headers/TLS/HTML against fingerprint patterns.
+
+    Returns a list of matching fingerprint dicts.
+    """
+    findings: list[dict[str, Any]] = []
+
+    # Build searchable text from headers + body
+    search_text_parts: list[str] = []
+    if headers:
+        for key, value in headers.items():
+            search_text_parts.append(f"{key}: {value}")
+    if body:
+        search_text_parts.append(body)
+    search_text = "\n".join(search_text_parts).lower()
+
+    for fp in FINGERPRINTS:
+        provider = fp["name"]
+        patterns = fp.get("header_patterns", []) + fp.get("html_patterns", [])
+        version_regex = fp.get("version_regex")
+
+        matched = False
+        matched_text = ""
+
+        for pattern in patterns:
+            if pattern.lower() in search_text.lower():
+                matched = True
+                matched_text = pattern
+                break
+
+        if not matched:
+            continue
+
+        confidence = fp.get("confidence", 0.5)
+        version = None
+        if version_regex and search_text:
+            m = re.search(version_regex, search_text)
+            if m:
+                version = m.group(1)
+
+        findings.append({
+            "provider": fp["name"],
+            "provider_type": fp.get("provider_type", ""),
+            "confidence": fp.get("confidence", 0.5),
+            "matched_pattern": pattern,
+            "matched_text": matched_text[:200] if matched_text else "",
+            "version": version,
+        })
+
+    return findings
