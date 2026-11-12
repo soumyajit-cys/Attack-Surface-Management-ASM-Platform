@@ -20,6 +20,7 @@ from models.scan_policy import ScanPolicy, ScanScope, ScanFrequency
 from models.verified_domain import VerifiedDomain
 from models.alert_integration import AlertIntegration, AlertChannel, AlertSeverity, EmailDigestConfig
 from models.enrichment_provider import EnrichmentProvider
+from models.asset_technology import AssetTechnology
 
 __all__ = [
     "Base",
@@ -52,4 +53,5 @@ __all__ = [
     "EmailDigestConfig",
     "VerifiedDomain",
     "EnrichmentProvider",
+    "AssetTechnology",
 ]
