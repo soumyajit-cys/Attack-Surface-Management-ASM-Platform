@@ -165,6 +165,16 @@ class Settings(BaseSettings):
     subdomain_takeover_max_redirects: int = 3
     subdomain_takeover_max_body_bytes: int = 65536
 
+    # Tech fingerprint (Phase 3, module 3): passive identification of
+    # technologies from headers/TLS/HTML. No new binaries; all outbound
+    # connections go through the SSRF-pinned egress helper.
+    tech_fingerprint_enabled: bool = True
+    tech_fingerprint_timeout_seconds: float = 10.0
+    tech_fingerprint_max_concurrency: int = 10
+    tech_fingerprint_max_hosts_per_scan: int = 100
+    tech_fingerprint_max_redirects: int = 3
+    tech_fingerprint_max_body_bytes: int = 65536
+
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
     # and the direct peer is used. Set behind nginx/traefik so the limiter,
