@@ -85,3 +85,9 @@ class Subdomain(Base):
         back_populates="subdomain",
         cascade="all, delete-orphan"
     )
+
+    asset_technologies = relationship(
+        "AssetTechnology",
+        back_populates="subdomain",
+        cascade="all, delete-orphan"
+    )
