@@ -29,7 +29,7 @@ class TestScannerModuleDiscovery:
     def test_discovers_port_ssl_header_modules(self):
         mods = registry.get_modules()
         names = {m.name for m in mods}
-        assert names == {"port_scan", "ssl_scan", "header_scan", "email_security", "subdomain_takeover"}
+        assert names == {"port_scan", "ssl_scan", "header_scan", "email_security", "subdomain_takeover", "tech_fingerprint"}
 
     def test_phase_assignment(self):
         by_phase = {
