@@ -190,8 +190,13 @@ async def tech_fingerprint_module(ctx: ScanContext) -> dict:
         hosts_checked += 1
 
         async with semaphore:
-            url = f"https://{subdomain}"
-            http_result = _http_probe(url)
+            # Reuse the HTTP response collected by header_scan if available;
+            # otherwise fetch via the SSRF-pinned helper.
+            if ctx.http_response is not None:
+                http_result = ctx.http_response
+            else:
+                url = f"https://{subdomain}"
+                http_result = _http_probe(url)
 
             matches = _match_fingerprints(
                 http_result.get("headers", {}),

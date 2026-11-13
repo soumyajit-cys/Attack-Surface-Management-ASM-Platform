@@ -630,6 +630,12 @@ def _scan_targets(
                 for issue in issues:
                     summary["header_findings"].append(issue)
 
+        # Capture the HTTP response from header scan for reuse by
+        # tech_fingerprint (avoids a duplicate request).
+        cached_http_response = None
+        if can_headers:
+            cached_http_response = header_results.get("http_response")
+
         if can_fingerprint:
             # Tech fingerprint runs per-subdomain (passive identification).
             fp_ctx = ScanContext(
@@ -640,6 +646,7 @@ def _scan_targets(
                 db=db,
                 scope=scope,
                 subdomains=[host],
+                http_response=cached_http_response,
             )
             fp_results = _run_in_context(
                 fp_ctx, registry.get_modules(phase=ScanPhase.FINGERPRINT)
