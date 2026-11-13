@@ -354,14 +354,14 @@ class TestTakeoverModule:
         _patch_dns(
             monkeypatch,
             cname_map={
-                "www.example.com": ["github.io."],
+                "www.example.com": ["bitbucket.io."],
             },
             a_map={
-                "github.io": ["1.2.3.4"],
+                "bitbucket.io": ["1.2.3.4"],
             },
         )
         _patch_http(monkeypatch, http_map={
-            "github.io": {"status_code": 200, "body": "There isn't a GitHub Pages site here"},
+            "bitbucket.io": {"status_code": 200, "body": "Repository not found"},
         })
         ctx = _make_ctx(domain="www.example.com", subdomains=["www.example.com"])
         result = asyncio.run(subdomain_takeover_module(ctx))
@@ -370,8 +370,8 @@ class TestTakeoverModule:
         f = findings[0]
         assert f["severity"] == "high"
         assert f["confidence"] == 0.85
-        assert f["provider_id"] == "GitHub Pages"
-        assert f["dedupe_key"] == "subdomain_takeover:GitHub Pages:www.example.com"
+        assert f["provider_id"] == "Bitbucket"
+        assert f["dedupe_key"] == "subdomain_takeover:Bitbucket:www.example.com"
 
     def test_provider_match_edge_case(self, monkeypatch):
         """An edge-case provider match yields medium severity ≤ 0.85."""
