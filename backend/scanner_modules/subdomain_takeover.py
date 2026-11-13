@@ -47,11 +47,22 @@ _FINGERPRINTS_PATH = Path(__file__).parent / "takeover_fingerprints.json"
 
 
 def _load_fingerprints() -> list[dict[str, Any]]:
-    """Load and validate the provider fingerprint data file."""
+    """Load and validate the provider fingerprint data file.
+
+    Only entries whose upstream ``status`` is ``"Vulnerable"`` or
+    ``"Edge case"`` are included.  ``"Not vulnerable"`` entries and entries
+    without an upstream match are excluded so they can never produce a
+    finding.
+    """
     with _FINGERPRINTS_PATH.open("r", encoding="utf-8") as fh:
         data = json.load(fh)
     providers: list[dict[str, Any]] = []
     for entry in data.get("providers", []):
+        status = entry.get("status", "")
+        # Only Vulnerable and Edge case entries can produce findings.
+        if status not in ("Vulnerable", "Edge case"):
+            continue
+
         cname_list = entry.get("cname", [])
         if not cname_list:
             suffix = entry.get("cname_suffix", "")
@@ -62,11 +73,22 @@ def _load_fingerprints() -> list[dict[str, Any]]:
         fingerprint = entry.get("fingerprint", "") or entry.get("unclaimed_body", "")
         if not fingerprint:
             continue
+
+        # Derive tier from upstream status.
+        if status == "Vulnerable":
+            tier = "claimable"
+        else:  # Edge case
+            tier = "likely_claimable"
+
         providers.append({
             "name": entry.get("service", entry.get("name", "unknown")),
+            "upstream_service": entry.get("upstream_service"),
+            "status": status,
             "cname_suffixes": [c.lower().rstrip(".") for c in cname_list],
             "unclaimed_body": fingerprint,
-            "verified_claimable": bool(entry.get("verified_claimable", entry.get("vulnerable", False))),
+            "tier": tier,
+            "verified_claimable": tier == "claimable",
+            "likely_claimable": tier == "likely_claimable",
         })
     return providers
 
