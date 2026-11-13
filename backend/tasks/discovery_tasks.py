@@ -55,6 +55,7 @@ from services.scanner.persistence import (
     persist_port_results,
     persist_ssl_result,
     persist_subdomain_ips,
+    persist_tech_fingerprint_results,
 )
 from services.scoring.risk_engine import calculate_risk
 from utils.database import SessionLocal
@@ -655,6 +656,10 @@ def _scan_targets(
                 summary["tech_fingerprint_findings"].append(finding)
             if fp_results.get("truncated"):
                 summary["tech_fingerprint_truncated"] = True
+            # Persist tech fingerprint findings to asset_technologies.
+            fp_findings = fp_results.get("findings", [])
+            if fp_findings and hasattr(sub, "id"):
+                persist_tech_fingerprint_results(db, sub, fp_findings)
 
     return summary
 

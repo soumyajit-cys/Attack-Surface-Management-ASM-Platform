@@ -246,3 +246,53 @@ def persist_ssl_result(
         existing.expires_at = ssl_data.get("expires_at", existing.expires_at)
         existing.self_signed = ssl_data.get("self_signed", existing.self_signed)
         existing.risk_level = ssl_data.get("risk_level", existing.risk_level)
+
+from models.asset_technology import AssetTechnology
+
+
+def persist_tech_fingerprint_results(
+    db: Session,
+    subdomain: Subdomain,
+    findings: list[dict],
+) -> None:
+    """Upsert tech fingerprint findings into asset_technologies.
+
+    Upserts on (subdomain_id, name): updates version, confidence,
+    matched_pattern, status_code, last_seen on existing rows; creates
+    new rows otherwise.  first_seen is set on insert only.
+    """
+    if not findings:
+        return
+
+    for finding in findings:
+        name = finding.get("provider") or finding.get("name")
+        if not name:
+            continue
+
+        existing = (
+            db.query(AssetTechnology)
+            .filter(
+                AssetTechnology.subdomain_id == subdomain.id,
+                AssetTechnology.name == name,
+            )
+            .first()
+        )
+        if existing is None:
+            existing = AssetTechnology(
+                subdomain_id=subdomain.id,
+                name=name,
+                category=finding.get("category"),
+                version=finding.get("version"),
+                confidence=finding.get("confidence"),
+                matched_pattern=finding.get("matched_pattern"),
+                status_code=finding.get("status_code"),
+            )
+            db.add(existing)
+        else:
+            existing.category = finding.get("category", existing.category)
+            existing.version = finding.get("version", existing.version)
+            existing.confidence = finding.get("confidence", existing.confidence)
+            existing.matched_pattern = finding.get("matched_pattern", existing.matched_pattern)
+            existing.status_code = finding.get("status_code", existing.status_code)
+            existing.last_seen = datetime.now(timezone.utc)
+    db.flush()
