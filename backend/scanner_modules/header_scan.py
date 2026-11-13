@@ -22,7 +22,7 @@ def _sanitize_response(raw: dict | None) -> dict | None:
     if not raw:
         return None
     headers = {
-        k: v for k, v in (raw.get("headers") or {}).items()
+        k.lower(): v for k, v in (raw.get("headers") or {}).items()
         if k.lower() in _SAFE_HEADERS
     }
     body = (raw.get("body") or "")[:65536]

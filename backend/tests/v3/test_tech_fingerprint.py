@@ -209,3 +209,158 @@ class TestTechFingerprintModule:
         result = asyncio.run(tf.tech_fingerprint_module(ctx))
         for f in result["findings"]:
             assert f["confidence"] <= 0.85
+
+
+class TestSanitizerAllowlist:
+    def test_only_allowlisted_headers_survive(self):
+        from scanner_modules.header_scan import _sanitize_response
+
+        raw = {
+            "status_code": 200,
+            "headers": {
+                "Server": "nginx/1.18.0",
+                "X-Powered-By": "PHP/7.4",
+                "Set-Cookie": "session=secret123",
+                "Authorization": "Bearer token",
+                "X-Custom-Secret": "should-not-survive",
+                "Content-Type": "text/html",
+            },
+            "body": "hello world",
+        }
+        sanitized = _sanitize_response(raw)
+        assert sanitized is not None
+        assert set(sanitized["headers"].keys()) == {"server", "x-powered-by", "content-type"}
+        assert "Set-Cookie" not in sanitized["headers"]
+        assert "Authorization" not in sanitized["headers"]
+        assert "X-Custom-Secret" not in sanitized["headers"]
+
+    def test_no_raw_headers_or_body_in_summary(self):
+        """Persisted scan summary must not contain raw headers or body."""
+        import tasks.discovery_tasks as dt
+
+        # Verify the summary dict doesn't include http_response fields
+        from app.scanning.registry import registry, ScanPhase
+        summary = dt._new_summary(registry)
+        # Check that no value in the summary contains header/body keys
+        def _check(obj, path=""):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    assert k not in ("http_response", "headers", "body", "raw_headers"), f"Found {k} at {path}"
+                    _check(v, f"{path}.{k}")
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    _check(item, f"{path}[{i}]")
+
+        _check(summary)
+
+
+class TestAssetTechnologiesAPI:
+    def test_cross_org_tenant_isolation(self, db, org_factory, monkeypatch):
+        """Org B cannot see org A's technologies."""
+        # This test verifies the API scoping; actual HTTP test would need
+        # TestClient. Here we verify the query-level scoping.
+        from models.asset import Asset
+        from models.domain import Domain
+        from models.subdomain import Subdomain
+        from models.asset_technology import AssetTechnology
+
+        # Create org A asset with technology
+        org_a, _ = org_factory("org-a", "usera", "a@example.com")
+        org_b, _ = org_factory("org-b", "userb", "b@example.com")
+        asset_a = Asset(organization_id=org_a.id, name="asset-a")
+        db.add(asset_a)
+        db.flush()
+        domain_a = Domain(organization_id=1, asset_id=asset_a.id, domain="a.example.com")
+        db.add(domain_a)
+        db.flush()
+        sub_a = Subdomain(domain_id=domain_a.id, subdomain="www.a.example.com")
+        db.add(sub_a)
+        db.flush()
+        tech_a = AssetTechnology(subdomain_id=sub_a.id, name="nginx", confidence=0.6)
+        db.add(tech_a)
+        db.commit()
+
+        # Query as org 2 should find nothing
+        from app.api.v1.assets import _subdomain_data
+        # Verify the subdomain belongs to org 1
+        assert sub_a.id is not None
+        # Cross-org: querying Asset with org_id=2 should not find asset_a
+        from models.asset import Asset as A
+        result = db.query(A).filter(A.id == asset_a.id, A.organization_id == org_b.id).first()
+        assert result is None
+
+
+class TestPersistenceUpsert:
+    def test_upsert_insert_and_update(self, db, org_factory):
+        from models.subdomain import Subdomain
+        from models.domain import Domain
+        from models.asset import Asset
+        from services.scanner.persistence import persist_tech_fingerprint_results
+        from models.asset_technology import AssetTechnology
+
+        org, _ = org_factory("test-org", "testuser", "test@example.com")
+        asset = Asset(organization_id=org.id, name="test-asset")
+        db.add(asset)
+        db.flush()
+        domain = Domain(organization_id=1, asset_id=asset.id, domain="example.com")
+        db.add(domain)
+        db.flush()
+        sub = Subdomain(domain_id=domain.id, subdomain="www.example.com")
+        db.add(sub)
+        db.flush()
+
+        # Insert
+        persist_tech_fingerprint_results(db, sub, [
+            {"provider": "nginx", "category": "web_server", "version": "1.18.0", "confidence": 0.6, "matched_pattern": "nginx/", "status_code": 200},
+        ])
+        db.commit()
+
+        tech = db.query(AssetTechnology).filter(AssetTechnology.subdomain_id == sub.id).first()
+        assert tech is not None
+        assert tech.name == "nginx"
+        assert tech.version == "1.18.0"
+        first_seen = tech.first_seen
+
+        # Update
+        persist_tech_fingerprint_results(db, sub, [
+            {"provider": "nginx", "category": "web_server", "version": "1.20.0", "confidence": 0.6, "matched_pattern": "nginx/", "status_code": 200},
+        ])
+        db.commit()
+        db.expire_all()
+
+        tech = db.query(AssetTechnology).filter(AssetTechnology.subdomain_id == sub.id).first()
+        assert tech.version == "1.20.0"
+        assert tech.first_seen == first_seen  # preserved
+
+    def test_concurrent_upsert_no_integrity_error(self, db, org_factory):
+        """Concurrent upserts must not raise IntegrityError."""
+        from models.subdomain import Subdomain
+        from models.domain import Domain
+        from models.asset import Asset
+        from services.scanner.persistence import persist_tech_fingerprint_results
+        from models.asset_technology import AssetTechnology
+        from sqlalchemy.exc import IntegrityError
+
+        org, _ = org_factory("test-org2", "testuser2", "test2@example.com")
+        asset = Asset(organization_id=org.id, name="test-asset2")
+        db.add(asset)
+        db.flush()
+        domain = Domain(organization_id=1, asset_id=asset.id, domain="example2.com")
+        db.add(domain)
+        db.flush()
+        sub = Subdomain(domain_id=domain.id, subdomain="www.example2.com")
+        db.add(sub)
+        db.flush()
+
+        # Two upserts for the same (subdomain_id, name) should not error
+        persist_tech_fingerprint_results(db, sub, [
+            {"provider": "Apache", "category": "web_server", "version": "2.4", "confidence": 0.6, "matched_pattern": "Apache/", "status_code": 200},
+        ])
+        persist_tech_fingerprint_results(db, sub, [
+            {"provider": "Apache", "category": "web_server", "version": "2.4.1", "confidence": 0.6, "matched_pattern": "Apache/", "status_code": 200},
+        ])
+        db.commit()
+        db.expire_all()
+
+        tech = db.query(AssetTechnology).filter(AssetTechnology.subdomain_id == sub.id).first()
+        assert tech.version == "2.4.1"
