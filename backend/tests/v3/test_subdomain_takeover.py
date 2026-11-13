@@ -502,7 +502,7 @@ class TestDataProvenance:
         from scanner_modules.subdomain_takeover import _load_fingerprints
 
         data = json.loads(
-            (Path(__file__).parent.parent / "scanner_modules" / "takeover_fingerprints.json").read_text()
+            (Path(__file__).parent.parent.parent / "scanner_modules" / "takeover_fingerprints.json").read_text()
         )
         # Collect names of Not-vulnerable entries in the data file.
         not_vuln_names = {
@@ -526,7 +526,7 @@ class TestDataProvenance:
         from pathlib import Path
 
         data = json.loads(
-            (Path(__file__).parent.parent / "scanner_modules" / "takeover_fingerprints.json").read_text()
+            (Path(__file__).parent.parent.parent / "scanner_modules" / "takeover_fingerprints.json").read_text()
         )
         assert "blob_sha" in data
         assert data["blob_sha"] == "6d4a4168552366b5050fff054017db9116873621"
