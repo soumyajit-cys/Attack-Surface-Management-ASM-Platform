@@ -34,6 +34,16 @@ def upgrade() -> None:
         sa.Column("matched_pattern", sa.String(), nullable=True),
         sa.Column("status_code", sa.Integer(), nullable=True),
         sa.Column(
+            "first_seen",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "last_seen",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.func.now(),

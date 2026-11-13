@@ -86,15 +86,6 @@
       "status": "Not vulnerable"
     },
     {
-      "name": "SurveyMonkey",
-      "cname_suffix": "",
-      "unclaimed_body": "Please check your URL or contact support",
-      "verified_claimable": false,
-      "last_verified": "2026-11-10",
-      "upstream_service": null,
-      "status": "Not in upstream"
-    },
-    {
       "name": "Fastly",
       "cname_suffix": "a.ssl.fastly.net",
       "unclaimed_body": "Fastly error: unknown domain:",
@@ -192,24 +183,6 @@
       "last_verified": "2026-11-10",
       "upstream_service": "Smartling",
       "status": "Edge case"
-    },
-    {
-      "name": "Teamwork",
-      "cname_suffix": "teamwork.com",
-      "unclaimed_body": "Page not found",
-      "verified_claimable": false,
-      "last_verified": "2026-11-10",
-      "upstream_service": null,
-      "status": "Not in upstream"
-    },
-    {
-      "name": "VaultPress",
-      "cname_suffix": "vaultpress.com",
-      "unclaimed_body": "No such blog",
-      "verified_claimable": false,
-      "last_verified": "2026-11-10",
-      "upstream_service": null,
-      "status": "Not in upstream"
     },
     {
       "name": "Zendesk",
