@@ -279,6 +279,7 @@ Settings field without documenting it fails `make check`.
 | `TECH_FINGERPRINT_MAX_HOSTS_PER_SCAN` | `100` | No | Max subdomains checked for tech fingerprinting per scan; exceeded hosts are truncated. |
 | `TECH_FINGERPRINT_MAX_REDIRECTS` | `3` | No | Max HTTP redirects followed during tech fingerprinting. |
 | `TECH_FINGERPRINT_MAX_BODY_BYTES` | `65536` | No | Max response body bytes read during tech fingerprinting. |
+| (tech fingerprint → risk) | 🔜 planned | — | Mapping detected versions to risk via existing OSV/KEV enrichment is not yet wired; banner-derived versions have confidence ≤0.6 with distro-backport caveat. |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
 | `VERIFICATION_GRACE_DAYS` | `14` | No | Grace for migration-grandfathered domains |
