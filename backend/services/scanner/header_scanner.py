@@ -62,7 +62,7 @@ INSECURE_HEADERS = {
 }
 
 
-async def analyze_headers(url: str) -> list[dict]:
+async def analyze_headers(url: str, *, capture_response: bool = False):
     """Fetch through the validated egress helper (no client-side redirects).
 
     Blocked destinations raise ``EgressBlocked``; other failures return [].
@@ -74,25 +74,36 @@ async def analyze_headers(url: str) -> list[dict]:
     if not url.startswith("http"):
         url = f"https://{url}"
 
+    _captured = None
     try:
         result = await fetch_url_validated(url, timeout=15.0)
-        return _headers_to_findings(result.headers, http_fallback=False)
+        _captured = {"status_code": result.status_code, "headers": dict(result.headers), "body": result.body.decode("utf-8", errors="replace") if result.body else ""}
+        findings = _headers_to_findings(result.headers, http_fallback=False)
+        if capture_response:
+            return findings, _captured
+        return findings
     except EgressBlocked:
         raise
     except Exception as exc:
         if _is_tls_error(exc):
-            return await _analyze_unverified(url, exc)
+            return await _analyze_unverified(url, exc, capture_response=capture_response)
         if not url.startswith("https://"):
             logger.warning("Header analysis failed for %s", url)
             return []
         try:
             http_url = "http://" + url[len("https://"):]
             result = await fetch_url_validated(http_url, timeout=15.0)
-            return _headers_to_findings(result.headers, http_fallback=True)
+            _captured = {"status_code": result.status_code, "headers": dict(result.headers), "body": result.body.decode("utf-8", errors="replace") if result.body else ""}
+            findings = _headers_to_findings(result.headers, http_fallback=True)
+            if capture_response:
+                return findings, _captured
+            return findings
         except EgressBlocked:
             raise
         except Exception as exc:
             logger.warning("Header analysis failed for %s: %s", url, exc)
+            if capture_response:
+                return [], _captured
             return []
 
 
@@ -108,19 +119,23 @@ def _is_tls_error(exc: BaseException) -> bool:
     return False
 
 
-async def _analyze_unverified(url: str, exc: Exception) -> list[dict]:
+async def _analyze_unverified(url: str, exc: Exception, *, capture_response: bool = False):
     """Analyze over an explicitly unverified connection (invalid cert only).
 
     Sends no credentials or cookies and stays IP/redirect-validated; records
     an "Invalid TLS certificate" finding so the downgrade is never silent.
     """
     logger.warning("Header analysis retrying without TLS verification for %s", url)
+    _captured = None
     try:
         result = await fetch_url_validated(url, timeout=15.0, verify_tls=False)
+        _captured = {"status_code": result.status_code, "headers": dict(result.headers), "body": result.body.decode("utf-8", errors="replace") if result.body else ""}
     except EgressBlocked:
         raise
     except Exception as retry_exc:
         logger.warning("Header analysis failed for %s: %s", url, retry_exc)
+        if capture_response:
+            return [], _captured
         return []
     findings = _headers_to_findings(result.headers, http_fallback=False)
     findings.append({
@@ -134,6 +149,8 @@ async def _analyze_unverified(url: str, exc: Exception) -> list[dict]:
         ),
         "recommendation": "Install a valid publicly-trusted TLS certificate",
     })
+    if capture_response:
+        return findings, _captured
     return findings
 
 

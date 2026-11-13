@@ -9,9 +9,12 @@ from services.scanner.header_scanner import analyze_headers
 @scanner_module("header_scan", phase="header", order=3)
 async def header_scan_module(ctx: ScanContext) -> dict:
     """HTTP security-header analysis against the pinned IP."""
-    issues = await analyze_headers(f"https://{ctx.domain}")
+    issues, http_response = await analyze_headers(
+        f"https://{ctx.domain}", capture_response=True
+    )
     return {
         "host": ctx.domain,
         "issues": issues,
         "issue_count": len(issues),
+        "http_response": http_response,
     }
