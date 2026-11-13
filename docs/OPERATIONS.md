@@ -152,6 +152,32 @@ password reset just won't deliver.
 - Severity is static per finding type (`high` for claimable providers,
   `medium` for edge-case providers) — not derived from OSV/KEV enrichment.
 
+## Tech fingerprint scanner operations (Phase 3, module 3)
+
+- `TECH_FINGERPRINT_ENABLED` (default `true`): set `false` to disable the
+  tech fingerprinting phase entirely.
+- `TECH_FINGERPRINT_TIMEOUT_SECONDS` (default `10.0`): per-HTTP request
+  timeout for fingerprint lookups.
+- `TECH_FINGERPRINT_MAX_CONCURRENCY` (default `10`): max concurrent
+  fingerprint lookups per scan.
+- `TECH_FINGERPRINT_MAX_HOSTS_PER_SCAN` (default `100`): max subdomains
+  checked for tech fingerprinting per scan; exceeded hosts are truncated and
+  reported via `truncated=true` on the scan record.
+- `TECH_FINGERPRINT_MAX_REDIRECTS` (default `3`): max HTTP redirects
+  followed during fingerprinting.
+- `TECH_FINGERPRINT_MAX_BODY_BYTES` (default `65536`): max response body
+  bytes read during fingerprinting.
+- All outbound connections go through the SSRF pin (`utils.egress`).
+- Fingerprint data lives in `backend/scanner_modules/tech_fingerprints.json`,
+  hand-curated (not derived from any external database). Each entry maps a
+  technology name to detection patterns (headers, TLS, HTML) and an optional
+  version regex.
+- Findings carry `confidence` (≤ 0.85) and `dedupe_key`
+  (`tech_fingerprint:<technology>:<hostname>`). Rescans update existing
+  findings by `dedupe_key` rather than creating duplicates.
+- Severity/CVE mapping flows only through existing OSV/KEV enrichment —
+  this module never invents EOL or CVE data.
+
 ## Tags and releases
 
 Single branch, tag-cut releases. **Nothing auto-publishes**: `docker-publish`
