@@ -49,6 +49,20 @@ def _port_data(port: Port) -> dict:
     }
 
 
+def _tech_data(tech) -> dict:
+    return {
+        "id": tech.id,
+        "name": tech.name,
+        "category": tech.category,
+        "version": tech.version,
+        "confidence": tech.confidence,
+        "matched_pattern": tech.matched_pattern,
+        "status_code": tech.status_code,
+        "first_seen": tech.first_seen.isoformat() if tech.first_seen else None,
+        "last_seen": tech.last_seen.isoformat() if tech.last_seen else None,
+    }
+
+
 def _subdomain_data(sub: Subdomain) -> dict:
     return {
         "id": sub.id,
@@ -60,6 +74,7 @@ def _subdomain_data(sub: Subdomain) -> dict:
             _ssl_data(sub.ssl_results[0])
             if sub.ssl_results else None
         ),
+        "technologies": [_tech_data(t) for t in getattr(sub, "asset_technologies", [])],
     }
 
 
