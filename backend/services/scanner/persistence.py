@@ -257,9 +257,9 @@ def persist_tech_fingerprint_results(
 ) -> None:
     """Upsert tech fingerprint findings into asset_technologies.
 
-    Upserts on (subdomain_id, name): updates version, confidence,
-    matched_pattern, status_code, last_seen on existing rows; creates
-    new rows otherwise.  first_seen is set on insert only.
+    Uses INSERT ... ON CONFLICT (subdomain_id, name) DO UPDATE so
+    concurrent scans never raise IntegrityError.  first_seen is set only
+    on insert; last_seen is updated on every upsert.
     """
     if not findings:
         return
@@ -269,30 +269,25 @@ def persist_tech_fingerprint_results(
         if not name:
             continue
 
-        existing = (
-            db.query(AssetTechnology)
-            .filter(
-                AssetTechnology.subdomain_id == subdomain.id,
-                AssetTechnology.name == name,
-            )
-            .first()
+        stmt = insert(AssetTechnology).values(
+            subdomain_id=subdomain.id,
+            name=name,
+            category=finding.get("category"),
+            version=finding.get("version"),
+            confidence=finding.get("confidence"),
+            matched_pattern=finding.get("matched_pattern"),
+            status_code=finding.get("status_code"),
         )
-        if existing is None:
-            existing = AssetTechnology(
-                subdomain_id=subdomain.id,
-                name=name,
-                category=finding.get("category"),
-                version=finding.get("version"),
-                confidence=finding.get("confidence"),
-                matched_pattern=finding.get("matched_pattern"),
-                status_code=finding.get("status_code"),
-            )
-            db.add(existing)
-        else:
-            existing.category = finding.get("category", existing.category)
-            existing.version = finding.get("version", existing.version)
-            existing.confidence = finding.get("confidence", existing.confidence)
-            existing.matched_pattern = finding.get("matched_pattern", existing.matched_pattern)
-            existing.status_code = finding.get("status_code", existing.status_code)
-            existing.last_seen = datetime.now(timezone.utc)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["subdomain_id", "name"],
+            set_={
+                "category": finding.get("category"),
+                "version": finding.get("version"),
+                "confidence": finding.get("confidence"),
+                "matched_pattern": finding.get("matched_pattern"),
+                "status_code": finding.get("status_code"),
+                "last_seen": datetime.now(timezone.utc),
+            },
+        )
+        db.execute(stmt)
     db.flush()

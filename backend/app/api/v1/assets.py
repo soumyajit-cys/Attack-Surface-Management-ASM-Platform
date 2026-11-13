@@ -74,7 +74,7 @@ def _subdomain_data(sub: Subdomain) -> dict:
             _ssl_data(sub.ssl_results[0])
             if sub.ssl_results else None
         ),
-        "technologies": [_tech_data(t) for t in getattr(sub, "asset_technologies", [])],
+        "technologies": [_tech_data(t) for t in (sub.asset_technologies or [])],
     }
 
 
