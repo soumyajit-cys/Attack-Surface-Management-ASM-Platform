@@ -13,12 +13,12 @@ _SAFE_HEADERS = frozenset({
 
 
 def _sanitize_response(raw: dict | None) -> dict | None:
-    \"\"\"Strip sensitive headers and cap body size.
+    """Strip sensitive headers and cap body size.
 
     Only an allowlist of non-sensitive headers is retained; Set-Cookie,
     Authorization, and all other headers are dropped.  The body is
     truncated to the configured cap.
-    \"\"\"
+    """
     if not raw:
         return None
     headers = {

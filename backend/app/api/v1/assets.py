@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from models.asset import Asset
 from models.subdomain import Subdomain
+from models.domain import Domain
 from sqlalchemy.orm import joinedload
 from models.port import Port
 from models.finding import Finding
