@@ -107,6 +107,18 @@ export interface AssetSsl {
   risk_level: string
 }
 
+export interface AssetTechnology {
+  id: number
+  name: string
+  category: string | null
+  version: string | null
+  confidence: number | null
+  matched_pattern: string | null
+  status_code: number | null
+  first_seen: string | null
+  last_seen: string | null
+}
+
 export interface AssetSubdomain {
   id: number
   subdomain: string
@@ -114,6 +126,7 @@ export interface AssetSubdomain {
   source: string
   ports: AssetPort[]
   ssl: AssetSsl | null
+  technologies: AssetTechnology[]
 }
 
 export interface AssetDomain {

@@ -243,6 +243,16 @@ export function AssetDetail() {
                               SSL: {sub.ssl.tls_version} ({sub.ssl.risk_level})
                             </span>
                           )}
+                          {sub.technologies?.map((tech) => (
+                            <span
+                              key={tech.id}
+                              className="badge badge-info"
+                              title={tech.matched_pattern || undefined}
+                            >
+                              {tech.name}
+                              {tech.version ? ` ${tech.version}` : ''}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>
