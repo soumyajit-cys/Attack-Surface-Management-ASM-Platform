@@ -195,7 +195,9 @@ async def get_asset(
     db: Session = Depends(get_db),
     principal: Principal = Depends(_READ_DEP),
 ):
-    asset = db.query(Asset).filter(
+    asset = db.query(Asset).options(
+        joinedload(Asset.domains).joinedload(Domain.subdomains).joinedload(Subdomain.asset_technologies),
+    ).filter(
         Asset.id == asset_id,
         Asset.organization_id == principal.organization_id,
     ).first()
