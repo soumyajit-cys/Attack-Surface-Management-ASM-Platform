@@ -209,5 +209,3 @@ class TestTechFingerprintModule:
         result = asyncio.run(tf.tech_fingerprint_module(ctx))
         for f in result["findings"]:
             assert f["confidence"] <= 0.85
-PYEOF
-echo "Done"
