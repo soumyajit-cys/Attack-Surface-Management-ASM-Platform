@@ -491,3 +491,57 @@ class TestTakeoverModule:
             )
         assert summary["unpinned_skipped"] == ["www.example.com"]
         assert summary["ports_total"] == 0
+
+
+class TestDataProvenance:
+    def test_no_not_vulnerable_entry_produces_finding(self):
+        """Reads the data file and asserts that no 'Not vulnerable' entry
+        is loaded into FINGERPRINTS (so it can never produce a finding)."""
+        import json
+        from pathlib import Path
+        from scanner_modules.subdomain_takeover import _load_fingerprints
+
+        data = json.loads(
+            (Path(__file__).parent.parent / "scanner_modules" / "takeover_fingerprints.json").read_text()
+        )
+        # Collect names of Not-vulnerable entries in the data file.
+        not_vuln_names = {
+            e.get("name", e.get("service"))
+            for e in data["providers"]
+            if e.get("status") == "Not vulnerable"
+        }
+        assert not_vuln_names, "Expected at least one Not-vulnerable entry"
+
+        loaded = _load_fingerprints()
+        loaded_names = {p["name"] for p in loaded}
+        # None of the Not-vulnerable entries should be in the loaded set.
+        overlap = not_vuln_names & loaded_names
+        assert not overlap, (
+            f"Not-vulnerable entries leaked into FINGERPRINTS: {overlap}"
+        )
+
+    def test_provenance_fields_present(self):
+        """Data file has blob_sha, commit (full SHA), and license."""
+        import json
+        from pathlib import Path
+
+        data = json.loads(
+            (Path(__file__).parent.parent / "scanner_modules" / "takeover_fingerprints.json").read_text()
+        )
+        assert "blob_sha" in data
+        assert data["blob_sha"] == "6d4a4168552366b5050fff054017db9116873621"
+        assert "commit" in data
+        assert data["commit"] == "5bd4e12837911c8475486f1da922c9b9c706e632"
+        assert data.get("license") == "CC BY 4.0"
+
+    def test_status_derives_tier(self):
+        """Every loaded provider has a tier derived from upstream status."""
+        from scanner_modules.subdomain_takeover import FINGERPRINTS
+
+        for p in FINGERPRINTS:
+            assert "tier" in p
+            assert p["tier"] in ("claimable", "likely_claimable")
+            if p["tier"] == "claimable":
+                assert p["verified_claimable"] is True
+            else:
+                assert p["likely_claimable"] is True
