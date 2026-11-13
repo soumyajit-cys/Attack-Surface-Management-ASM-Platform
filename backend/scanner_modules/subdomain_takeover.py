@@ -273,14 +273,16 @@ def _match_provider(
         if not matched:
             continue
 
-        # Severity/confidence based on claimable status.
-        if provider["verified_claimable"]:
+        # Severity/confidence based on upstream status tier.
+        if provider.get("tier") == "claimable":
             severity = "high"
             confidence = 0.85
-        else:
-            # Edge-case provider: only "likely_claimable" at low confidence.
+        elif provider.get("tier") == "likely_claimable":
             severity = "medium"
             confidence = 0.60
+        else:
+            # Excluded tier should never reach here.
+            continue
 
         return {
             "provider_id": provider["name"],
