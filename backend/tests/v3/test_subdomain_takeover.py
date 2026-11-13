@@ -119,7 +119,7 @@ def _patch_http(monkeypatch, http_map=None):
             return _Response(resp["status_code"], resp["body"])
         return _Response(404, "Not Found")
 
-    monkeypatch.setattr(httpx.Client, "get", lambda self, url, headers=None, **kwargs: fake_get(url, headers))
+    monkeypatch.setattr(httpx.Client, "get", lambda self, url, headers=None, **kwargs: fake_get(self, url, headers, **kwargs))
 
     def fake_resolve_validated_ips(host, port=80):
         # Return the pinned IP for any host
