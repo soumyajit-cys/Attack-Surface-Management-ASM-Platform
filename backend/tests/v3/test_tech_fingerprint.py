@@ -245,7 +245,10 @@ class TestSanitizerAllowlist:
         def _check(obj, path=""):
             if isinstance(obj, dict):
                 for k, v in obj.items():
-                    assert k not in ("http_response", "headers", "body", "raw_headers"), f"Found {k} at {path}"
+                    # The summary legitimately has a "headers" key (scanned/issues
+                    # counters) and "ssl" key.  We only flag http_response and
+                    # body keys that would indicate leaked raw data.
+                    assert k not in ("http_response", "body", "raw_headers", "raw_body"), f"Found {k} at {path}"
                     _check(v, f"{path}.{k}")
             elif isinstance(obj, list):
                 for i, item in enumerate(obj):
