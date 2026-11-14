@@ -75,5 +75,3 @@ def upsert_finding(
 def legacy_dedupe_key(title: str) -> str:
     """Generate a dedupe key for legacy title-keyed findings."""
     return f"legacy:{hashlib.md5(title.encode()).hexdigest()}"
-PYEOF
-echo "Rewritten"
