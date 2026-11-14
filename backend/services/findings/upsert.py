@@ -38,8 +38,9 @@ def upsert_finding(
         "confidence": fields.get("confidence"),
         "source_module": fields.get("source_module"),
         "target_host": fields.get("target_host"),
+        "first_seen_at": fields.get("first_seen_at"),
     }
-    # Remove None values for optional fields to use DB defaults
+    # Remove None values for optional fields
     values = {k: v for k, v in values.items() if v is not None or k in ("organization_id", "asset_id", "dedupe_key", "title", "severity", "category")}
 
     stmt = insert(Finding).values(**values)
@@ -51,7 +52,8 @@ def upsert_finding(
             "description": fields.get("description"),
             "recommendation": fields.get("recommendation"),
             "confidence": fields.get("confidence"),
-            "last_seen_at": None,  # will be set by caller
+            "last_seen_at": fields.get("last_seen_at"),
+            "last_seen_scan_id": fields.get("last_seen_scan_id"),
         },
     )
     db.execute(stmt)
@@ -74,8 +76,4 @@ def legacy_dedupe_key(title: str) -> str:
     """Generate a dedupe key for legacy title-keyed findings."""
     return f"legacy:{hashlib.md5(title.encode()).hexdigest()}"
 PYEOF
-mkdir -p /home/babai/Desktop/codeing/ASM/Attack-Surface-Management-ASM-Platform/backend/services/findings
-mv /home/babai/Desktop/codeing/ASM/Attack-Surface-Management-ASM-Platform/backend/services/findings/upsert.py /tmp/upsert_backup.py 2>/dev/null
-mkdir -p /home/babai/Desktop/codeing/ASM/Attack-Surface-Management-ASM-Platform/backend/services/findings
-cp /tmp/upsert_backup.py /home/babai/Desktop/codeing/ASM/Attack-Surface-Management-ASM-Platform/backend/services/findings/upsert.py
-echo "Done"
+echo "Rewritten"
