@@ -1,0 +1,12 @@
+{
+  "source": "hand-written",
+  "license": "internal",
+  "signatures": [
+    {"service": "redis", "ports": [6379], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5},
+    {"service": "mongodb", "ports": [27017, 27018, 27019], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5},
+    {"service": "memcached", "ports": [11211], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5},
+    {"service": "mysql", "ports": [3306], "probe_type": "passive", "match_patterns": ["\\d+\\.\\d+\\.\\d+"], "severity": "high", "confidence": 0.9},
+    {"service": "elasticsearch", "ports": [9200, 9300], "probe_type": "http", "match_patterns": ["cluster_name", "elasticsearch"], "severity": "high", "confidence": 0.9},
+    {"service": "http_admin", "ports": [80, 443, 8080, 8443, 9090], "probe_type": "http", "match_patterns": ["/admin", "/manager", "/phpmyadmin", "/wp-admin"], "severity": "medium", "confidence": 0.7}
+  ]
+}

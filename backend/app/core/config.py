@@ -175,6 +175,15 @@ class Settings(BaseSettings):
     tech_fingerprint_max_redirects: int = 3
     tech_fingerprint_max_body_bytes: int = 65536
 
+    # Exposed services (Phase 4, module 4): identify services on open ports.
+    exposed_services_enabled: bool = True
+    exposed_services_timeout_seconds: float = 10.0
+    exposed_services_max_concurrency: int = 10
+    exposed_services_max_hosts_per_scan: int = 100
+    exposed_services_max_ports_per_host: int = 20
+    exposed_services_max_body_bytes: int = 65536
+    exposed_services_allow_pg_sslrequest: bool = False
+
     # Comma-separated CIDRs (or bare IPs) of proxies allowed to set
     # X-Forwarded-For. Default empty trusts nothing: the header is ignored
     # and the direct peer is used. Set behind nginx/traefik so the limiter,
