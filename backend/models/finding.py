@@ -6,7 +6,8 @@ from sqlalchemy import (
     String,
     Text,
     ForeignKey,
-    DateTime
+    DateTime,
+    UniqueConstraint,
 )
 
 from sqlalchemy.sql import func
@@ -19,6 +20,15 @@ from models.base import Base
 class Finding(Base):
 
     __tablename__ = "findings"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "asset_id",
+            "dedupe_key",
+            name="uq_findings_org_asset_dedupe",
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
 
