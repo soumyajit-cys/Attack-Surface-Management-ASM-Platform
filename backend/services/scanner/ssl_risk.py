@@ -18,7 +18,7 @@ except Exception:
     CA_BUNDLE_AVAILABLE = False
 
 
-def assess_ssl_risk(ssl_data: dict) -> dict:
+def assess_ssl_risk(ssl_data: dict, now: datetime | None = None) -> dict:
     if not ssl_data:
         return {
             "risk_level": "unknown",
@@ -55,7 +55,8 @@ def assess_ssl_risk(ssl_data: dict) -> dict:
     # Expiry tiers (replace expires_soon; days_remaining = floor in UTC).
     expires_at = ssl_data.get("expires_at")
     if expires_at and not ssl_data.get("expired"):
-        now = datetime.now(timezone.utc)
+        if now is None:
+            now = datetime.now(timezone.utc)
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         days_remaining = math.floor((expires_at - now).total_seconds() / 86400)
