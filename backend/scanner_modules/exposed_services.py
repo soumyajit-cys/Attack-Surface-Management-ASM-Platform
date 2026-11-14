@@ -237,5 +237,3 @@ async def exposed_services_module(ctx: ScanContext) -> dict:
         "findings_total": len(findings),
         "truncated": truncated,
     }
-PYEOF
-echo "Done"
