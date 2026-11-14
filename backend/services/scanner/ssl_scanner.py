@@ -156,6 +156,7 @@ def _parse_cert(host: str, cert: dict, cert_der: bytes, tls_version: str, cipher
     ).replace(tzinfo=timezone.utc)
     now = datetime.now(timezone.utc)
     expired = expires_at < now
+    expires_soon = (expires_at - now).days <= 30
 
     san = []
     for ext in cert.get("subjectAltName", []):
@@ -176,10 +177,11 @@ def _parse_cert(host: str, cert: dict, cert_der: bytes, tls_version: str, cipher
         "cipher_bits": cipher[2] if cipher and len(cipher) > 2 else None,
         "expires_at": expires_at,
         "expired": expired,
+        "expires_soon": expires_soon,
         "self_signed": self_signed,
         "san": san,
         "chain_length": chain_length,
-        "risk_level": "unknown",
+        "risk_level": _calculate_risk_level(expired, expires_soon, self_signed, tls_version),
     }
 
 
