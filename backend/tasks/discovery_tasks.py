@@ -513,6 +513,7 @@ def _scan_targets(
     can_headers = scope_policy.phase_allowed(scope, ScanPhase.HEADER)
     can_dns = scope_policy.phase_allowed(scope, ScanPhase.EMAIL_SECURITY)
     can_fingerprint = scope_policy.phase_allowed(scope, ScanPhase.FINGERPRINT)
+    can_exposed = scope_policy.phase_allowed(scope, ScanPhase.EXPOSED_SERVICES)
 
     # ── Passive email-security DNS lookups (runs once per domain,
     #    not per subdomain; allowed even in passive scope). ─────────────
