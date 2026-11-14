@@ -21,6 +21,7 @@ from models.verified_domain import VerifiedDomain
 from models.alert_integration import AlertIntegration, AlertChannel, AlertSeverity, EmailDigestConfig
 from models.enrichment_provider import EnrichmentProvider
 from models.asset_technology import AssetTechnology
+from models.finding_event import FindingEvent
 
 __all__ = [
     "Base",
