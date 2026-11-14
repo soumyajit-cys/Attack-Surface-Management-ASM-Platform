@@ -7,6 +7,19 @@ from cryptography import x509
 
 from utils.egress import connect_tls_socket, EgressBlocked
 from utils.logger import logger
+import ssl as _ssl_mod
+
+# Check if CA bundle is available (computed once)
+_CA_BUNDLE_AVAILABLE = True
+try:
+    _ctx = _ssl_mod.create_default_context()
+    if not _ctx.get_ca_certs():
+        _CA_BUNDLE_AVAILABLE = False
+except Exception:
+    _CA_BUNDLE_AVAILABLE = False
+
+if not _CA_BUNDLE_AVAILABLE:
+    logger.warning("CA bundle unavailable; tls_depth chain checks disabled")
 
 
 async def analyze_ssl(host: str) -> Optional[dict]:
@@ -22,12 +35,36 @@ async def analyze_ssl(host: str) -> Optional[dict]:
         tls_version = ssl_sock.version()
         cipher = ssl_sock.cipher()
 
+        # Python 3.13: get_unverified_chain() exposes the full chain even
+        # when verification is disabled.
+        chain = []
+        try:
+            chain = ssl_sock.get_unverified_chain()
+        except AttributeError:
+            chain = []
+
+        # Verify code from a separate verified handshake
+        verify_code = 0
+        try:
+            verify_sock = await loop.run_in_executor(
+                None,
+                lambda: connect_tls_socket(host, 443, server_hostname=host, verified=True),
+            )
+            verify_sock.close()
+        except ssl.SSLCertVerificationError as ve:
+            verify_code = ve.verify_code if hasattr(ve, "verify_code") else 0
+        except Exception:
+            pass
+
         ssl_sock.close()
 
         if not cert:
             return None
 
-        return _parse_cert(host, cert, cert_der, tls_version, cipher)
+        result = _parse_cert(host, cert, cert_der, tls_version, cipher)
+        result["verify_code"] = verify_code
+        result["chain_length"] = len(chain) if chain else 1
+        return result
 
     except ssl.SSLCertVerificationError as exc:
         return await _analyze_ssl_unverified(host, str(exc))
@@ -51,6 +88,12 @@ async def _analyze_ssl_unverified(host: str, error: str) -> Optional[dict]:
         tls_version = ssl_sock.version()
         cipher = ssl_sock.cipher()
 
+        chain = []
+        try:
+            chain = ssl_sock.get_unverified_chain()
+        except AttributeError:
+            chain = []
+
         ssl_sock.close()
 
         # With verify_mode=CERT_NONE ``getpeercert()`` returns an EMPTY dict
@@ -64,6 +107,8 @@ async def _analyze_ssl_unverified(host: str, error: str) -> Optional[dict]:
 
         result = _parse_cert(host, cert, cert_der, tls_version, cipher)
         result["verify_error"] = error
+        result["verify_code"] = 0
+        result["chain_length"] = len(chain) if chain else 1
         return result
 
     except Exception as exc:
