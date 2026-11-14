@@ -23,6 +23,7 @@ from models.enrichment_provider import EnrichmentProvider
 from models.asset_technology import AssetTechnology
 from models.finding_event import FindingEvent
 from models.scan_module_run import ScanModuleRun
+from models.org_sla_config import OrgSlaConfig
 
 __all__ = [
     "Base",
@@ -58,4 +59,5 @@ __all__ = [
     "AssetTechnology",
     "FindingEvent",
     "ScanModuleRun",
+    "OrgSlaConfig",
 ]
