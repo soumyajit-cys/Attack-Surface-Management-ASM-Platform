@@ -20,6 +20,7 @@ class TestScopeMapping:
         assert scope_policy.phases_for_scope("active") == frozenset({
             ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY,
             ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
+            ScanPhase.EXPOSED_SERVICES,
         })
         assert not scope_policy.enrichment_allowed("active")
 
@@ -27,7 +28,7 @@ class TestScopeMapping:
         assert scope_policy.phases_for_scope("full") == frozenset({
             ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY,
             ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
-            ScanPhase.FINGERPRINT,
+            ScanPhase.FINGERPRINT, ScanPhase.EXPOSED_SERVICES,
         })
         assert scope_policy.enrichment_allowed("full")
 
@@ -39,6 +40,7 @@ class TestScopeMapping:
             ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY,
             ScanPhase.PORT, ScanPhase.SSL,
             ScanPhase.HEADER, ScanPhase.FINGERPRINT,
+            ScanPhase.EXPOSED_SERVICES,
         })
 
     def test_normalize_defaults_and_rejects(self):
@@ -119,6 +121,7 @@ class TestPipelineGating:
             expected = {
                 ScanPhase.EMAIL_SECURITY, ScanPhase.PORT,
                 ScanPhase.SSL, ScanPhase.HEADER,
+                ScanPhase.EXPOSED_SERVICES,
             }
             if scope == "full":
                 expected.add(ScanPhase.FINGERPRINT)
