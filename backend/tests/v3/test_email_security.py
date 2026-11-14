@@ -229,10 +229,10 @@ class TestEmailSecurityModule:
         spf_f = next(f for f in result["findings"] if f["title"] == "SPF record not published")
         assert spf_f["severity"] == "low"
         assert spf_f["confidence"] == 0.95
-        assert spf_f["dedupe_key"] == "email_security:spf_missing"
+        assert spf_f["dedupe_key"] == "email_security:spf_missing:example.com"
         dmarc_f = next(f for f in result["findings"] if f["title"] == "DMARC record not published")
         assert dmarc_f["severity"] == "low"
-        assert dmarc_f["dedupe_key"] == "email_security:dmarc_missing"
+        assert dmarc_f["dedupe_key"] == "email_security:dmarc_missing:example.com"
 
     def test_no_mail_evidence_no_findings(self, monkeypatch):
         """No MX, no SPF, no DMARC: info note only, never medium."""
