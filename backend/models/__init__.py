@@ -56,4 +56,6 @@ __all__ = [
     "VerifiedDomain",
     "EnrichmentProvider",
     "AssetTechnology",
+    "FindingEvent",
+    "ScanModuleRun",
 ]
