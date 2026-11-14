@@ -257,7 +257,7 @@ class TestEmailSecurityModule:
         result = asyncio.run(email_security_module(_make_ctx("example.com")))
         f = next(f for f in result["findings"] if "DMARC" in f["title"])
         assert f["severity"] == "low"
-        assert f["dedupe_key"] == "email_security:dmarc_none"
+        assert f["dedupe_key"] == "email_security:dmarc_none:example.com"
 
     def test_dmarc_pct_under_100(self, monkeypatch):
         """DMARC p=reject with pct<100: low severity finding."""
@@ -372,7 +372,7 @@ class TestEmailSecurityModule:
         keys2 = {f["dedupe_key"] for f in r2["findings"] if "dedupe_key" in f}
         assert keys1 == keys2
         # dmarc_none key present in both
-        assert "email_security:dmarc_none" in keys1
+        assert "email_security:dmarc_none:example.com" in keys1
 
     def test_module_disabled(self, monkeypatch):
         """email_security_enabled=False: no findings, outcome=disabled."""
