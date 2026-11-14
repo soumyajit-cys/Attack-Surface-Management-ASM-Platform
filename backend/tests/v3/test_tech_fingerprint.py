@@ -367,3 +367,187 @@ class TestPersistenceUpsert:
 
         tech = db.query(AssetTechnology).filter(AssetTechnology.subdomain_id == sub.id).first()
         assert tech.version == "2.4.1"
+
+
+class TestRealConcurrency:
+    def test_concurrent_upsert_two_sessions(self, db, org_factory):
+        """Two sessions in two threads released together with a barrier."""
+        import threading
+        from models.subdomain import Subdomain
+        from models.domain import Domain
+        from models.asset import Asset
+        from models.asset_technology import AssetTechnology
+        from services.scanner.persistence import persist_tech_fingerprint_results
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        org, _ = org_factory("conc-org", "concuser", "conc@example.com")
+        asset = Asset(organization_id=org.id, name="conc-asset")
+        db.add(asset)
+        db.flush()
+        domain = Domain(organization_id=org.id, asset_id=asset.id, domain="conc.example.com")
+        db.add(domain)
+        db.flush()
+        sub = Subdomain(domain_id=domain.id, subdomain="www.conc.example.com")
+        db.add(sub)
+        db.commit()
+        sub_id = sub.id
+
+        # Use the same DB URL for both sessions
+        db_url = str(db.bind.url)
+        engine = create_engine(db_url)
+        Session = sessionmaker(bind=engine)
+
+        barrier = threading.Barrier(2)
+        errors = []
+
+        def worker(version):
+            try:
+                s = Session()
+                # Re-fetch subdomain in this session
+                sub_obj = s.query(Subdomain).filter(Subdomain.id == sub_id).first()
+                barrier.wait(timeout=5)
+                persist_tech_fingerprint_results(s, sub_obj, [
+                    {"provider": "nginx", "category": "web_server", "version": version,
+                     "confidence": 0.6, "matched_pattern": "nginx/", "status_code": 200},
+                ])
+                s.commit()
+                s.close()
+            except Exception as e:
+                errors.append(e)
+
+        t1 = threading.Thread(target=worker, args=("1.18.0",))
+        t2 = threading.Thread(target=worker, args=("1.20.0",))
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+
+        assert not errors, f"Concurrency errors: {errors}"
+
+        # Verify final state
+        s = Session()
+        tech = s.query(AssetTechnology).filter(AssetTechnology.subdomain_id == sub_id).first()
+        assert tech is not None
+        assert tech.version in ("1.18.0", "1.20.0")
+        s.close()
+
+
+class TestValueBasedSanitizer:
+    def test_sentinel_strings_not_in_summary_or_logs(self, caplog):
+        import logging
+        import json
+        import tasks.discovery_tasks as dt
+        from app.scanning.registry import registry
+
+        caplog.set_level(logging.DEBUG)
+
+        # Unique sentinel strings
+        sentinel_cookie = "SENTINEL_COOKIE_VALUE_XYZ"
+        sentinel_auth = "SENTINEL_AUTH_TOKEN_ABC"
+        sentinel_body = "SENTINEL_BODY_CONTENT_123"
+
+        # Build a sanitized response (simulating what header_scan produces)
+        from scanner_modules.header_scan import _sanitize_response
+        raw = {
+            "status_code": 200,
+            "headers": {
+                "Server": "nginx/1.18.0",
+                "Set-Cookie": sentinel_cookie,
+                "Authorization": sentinel_auth,
+            },
+            "body": sentinel_body,
+        }
+        sanitized = _sanitize_response(raw)
+
+        # Sanitized response must not contain sentinels
+        sanitized_str = json.dumps(sanitized)
+        assert sentinel_cookie not in sanitized_str
+        assert sentinel_auth not in sanitized_str
+        assert sentinel_body not in sanitized_str
+
+        # Build a summary and check it doesn't contain sentinels
+        summary = dt._new_summary(registry)
+        summary_str = json.dumps(summary)
+        assert sentinel_cookie not in summary_str
+        assert sentinel_auth not in summary_str
+        assert sentinel_body not in summary_str
+
+        # Check logs don't contain sentinels
+        for record in caplog.records:
+            msg = record.getMessage()
+            assert sentinel_cookie not in msg
+            assert sentinel_auth not in msg
+            assert sentinel_body not in msg
+
+
+class TestMigrationUpDownUp:
+    def test_asset_technologies_migration_roundtrip(self, monkeypatch, tmp_path):
+        """Automated up/down/up test on scratch DB."""
+        import os
+        import subprocess
+        from pathlib import Path
+        import shutil
+
+        db_url = os.environ.get(
+            "SCRATCH_DB_URL",
+            "postgresql://sentinel:sentinelpass@localhost:5432/scratch_migration_test",
+        )
+        env = dict(os.environ)
+        env["DATABASE_URL"] = db_url
+
+        backend_root = Path(__file__).resolve().parents[2]
+        alembic_ini = str(tmp_path / "alembic.ini")
+        shutil.copy(backend_root / "alembic.ini", alembic_ini)
+        ini_text = Path(alembic_ini).read_text()
+        ini_text = ini_text.replace(
+            "script_location = migrations",
+            f"script_location = {backend_root}/migrations",
+        )
+        ini_text = ini_text.replace(
+            "sqlalchemy.url =",
+            f"sqlalchemy.url = {db_url}",
+        )
+        ini_text = ini_text.replace(
+            "prepend_sys_path = .",
+            f"prepend_sys_path = {backend_root}",
+        )
+        Path(alembic_ini).write_text(ini_text)
+        env["PYTHONPATH"] = str(backend_root)
+
+        import psycopg2
+
+        # Create fresh DB
+        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn.autocommit = True
+        try:
+            conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_test;")
+            conn.cursor().execute("CREATE DATABASE scratch_migration_test OWNER sentinel;")
+        finally:
+            conn.close()
+
+        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn.autocommit = True
+        try:
+            conn.cursor().execute("GRANT ALL ON DATABASE scratch_migration_test TO sentinel;")
+        finally:
+            conn.close()
+
+        def run(cmd):
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+            assert result.returncode == 0, f"Failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
+
+        # Upgrade to head
+        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+        # Downgrade one step
+        run(["alembic", "-c", alembic_ini, "downgrade", "-1"])
+        # Upgrade again
+        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+
+        # Cleanup
+        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn.autocommit = True
+        try:
+            conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_test;")
+        finally:
+            conn.close()
