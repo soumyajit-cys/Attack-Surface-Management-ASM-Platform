@@ -460,13 +460,13 @@ class TestValueBasedSanitizer:
         }
         sanitized = _sanitize_response(raw)
 
-        # Sanitized response must not contain sentinels
-        sanitized_str = json.dumps(sanitized)
+        # Sanitized response must not contain sentinel headers
+        sanitized_str = json.dumps(sanitized["headers"])
         assert sentinel_cookie not in sanitized_str
         assert sentinel_auth not in sanitized_str
-        assert sentinel_body not in sanitized_str
 
-        # Build a summary and check it doesn't contain sentinels
+        # The body is retained (size-capped) for tech_fingerprint use,
+        # but must not leak into the scan summary.
         summary = dt._new_summary(registry)
         summary_str = json.dumps(summary)
         assert sentinel_cookie not in summary_str
