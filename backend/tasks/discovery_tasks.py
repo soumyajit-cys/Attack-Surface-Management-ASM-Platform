@@ -483,6 +483,7 @@ def _new_summary(scan_registry) -> dict:
         "email_security_findings": [],
         "takeover_findings": [],
         "tech_fingerprint_findings": [],
+        "exposed_services_findings": [],
         "unpinned_skipped": [],
         # Template scanning is unwired until Phase 4 (see
         # services/findings/finding_engine.run_nuclei_scan): always skipped.
@@ -637,6 +638,32 @@ def _scan_targets(
         cached_http_response = None
         if can_headers:
             cached_http_response = header_results.get("http_response")
+
+        if can_exposed:
+            # Exposed services: reuse open ports from port scan.
+            open_ports_for_host = []
+            if can_port and ports:
+                open_ports_for_host = [
+                    {"port": p["port"], "banner": p.get("banner", "")}
+                    for p in ports if p.get("status") == "open"
+                ]
+            es_ctx = ScanContext(
+                domain=host,
+                pinned_ip=pinned_ip,
+                org_id=scan.organization_id,
+                scan_id=scan.id,
+                db=db,
+                scope=scope,
+                subdomains=[host],
+                config={"open_ports": {host: open_ports_for_host}},
+            )
+            es_results = _run_in_context(
+                es_ctx, registry.get_modules(phase=ScanPhase.EXPOSED_SERVICES)
+            )
+            for finding in es_results.get("findings", []):
+                summary["exposed_services_findings"].append(finding)
+            if es_results.get("truncated"):
+                summary["exposed_services_truncated"] = True
 
         if can_fingerprint:
             # Tech fingerprint runs per-subdomain (passive identification).
