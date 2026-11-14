@@ -209,9 +209,13 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Note: cannot restore merged duplicates.
+    op.drop_constraint("fk_findings_last_seen_scan", "findings", type_="foreignkey")
     op.drop_constraint("fk_findings_suppressed_by", "findings", type_="foreignkey")
     op.drop_constraint("fk_findings_resolved_by", "findings", type_="foreignkey")
     op.drop_constraint("fk_findings_assigned_to", "findings", type_="foreignkey")
+    op.drop_index("ix_findings_due_date", table_name="findings")
+    op.drop_index("ix_findings_org_assigned", table_name="findings")
+    op.drop_index("ix_findings_org_status", table_name="findings")
     op.drop_index("uq_findings_org_asset_dedupe", table_name="findings")
     op.drop_table("scan_module_runs")
     op.drop_table("org_sla_config")
