@@ -35,6 +35,7 @@ def _setup_database():
     with engine.connect() as conn:
         conn.execute(text("DROP SCHEMA public CASCADE"))
         conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO sentinel"))
         conn.commit()
     Base.metadata.create_all(engine)
     engine.dispose()
