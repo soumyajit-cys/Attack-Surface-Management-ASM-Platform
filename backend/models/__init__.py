@@ -22,6 +22,7 @@ from models.alert_integration import AlertIntegration, AlertChannel, AlertSeveri
 from models.enrichment_provider import EnrichmentProvider
 from models.asset_technology import AssetTechnology
 from models.finding_event import FindingEvent
+from models.scan_module_run import ScanModuleRun
 
 __all__ = [
     "Base",
