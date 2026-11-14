@@ -729,6 +729,8 @@ def _generate_and_persist_findings(
     findings_data.extend(summary.get("takeover_findings", []))
     # Tech fingerprint findings are also in finding-dict shape; merge them directly.
     findings_data.extend(summary.get("tech_fingerprint_findings", []))
+    # Exposed services findings are also in finding-dict shape; merge them directly.
+    findings_data.extend(summary.get("exposed_services_findings", []))
 
     new_findings: list[Finding] = []
 
