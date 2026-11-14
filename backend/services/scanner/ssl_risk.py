@@ -11,6 +11,12 @@ try:
 except Exception:
     LEGACY_PROTOCOLS_TESTABLE = False
 
+try:
+    from services.scanner.ssl_scanner import _CA_BUNDLE_AVAILABLE
+    CA_BUNDLE_AVAILABLE = _CA_BUNDLE_AVAILABLE
+except Exception:
+    CA_BUNDLE_AVAILABLE = False
+
 
 def assess_ssl_risk(ssl_data: dict) -> dict:
     if not ssl_data:
@@ -131,6 +137,7 @@ def assess_ssl_risk(ssl_data: dict) -> dict:
 
     # Chain problems (from verify codes)
     verify_code = ssl_data.get("verify_code")
+    from services.scanner.ssl_risk import CA_BUNDLE_AVAILABLE
     if verify_code == 20:
         findings.append({
             "title": "Incomplete Certificate Chain",
@@ -141,7 +148,7 @@ def assess_ssl_risk(ssl_data: dict) -> dict:
             "dedupe_key": f"ssl_incomplete_chain:{ssl_data.get('host', '')}",
         })
         risk_score += 4.0
-    elif verify_code == 19:
+    elif verify_code == 19 and CA_BUNDLE_AVAILABLE:
         findings.append({
             "title": "Untrusted Root Certificate",
             "severity": "medium",
