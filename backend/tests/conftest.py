@@ -32,7 +32,12 @@ def _setup_database():
         poolclass=NullPool,
     )
     # Drop with CASCADE to handle FK dependencies between tables.
-    Base.metadata.drop_all(engine)
+    # Drop all tables with CASCADE to handle FK dependencies.
+    with engine.connect() as conn:
+        tables = [t.name for t in Base.metadata.sorted_tables]
+        for t in reversed(tables):
+            conn.execute(text(f"DROP TABLE IF EXISTS {t} CASCADE"))
+        conn.commit()
     Base.metadata.create_all(engine)
     engine.dispose()
     yield
