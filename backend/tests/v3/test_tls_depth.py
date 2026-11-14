@@ -138,3 +138,54 @@ class TestExpiryTiers:
 
     def test_ca_bundle_available_is_bool(self):
         assert isinstance(CA_BUNDLE_AVAILABLE, bool)
+
+
+class TestSslScanRiskLevelConsistency:
+    def test_chain_code_19_maps_to_untrusted_root(self):
+        """Verify code 19 → untrusted root finding (real mapping, not constant)."""
+        from services.scanner.ssl_risk import assess_ssl_risk
+        now = datetime.now(timezone.utc)
+        data = {
+            "host": "example.com",
+            "expired": False,
+            "expires_at": now + timedelta(days=45),
+            "self_signed": False,
+            "tls_version": "TLSv1.3",
+            "cipher": "TLS_AES_256_GCM_SHA384",
+            "verify_code": 19,
+        }
+        # Only flag if CA bundle available
+        from services.scanner.ssl_risk import CA_BUNDLE_AVAILABLE
+        result = assess_ssl_risk(data, now=now)
+        findings = result["findings"]
+        untrusted = [f for f in findings if "Untrusted Root" in f.get("title", "")]
+        if CA_BUNDLE_AVAILABLE:
+            assert len(untrusted) == 1
+        else:
+            assert len(untrusted) == 0
+
+    def test_chain_code_20_maps_to_incomplete_chain(self):
+        """Verify code 20 → incomplete chain finding (real mapping, not constant)."""
+        from services.scanner.ssl_risk import assess_ssl_risk
+        now = datetime.now(timezone.utc)
+        data = {
+            "host": "example.com",
+            "expired": False,
+            "expires_at": now + timedelta(days=45),
+            "self_signed": False,
+            "tls_version": "TLSv1.3",
+            "cipher": "TLS_AES_256_GCM_SHA384",
+            "verify_code": 20,
+        }
+        result = assess_ssl_risk(data, now=now)
+        findings = result["findings"]
+        incomplete = [f for f in findings if "Incomplete" in f.get("title", "")]
+        assert len(incomplete) == 1
+
+    def test_ssl_scan_risk_level_not_unknown(self):
+        """ssl_scanner risk_level should be computed, not 'unknown'."""
+        # This tests the _calculate_risk_level function
+        from services.scanner.ssl_scanner import _calculate_risk_level
+        assert _calculate_risk_level(False, False, False, "TLSv1.3") == "low"
+        assert _calculate_risk_level(True, False, False, "TLSv1.3") == "critical"
+        assert _calculate_risk_level(False, True, False, "TLSv1.3") == "high"
