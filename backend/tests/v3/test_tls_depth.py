@@ -23,11 +23,14 @@ class TestExpiryTiers:
         }
 
     def test_30_days_low(self):
+        # Use 30 days + 1 hour to avoid timing edge
         data = self._make_ssl_data(30)
+        # Override expires_at to be exactly 30 days + 12 hours from now
+        now = datetime.now(timezone.utc)
+        data["expires_at"] = now + timedelta(days=30, hours=12)
         result = assess_ssl_risk(data)
         findings = result["findings"]
         expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
-        # 30 days is NOT < 30, so no tier finding
         assert len(expiry_findings) == 0
 
     def test_29_days_low(self):
