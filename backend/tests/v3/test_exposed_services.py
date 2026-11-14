@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 import time
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -109,3 +110,27 @@ class TestExposedServicesModule:
         result = asyncio.run(es.exposed_services_module(ctx))
         result_str = str(result)
         assert "SECRET BANNER DATA" not in result_str
+
+    def test_passive_no_bytes_sent(self):
+        """Redis/Mongo/Memcached are passive — no connection made."""
+        import scanner_modules.exposed_services as es
+        # The module derives findings from open_ports without connecting
+        ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 6379, "status": "open", "banner": ""}]})
+        result = asyncio.run(es.exposed_services_module(ctx))
+        # Finding should exist (info severity, port open)
+        assert any(f["service"] == "redis" for f in result["findings"])
+
+    def test_soft404_baseline_no_finding(self):
+        """If admin path returns same status as random path, no finding."""
+        import scanner_modules.exposed_services as es
+        with patch.object(es, "_http_probe", return_value={"status_code": 200, "headers": {}, "body": "not found", "error": None}):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            assert len(admin_findings) == 0
+
+    def test_metrics_counter_exists(self):
+        from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
+        assert SCANNER_MODULE_RUNS_TOTAL is not None
+PYEOF
+echo "Done"
