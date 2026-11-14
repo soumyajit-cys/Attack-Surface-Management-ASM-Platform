@@ -31,7 +31,11 @@ def _setup_database():
         settings.database_url,
         poolclass=NullPool,
     )
-    Base.metadata.drop_all(engine)
+    # Drop with CASCADE to handle FK dependencies between tables.
+    with engine.connect() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.commit()
     Base.metadata.create_all(engine)
     engine.dispose()
     yield
