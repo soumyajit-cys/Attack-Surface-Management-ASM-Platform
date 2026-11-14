@@ -64,7 +64,7 @@ describe('Findings page', () => {
           recommendation:
             'Publish a DMARC TXT record at _dmarc.example.com starting with p=none;rua=mailto:dmarc-reports@example.com, then progress to p=quarantine and p=reject.',
           confidence: 0.95,
-          dedupe_key: 'email_security:dmarc_missing',
+          dedupe_key: 'email_security:dmarc_missing:example.com',
           asset_id: 1,
           asset_name: 'example.com',
           created_at: '2026-11-07T00:00:00Z',
