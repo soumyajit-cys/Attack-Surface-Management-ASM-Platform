@@ -10,8 +10,7 @@ from services.scanner.ssl_risk import assess_ssl_risk, LEGACY_PROTOCOLS_TESTABLE
 
 
 class TestExpiryTiers:
-    def _make_ssl_data(self, days_remaining):
-        now = datetime.now(timezone.utc)
+    def _make_ssl_data(self, now, days_remaining):
         expires_at = now + timedelta(days=days_remaining)
         return {
             "host": "example.com",
@@ -22,68 +21,81 @@ class TestExpiryTiers:
             "cipher": "TLS_AES_256_GCM_SHA384",
         }
 
-    def test_30_days_low(self):
-        # Use 30 days + 1 hour to avoid timing edge
-        data = self._make_ssl_data(30)
-        # Override expires_at to be exactly 30 days + 12 hours from now
+    def test_exactly_30_days_no_finding(self):
         now = datetime.now(timezone.utc)
-        data["expires_at"] = now + timedelta(days=30, hours=12)
-        result = assess_ssl_risk(data)
+        data = self._make_ssl_data(now, 30)
+        result = assess_ssl_risk(data, now=now)
         findings = result["findings"]
         expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
         assert len(expiry_findings) == 0
 
-    def test_29_days_low(self):
-        data = self._make_ssl_data(29)
-        result = assess_ssl_risk(data)
+    def test_29d23h_low(self):
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=29, hours=23)
+        data = self._make_ssl_data(now, 0)
+        data["expires_at"] = expires_at
+        data["expired"] = False
+        result = assess_ssl_risk(data, now=now)
         findings = result["findings"]
         expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
         assert len(expiry_findings) == 1
         assert expiry_findings[0]["severity"] == "low"
 
-    def test_14_days_medium(self):
-        data = self._make_ssl_data(14)
-        result = assess_ssl_risk(data)
+    def test_exactly_14_days_low(self):
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, 14)
+        result = assess_ssl_risk(data, now=now)
+        findings = result["findings"]
+        expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
+        assert len(expiry_findings) == 1
+        assert expiry_findings[0]["severity"] == "low"
+
+    def test_13d23h_medium(self):
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=13, hours=23)
+        data = self._make_ssl_data(now, 0)
+        data["expires_at"] = expires_at
+        data["expired"] = False
+        result = assess_ssl_risk(data, now=now)
         findings = result["findings"]
         expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
         assert len(expiry_findings) == 1
         assert expiry_findings[0]["severity"] == "medium"
 
-    def test_13_days_medium(self):
-        data = self._make_ssl_data(13)
-        result = assess_ssl_risk(data)
+    def test_exactly_7_days_medium(self):
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, 7)
+        result = assess_ssl_risk(data, now=now)
         findings = result["findings"]
         expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
         assert len(expiry_findings) == 1
         assert expiry_findings[0]["severity"] == "medium"
 
-    def test_7_days_high(self):
-        data = self._make_ssl_data(7)
-        result = assess_ssl_risk(data)
-        findings = result["findings"]
-        expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
-        assert len(expiry_findings) == 1
-        assert expiry_findings[0]["severity"] == "high"
-
-    def test_6_days_high(self):
-        data = self._make_ssl_data(6)
-        result = assess_ssl_risk(data)
+    def test_6d23h_high(self):
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=6, hours=23)
+        data = self._make_ssl_data(now, 0)
+        data["expires_at"] = expires_at
+        data["expired"] = False
+        result = assess_ssl_risk(data, now=now)
         findings = result["findings"]
         expiry_findings = [f for f in findings if "Expiring Soon" in f.get("title", "")]
         assert len(expiry_findings) == 1
         assert expiry_findings[0]["severity"] == "high"
 
     def test_0_days_expired(self):
-        data = self._make_ssl_data(0)
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, 0)
         data["expired"] = True
-        result = assess_ssl_risk(data)
+        result = assess_ssl_risk(data, now=now)
         findings = result["findings"]
         assert any("Expired" in f.get("title", "") for f in findings)
 
     def test_negative_days_expired(self):
-        data = self._make_ssl_data(-1)
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, -1)
         data["expired"] = True
-        result = assess_ssl_risk(data)
+        result = assess_ssl_risk(data, now=now)
         findings = result["findings"]
         assert any("Expired" in f.get("title", "") for f in findings)
 
