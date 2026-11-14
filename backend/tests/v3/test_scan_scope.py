@@ -83,7 +83,7 @@ class TestPipelineGating:
         # Passive runs discovery + EMAIL_SECURITY — no port/ssl/header.
         active_phases = {
             ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
-            ScanPhase.FINGERPRINT,
+            ScanPhase.FINGERPRINT, ScanPhase.EXPOSED_SERVICES,
         }
         for phase_list in calls:
             assert not any(p in active_phases for p in phase_list), (
