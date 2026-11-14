@@ -137,7 +137,6 @@ def assess_ssl_risk(ssl_data: dict) -> dict:
 
     # Chain problems (from verify codes)
     verify_code = ssl_data.get("verify_code")
-    from services.scanner.ssl_risk import CA_BUNDLE_AVAILABLE
     if verify_code == 20:
         findings.append({
             "title": "Incomplete Certificate Chain",
