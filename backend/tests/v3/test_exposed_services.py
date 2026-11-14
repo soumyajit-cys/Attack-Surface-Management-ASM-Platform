@@ -132,5 +132,3 @@ class TestExposedServicesModule:
     def test_metrics_counter_exists(self):
         from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
         assert SCANNER_MODULE_RUNS_TOTAL is not None
-PYEOF
-echo "Done"
