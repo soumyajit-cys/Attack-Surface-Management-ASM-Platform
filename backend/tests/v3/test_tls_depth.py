@@ -106,21 +106,24 @@ class TestExpiryTiers:
         assert result["risk_level"] != "high" or result["risk_level"] == "low"
 
     def test_no_ssl_tls13_info_finding(self):
-        data = self._make_ssl_data(45)
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, 45)
         data["tls_version"] = "TLSv1.3"
         result = assess_ssl_risk(data)
         findings = result["findings"]
         assert not any("TLS 1.3 Supported" in f.get("title", "") for f in findings)
 
     def test_chain_code_20_incomplete(self):
-        data = self._make_ssl_data(45)
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, 45)
         data["verify_code"] = 20
         result = assess_ssl_risk(data)
         findings = result["findings"]
         assert any("Incomplete" in f.get("title", "") for f in findings)
 
     def test_chain_code_19_untrusted(self):
-        data = self._make_ssl_data(45)
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, 45)
         data["verify_code"] = 19
         result = assess_ssl_risk(data)
         findings = result["findings"]
