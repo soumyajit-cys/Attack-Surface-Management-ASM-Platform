@@ -60,6 +60,48 @@ class Finding(Base):
     # Confidence score (0.0-1.0) for fingerprint-derived findings.
     confidence = Column(Float, nullable=True)
 
+    source_module = Column(String, nullable=True)
+
+    target_host = Column(String, nullable=True)
+
+    first_seen_at = Column(DateTime(timezone=True), nullable=True)
+
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+
+    last_seen_scan_id = Column(Integer, nullable=True)
+
+    version = Column(Integer, server_default="1", nullable=False)
+
+    status = Column(String, server_default="open", nullable=False)
+
+    assigned_to = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    due_date = Column(DateTime(timezone=True), nullable=True)
+
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    resolved_by = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    suppression_reason = Column(Text, nullable=True)
+
+    suppressed_by = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    suppressed_until = Column(DateTime(timezone=True), nullable=True)
+
+    sla_alerted_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(
         DateTime(timezone=True),
         server_default=func.now()
