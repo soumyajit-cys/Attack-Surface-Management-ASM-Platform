@@ -223,7 +223,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                     "your legitimate mail sources (e.g. v=spf1 mx -all)."
                 ),
                 "confidence": 0.95,
-                "dedupe_key": "email_security:spf_missing",
+                "dedupe_key": f"email_security:spf_missing:{ctx.domain}",
             })
         else:
             findings.append({
@@ -240,7 +240,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                     "mail; then publish SPF, DKIM, and DMARC records."
                 ),
                 "confidence": 0.7,
-                "dedupe_key": "email_security:no_mail_evidence",
+                "dedupe_key": f"email_security:no_mail_evidence:{ctx.domain}",
             })
     else:
         # SPF exists but may be overly permissive.
@@ -259,7 +259,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                     "'~all' (soft fail) to reject or flag unauthorized mail."
                 ),
                 "confidence": 0.9,
-                "dedupe_key": "email_security:spf_permissive",
+                "dedupe_key": f"email_security:spf_permissive:{ctx.domain}",
             })
 
     if not dmarc:
@@ -280,7 +280,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                     "p=reject."
                 ),
                 "confidence": 0.95,
-                "dedupe_key": "email_security:dmarc_missing",
+                "dedupe_key": f"email_security:dmarc_missing:{ctx.domain}",
             })
     elif policy == "none":
         findings.append({
@@ -296,7 +296,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "p=reject as legitimate mail sources are confirmed aligned."
             ),
             "confidence": 0.9,
-            "dedupe_key": "email_security:dmarc_none",
+            "dedupe_key": f"email_security:dmarc_none:{ctx.domain}",
         })
     elif policy in ("quarantine", "reject"):
         pct = _dmarc_pct(dmarc)
@@ -313,7 +313,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                     "Increase DMARC pct to 100 so the policy covers all mail."
                 ),
                 "confidence": 0.85,
-                "dedupe_key": "email_security:dmarc_pct_under_100",
+                "dedupe_key": f"email_security:dmarc_pct_under_100:{ctx.domain}",
             })
 
     if not dkim_selectors_found and mail_evidence:
@@ -331,7 +331,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "the public key under at least one common selector."
             ),
             "confidence": 0.5,
-            "dedupe_key": "email_security:dkim_missing",
+            "dedupe_key": f"email_security:dkim_missing:{ctx.domain}",
         })
 
     if not mta_sts_available and mail_evidence:
@@ -349,7 +349,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "add the corresponding TXT record at _mta-sts.{ctx.domain}."
             ),
             "confidence": 0.8,
-            "dedupe_key": "email_security:mta_sts_missing",
+            "dedupe_key": f"email_security:mta_sts_missing:{ctx.domain}",
         })
 
     if not records["bimi"] and mail_evidence:
@@ -366,7 +366,7 @@ async def email_security_module(ctx: ScanContext) -> dict:
                 "pointing to your verified SVG logo."
             ),
             "confidence": 0.75,
-            "dedupe_key": "email_security:bimi_missing",
+            "dedupe_key": f"email_security:bimi_missing:{ctx.domain}",
         })
 
     # ── Metrics (module + outcome only) ────────────────────────────
