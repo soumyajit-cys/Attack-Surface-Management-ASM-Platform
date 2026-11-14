@@ -30,8 +30,8 @@ DEFAULT_SCOPE = SCOPE_FULL
 
 SCOPE_PHASES: dict[str, frozenset[ScanPhase]] = {
     SCOPE_PASSIVE: frozenset({ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY}),
-    SCOPE_ACTIVE: frozenset({ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER}),
-    SCOPE_FULL: frozenset({ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER, ScanPhase.FINGERPRINT}),
+    SCOPE_ACTIVE: frozenset({ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER, ScanPhase.EXPOSED_SERVICES}),
+    SCOPE_FULL: frozenset({ScanPhase.DISCOVERY, ScanPhase.EMAIL_SECURITY, ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER, ScanPhase.FINGERPRINT, ScanPhase.EXPOSED_SERVICES}),
 }
 
 #: Scopes allowed to run post-scan CVE enrichment (OSV.dev).

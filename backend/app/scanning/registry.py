@@ -40,6 +40,7 @@ class ScanPhase(str, Enum):
     SSL = "ssl"
     HEADER = "header"
     FINGERPRINT = "fingerprint"
+    EXPOSED_SERVICES = "exposed_services"
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,7 @@ class ScannerRegistry:
         ScanPhase.SSL,
         ScanPhase.HEADER,
         ScanPhase.FINGERPRINT,
+        ScanPhase.EXPOSED_SERVICES,
     )
 
     def __init__(self) -> None:
