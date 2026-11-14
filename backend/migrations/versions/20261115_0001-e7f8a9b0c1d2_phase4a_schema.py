@@ -66,7 +66,7 @@ def upgrade() -> None:
     op.execute("""
         UPDATE findings SET source_module = 'ssl_scan',
             target_host = split_part(dedupe_key, ':', 2)
-        WHERE dedupe_key LIKE 'ssl_%'
+        WHERE dedupe_key LIKE 'ssl\\_%' ESCAPE '\\'
     """)
 
     # Backfill dedupe_key for legacy title-keyed findings.

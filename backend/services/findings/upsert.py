@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
+from datetime import datetime, timezone
 
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -24,42 +25,52 @@ def upsert_finding(
 ) -> Finding:
     """Insert or update a finding by (org_id, asset_id, dedupe_key).
 
-    Returns the Finding instance.
+    On insert: sets all provided fields + first_seen_at = now.
+    On conflict: updates ONLY fields that are explicitly provided (non-None).
+    Never overwrites existing values with NULL. Never touches workflow
+    fields (status, assigned_to, due_date, suppression_*) unless explicitly
+    passed (4b will add reopen logic).
+
+    Returns a fresh instance from the DB.
     """
-    values = {
+    now = datetime.now(timezone.utc)
+
+    # Build insert values (only non-None optional fields).
+    values: dict[str, Any] = {
         "organization_id": org_id,
         "asset_id": asset_id,
         "dedupe_key": dedupe_key,
         "title": fields.get("title", ""),
         "severity": fields.get("severity", "info"),
         "category": fields.get("category", "general"),
-        "description": fields.get("description"),
-        "recommendation": fields.get("recommendation"),
-        "confidence": fields.get("confidence"),
-        "source_module": fields.get("source_module"),
-        "target_host": fields.get("target_host"),
-        "first_seen_at": fields.get("first_seen_at"),
+        "first_seen_at": fields.get("first_seen_at", now),
+        "last_seen_at": fields.get("last_seen_at", now),
+        "last_seen_scan_id": fields.get("last_seen_scan_id"),
     }
-    # Remove None values for optional fields
-    values = {k: v for k, v in values.items() if v is not None or k in ("organization_id", "asset_id", "dedupe_key", "title", "severity", "category")}
+    for key in ("description", "recommendation", "confidence", "source_module", "target_host", "cve_ids", "cvss_score"):
+        if fields.get(key) is not None:
+            values[key] = fields[key]
 
     stmt = insert(Finding).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["organization_id", "asset_id", "dedupe_key"],
-        set_={
-            "severity": fields.get("severity"),
-            "category": fields.get("category"),
-            "description": fields.get("description"),
-            "recommendation": fields.get("recommendation"),
-            "confidence": fields.get("confidence"),
-            "last_seen_at": fields.get("last_seen_at"),
-            "last_seen_scan_id": fields.get("last_seen_scan_id"),
-        },
-    )
+    # On conflict, update only provided (non-None) fields.
+    update_set = {}
+    for key in ("title", "severity", "category", "description", "recommendation", "confidence", "source_module", "target_host", "cve_ids", "cvss_score"):
+        if fields.get(key) is not None:
+            update_set[key] = fields[key]
+    if fields.get("last_seen_at") is not None:
+        update_set["last_seen_at"] = fields["last_seen_at"]
+    if fields.get("last_seen_scan_id") is not None:
+        update_set["last_seen_scan_id"] = fields["last_seen_scan_id"]
+
+    if update_set:
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["organization_id", "asset_id", "dedupe_key"],
+            set_=update_set,
+        )
     db.execute(stmt)
     db.flush()
 
-    # Fetch the finding
+    # Fetch fresh instance.
     finding = (
         db.query(Finding)
         .filter(
@@ -69,9 +80,14 @@ def upsert_finding(
         )
         .first()
     )
+    # Refresh to get latest DB state.
+    if finding is not None:
+        db.refresh(finding)
     return finding
 
 
 def legacy_dedupe_key(title: str) -> str:
     """Generate a dedupe key for legacy title-keyed findings."""
     return f"legacy:{hashlib.md5(title.encode()).hexdigest()}"
+PYEOF
+echo "Done"
