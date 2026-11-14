@@ -112,66 +112,61 @@ def upgrade() -> None:
     )
 
     # 5. Merge duplicate findings: keep the row with the newest updated_at
-    # (or highest id as tiebreaker), copy its content, set first_seen_at
-    # to MIN across the group.  Then delete the rest.
+    # (or highest id as tiebreaker).  Copy first_seen_at = MIN across group.
+    # Delete the rest.
     op.execute("""
-        WITH survivors AS (
+        WITH to_keep AS (
             SELECT DISTINCT ON (organization_id, asset_id, dedupe_key)
-                id AS survivor_id,
-                organization_id, asset_id, dedupe_key
+                id
             FROM findings
-            ORDER BY organization_id, asset_id, dedupe_key, updated_at DESC NULLS LAST, id DESC
-        ),
-        merged AS (
-            SELECT
-                s.survivor_id,
-                MIN(f.first_seen_at) AS min_first_seen,
-                -- Copy newest content from the row with max updated_at
-                (SELECT f2.severity FROM findings f2
-                 WHERE f2.organization_id = s.organization_id
-                   AND f2.asset_id = s.asset_id
-                   AND f2.dedupe_key = s.dedupe_key
-                 ORDER BY f2.updated_at DESC NULLS LAST, f2.id DESC LIMIT 1) AS new_severity,
-                (SELECT f2.description FROM findings f2
-                 WHERE f2.organization_id = s.organization_id
-                   AND f2.asset_id = s.asset_id
-                   AND f2.dedupe_key = s.dedupe_key
-                 ORDER BY f2.updated_at DESC NULLS LAST, f2.id DESC LIMIT 1) AS new_description,
-                (SELECT f2.recommendation FROM findings f2
-                 WHERE f2.organization_id = s.organization_id
-                   AND f2.asset_id = s.asset_id
-                   AND f2.dedupe_key = s.dedupe_key
-                 ORDER BY f2.updated_at DESC NULLS LAST, f2.id DESC LIMIT 1) AS new_recommendation
-            FROM survivors s
-            JOIN findings f ON f.organization_id = s.organization_id
-                AND f.asset_id = s.asset_id
-                AND f.dedupe_key = s.dedupe_key
-            GROUP BY s.survivor_id, s.organization_id, s.asset_id, s.dedupe_key
+            ORDER BY organization_id, asset_id, dedupe_key,
+                     updated_at DESC NULLS LAST, id DESC
         )
         UPDATE findings SET
-            first_seen_at = m.min_first_seen,
-            severity = COALESCE(m.new_severity, findings.severity),
-            description = COALESCE(m.new_description, findings.description),
-            recommendation = COALESCE(m.new_recommendation, findings.recommendation)
-        FROM merged m
-        WHERE findings.id = m.survivor_id
+            first_seen_at = sub.min_first
+        FROM (
+            SELECT organization_id, asset_id, dedupe_key,
+                   MIN(first_seen_at) AS min_first
+            FROM findings
+            GROUP BY organization_id, asset_id, dedupe_key
+            HAVING COUNT(*) > 1
+        ) sub
+        WHERE findings.id IN (SELECT id FROM to_keep)
+          AND findings.organization_id = sub.organization_id
+          AND findings.asset_id = sub.asset_id
+          AND findings.dedupe_key = sub.dedupe_key
     """)
     op.execute("""
         DELETE FROM findings
         WHERE id NOT IN (
-            SELECT MIN(id) FROM findings
-            GROUP BY organization_id, asset_id, dedupe_key
+            SELECT id FROM (
+                SELECT DISTINCT ON (organization_id, asset_id, dedupe_key)
+                    id
+                FROM findings
+                ORDER BY organization_id, asset_id, dedupe_key,
+                         updated_at DESC NULLS LAST, id DESC
+            ) keepers
         )
     """)
 
-    # 6. Add unique index (CONCURRENTLY requires autocommit).
-    # Note: in a migration, we use the standard approach.
+    # 6. Add NOT NULL for dedupe_key and first_seen_at.
+    op.execute("UPDATE findings SET dedupe_key = 'legacy:' || md5(title) WHERE dedupe_key IS NULL")
+    op.execute("UPDATE findings SET first_seen_at = created_at WHERE first_seen_at IS NULL")
+    op.alter_column("findings", "dedupe_key", nullable=False)
+    op.alter_column("findings", "first_seen_at", nullable=False)
+
+    # 7. Add unique index (CONCURRENTLY for production; standard in tests).
     op.create_index(
         "uq_findings_org_asset_dedupe",
         "findings",
         ["organization_id", "asset_id", "dedupe_key"],
         unique=True,
     )
+
+    # 8. Add (organization_id, status), (organization_id, assigned_to), due_date indexes.
+    op.create_index("ix_findings_org_status", "findings", ["organization_id", "status"])
+    op.create_index("ix_findings_org_assigned", "findings", ["organization_id", "assigned_to"])
+    op.create_index("ix_findings_due_date", "findings", ["due_date"])
 
     # 7. Backfill SLA due_dates (baseline: no alerts for pre-existing).
     op.execute("""
@@ -205,6 +200,10 @@ def upgrade() -> None:
     op.create_foreign_key(
         "fk_findings_suppressed_by", "findings", "users",
         ["suppressed_by"], ["id"], ondelete="SET NULL",
+    )
+    op.create_foreign_key(
+        "fk_findings_last_seen_scan", "findings", "scan_history",
+        ["last_seen_scan_id"], ["id"], ondelete="SET NULL",
     )
 
 
