@@ -101,9 +101,10 @@ class TestExpiryTiers:
 
     def test_risk_level_consistent_with_tier(self):
         # At 29 days, finding=low, risk_level should be low (not high)
-        data = self._make_ssl_data(29)
-        result = assess_ssl_risk(data)
-        assert result["risk_level"] != "high" or result["risk_level"] == "low"
+        now = datetime.now(timezone.utc)
+        data = self._make_ssl_data(now, 29)
+        result = assess_ssl_risk(data, now=now)
+        assert result["risk_level"] == "low"
 
     def test_no_ssl_tls13_info_finding(self):
         now = datetime.now(timezone.utc)
