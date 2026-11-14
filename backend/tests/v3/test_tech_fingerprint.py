@@ -393,8 +393,8 @@ class TestRealConcurrency:
         db.commit()
         sub_id = sub.id
 
-        # Use the same DB URL for both sessions
-        db_url = str(db.bind.url)
+        import os
+        db_url = os.environ.get("DATABASE_URL", str(db.bind.url))
         engine = create_engine(db_url)
         Session = sessionmaker(bind=engine)
 
