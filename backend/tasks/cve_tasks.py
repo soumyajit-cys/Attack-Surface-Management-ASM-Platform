@@ -25,6 +25,7 @@ import requests
 from models.asset import Asset
 from models.domain import Domain
 from models.finding import Finding
+from services.findings.upsert import upsert_finding
 from models.port import Port
 from models.subdomain import Subdomain
 from services.enrichment.cve_service import enrich_service_banner
@@ -79,20 +80,12 @@ def enrich_asset_findings(self, asset_id: int) -> dict:
                     f"{vuln['cve_id']} in {vuln['product']} {vuln['version']} "
                     f"on {subdomain_name}:{port.port}"
                 )
-                exists = (
-                    db.query(Finding)
-                    .filter(
-                        Finding.organization_id == asset.organization_id,
-                        Finding.asset_id == asset_id,
-                        Finding.title == title,
-                    )
-                    .first()
-                )
-                if exists is not None:
-                    continue
-                finding = Finding(
-                    organization_id=asset.organization_id,
+                dedupe_key = f"cve:{vuln['cve_id']}:{subdomain_name}:{port.port}"
+                finding = upsert_finding(
+                    db,
+                    org_id=asset.organization_id,
                     asset_id=asset_id,
+                    dedupe_key=dedupe_key,
                     title=title,
                     severity=vuln["severity"],
                     category="vulnerability",
@@ -104,9 +97,11 @@ def enrich_asset_findings(self, asset_id: int) -> dict:
                     ),
                     cve_ids=[vuln["cve_id"]],
                     cvss_score=vuln["cvss"],
+                    source_module="cve_enrichment",
+                    target_host=subdomain_name,
                 )
-                db.add(finding)
-                new_findings.append(finding)
+                if finding is not None:
+                    new_findings.append(finding)
 
         db.flush()
 
