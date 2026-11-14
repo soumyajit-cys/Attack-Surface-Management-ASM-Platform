@@ -243,7 +243,7 @@ class TestEmailSecurityModule:
         assert f["title"] == "No mail evidence or SPF record"
         assert f["severity"] == "info"
         assert f["confidence"] == 0.7
-        assert f["dedupe_key"] == "email_security:no_mail_evidence"
+        assert f["dedupe_key"] == "email_security:no_mail_evidence:example.com"
 
     def test_dmarc_p_none(self, monkeypatch):
         """DMARC p=none: low severity."""
@@ -275,7 +275,7 @@ class TestEmailSecurityModule:
         assert len(dmarc_findings) == 1
         f = dmarc_findings[0]
         assert f["severity"] == "low"
-        assert f["dedupe_key"] == "email_security:dmarc_pct_under_100"
+        assert f["dedupe_key"] == "email_security:dmarc_pct_under_100:example.com"
 
     def test_split_long_txt_strings(self, monkeypatch):
         """SPF record split across multiple TXT strings (concatenated)."""
@@ -323,7 +323,7 @@ class TestEmailSecurityModule:
         dkim_f = next(f for f in result["findings"] if "DKIM" in f["title"])
         assert dkim_f["severity"] == "info"  # never medium
         assert dkim_f["confidence"] == 0.5
-        assert dkim_f["dedupe_key"] == "email_security:dkim_missing"
+        assert dkim_f["dedupe_key"] == "email_security:dkim_missing:example.com"
 
     def test_mta_sts_and_bimi_absent(self, monkeypatch):
         """MTA-STS and BIMI absent: info-level findings."""
@@ -351,10 +351,10 @@ class TestEmailSecurityModule:
         result = asyncio.run(email_security_module(_make_ctx("example.com")))
         mta_f = next(f for f in result["findings"] if "MTA-STS" in f["title"])
         assert mta_f["severity"] == "info"
-        assert mta_f["dedupe_key"] == "email_security:mta_sts_missing"
+        assert mta_f["dedupe_key"] == "email_security:mta_sts_missing:example.com"
         bimi_f = next(f for f in result["findings"] if "BIMI" in f["title"])
         assert bimi_f["severity"] == "info"
-        assert bimi_f["dedupe_key"] == "email_security:bimi_missing"
+        assert bimi_f["dedupe_key"] == "email_security:bimi_missing:example.com"
 
     def test_dedupe_keys_stable_across_rescans(self, monkeypatch):
         """Same domain scanned twice: same dedupe_key set (update, not duplicate)."""
