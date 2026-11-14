@@ -111,8 +111,51 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
-    # 5. Merge duplicate findings (keep earliest first_seen_at).
-    # Use a CTE to find duplicates and keep the one with min id.
+    # 5. Merge duplicate findings: keep the row with the newest updated_at
+    # (or highest id as tiebreaker), copy its content, set first_seen_at
+    # to MIN across the group.  Then delete the rest.
+    op.execute("""
+        WITH survivors AS (
+            SELECT DISTINCT ON (organization_id, asset_id, dedupe_key)
+                id AS survivor_id,
+                organization_id, asset_id, dedupe_key
+            FROM findings
+            ORDER BY organization_id, asset_id, dedupe_key, updated_at DESC NULLS LAST, id DESC
+        ),
+        merged AS (
+            SELECT
+                s.survivor_id,
+                MIN(f.first_seen_at) AS min_first_seen,
+                -- Copy newest content from the row with max updated_at
+                (SELECT f2.severity FROM findings f2
+                 WHERE f2.organization_id = s.organization_id
+                   AND f2.asset_id = s.asset_id
+                   AND f2.dedupe_key = s.dedupe_key
+                 ORDER BY f2.updated_at DESC NULLS LAST, f2.id DESC LIMIT 1) AS new_severity,
+                (SELECT f2.description FROM findings f2
+                 WHERE f2.organization_id = s.organization_id
+                   AND f2.asset_id = s.asset_id
+                   AND f2.dedupe_key = s.dedupe_key
+                 ORDER BY f2.updated_at DESC NULLS LAST, f2.id DESC LIMIT 1) AS new_description,
+                (SELECT f2.recommendation FROM findings f2
+                 WHERE f2.organization_id = s.organization_id
+                   AND f2.asset_id = s.asset_id
+                   AND f2.dedupe_key = s.dedupe_key
+                 ORDER BY f2.updated_at DESC NULLS LAST, f2.id DESC LIMIT 1) AS new_recommendation
+            FROM survivors s
+            JOIN findings f ON f.organization_id = s.organization_id
+                AND f.asset_id = s.asset_id
+                AND f.dedupe_key = s.dedupe_key
+            GROUP BY s.survivor_id, s.organization_id, s.asset_id, s.dedupe_key
+        )
+        UPDATE findings SET
+            first_seen_at = m.min_first_seen,
+            severity = COALESCE(m.new_severity, findings.severity),
+            description = COALESCE(m.new_description, findings.description),
+            recommendation = COALESCE(m.new_recommendation, findings.recommendation)
+        FROM merged m
+        WHERE findings.id = m.survivor_id
+    """)
     op.execute("""
         DELETE FROM findings
         WHERE id NOT IN (
