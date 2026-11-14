@@ -165,17 +165,6 @@ def assess_ssl_risk(ssl_data: dict) -> dict:
         })
         risk_score += 7.0
 
-    # TLS 1.3 support as info
-    if tls_version == "TLSv1.3":
-        findings.append({
-            "title": "TLS 1.3 Supported",
-            "severity": "info",
-            "category": "tls",
-            "description": "Server supports TLS 1.3.",
-            "recommendation": "No action needed.",
-            "dedupe_key": f"ssl_tls13:{ssl_data.get('host', '')}",
-        })
-
     cipher = ssl_data.get("cipher", "")
     weak_ciphers = ["RC4", "DES", "3DES", "MD5", "NULL", "EXPORT", "ANON"]
     if any(wc in cipher.upper() for wc in weak_ciphers):

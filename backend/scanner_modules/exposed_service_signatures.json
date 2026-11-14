@@ -2,11 +2,20 @@
   "source": "hand-written",
   "license": "internal",
   "signatures": [
-    {"service": "redis", "ports": [6379], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5},
-    {"service": "mongodb", "ports": [27017, 27018, 27019], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5},
-    {"service": "memcached", "ports": [11211], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5},
-    {"service": "mysql", "ports": [3306], "probe_type": "passive", "match_patterns": ["\\d+\\.\\d+\\.\\d+"], "severity": "high", "confidence": 0.9},
-    {"service": "elasticsearch", "ports": [9200, 9300], "probe_type": "http", "match_patterns": ["cluster_name", "elasticsearch"], "severity": "high", "confidence": 0.9},
-    {"service": "http_admin", "ports": [80, 443, 8080, 8443, 9090], "probe_type": "http", "match_patterns": ["/admin", "/manager", "/phpmyadmin", "/wp-admin"], "severity": "medium", "confidence": 0.7}
+    {"service": "redis", "ports": [6379], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5, "identifying_string": null},
+    {"service": "mongodb", "ports": [27017, 27018, 27019], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5, "identifying_string": null},
+    {"service": "memcached", "ports": [11211], "probe_type": "passive", "match_patterns": [], "severity": "info", "confidence": 0.5, "identifying_string": null},
+    {"service": "mysql", "ports": [3306], "probe_type": "passive", "match_patterns": ["\\d+\\.\\d+\\.\\d+"], "severity": "high", "confidence": 0.9, "identifying_string": null},
+    {"service": "elasticsearch", "ports": [9200, 9300], "probe_type": "http", "match_patterns": ["cluster_name", "elasticsearch"], "severity": "high", "confidence": 0.9, "identifying_string": "cluster_name"},
+    {"service": "phpmyadmin", "ports": [80, 443, 8080, 8443], "probe_type": "http", "match_patterns": ["phpMyAdmin"], "severity": "medium", "confidence": 0.7, "identifying_string": "phpMyAdmin"},
+    {"service": "tomcat_manager", "ports": [8080, 8443], "probe_type": "http", "match_patterns": ["Tomcat Web Application Manager", "Apache Tomcat"], "severity": "medium", "confidence": 0.7, "identifying_string": "Tomcat Web Application Manager"},
+    {"service": "wordpress_login", "ports": [80, 443, 8080], "probe_type": "http", "match_patterns": ["wp-login.php", "WordPress"], "severity": "medium", "confidence": 0.7, "identifying_string": "wp-login"},
+    {"service": "jenkins", "ports": [8080, 8443], "probe_type": "http", "match_patterns": ["Jenkins", "Dashboard [Jenkins]"], "severity": "high", "confidence": 0.9, "identifying_string": "Jenkins"},
+    {"service": "grafana", "ports": [3000], "probe_type": "http", "match_patterns": ["Grafana"], "severity": "medium", "confidence": 0.7, "identifying_string": "Grafana"},
+    {"service": "kibana", "ports": [5601], "probe_type": "http", "match_patterns": ["Kibana"], "severity": "medium", "confidence": 0.7, "identifying_string": "Kibana"},
+    {"service": "portainer", "ports": [9000, 9443], "probe_type": "http", "match_patterns": ["Portainer"], "severity": "high", "confidence": 0.9, "identifying_string": "Portainer"},
+    {"service": "webmin", "ports": [10000], "probe_type": "http", "match_patterns": ["Webmin"], "severity": "high", "confidence": 0.9, "identifying_string": "Webmin"},
+    {"service": "solr", "ports": [8983], "probe_type": "http", "match_patterns": ["Solr", "Apache Solr"], "severity": "high", "confidence": 0.9, "identifying_string": "Solr Admin"},
+    {"service": "rabbitmq_mgmt", "ports": [15672], "probe_type": "http", "match_patterns": ["RabbitMQ Management"], "severity": "medium", "confidence": 0.7, "identifying_string": "RabbitMQ Management"}
   ]
 }
