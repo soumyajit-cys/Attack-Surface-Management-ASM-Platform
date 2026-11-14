@@ -4,7 +4,7 @@ Adds workflow columns to findings, creates finding_events, org_sla_config,
 and scan_module_runs tables, backfills source_module/target_host/dedupe_key,
 merges duplicates, adds unique index.
 
-Revision ID: c4d5e6f7a8b9
+Revision ID: e7f8a9b0c1d2
 Revises: b2c3d4e5f6a7
 Create Date: 2026-11-15
 """
@@ -14,7 +14,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "c4d5e6f7a8b9"
+revision: str = "e7f8a9b0c1d2"
 down_revision: Union[str, None] = "b2c3d4e5f6a7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
