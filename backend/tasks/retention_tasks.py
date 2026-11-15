@@ -40,13 +40,14 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from models import Alert, AssetSnapshot, AuditLog, ScanHistory
+from models import Alert, AssetSnapshot, AuditLog, ScanHistory, ScanModuleRun
 from utils.database import SessionLocal
 from utils.logger import logger
 from workers.celery_app import celery
 
 _AGE_RULES: tuple[tuple[str, type, str, str], ...] = (
     # (result_key, model, timestamp column, Settings window name)
+    ("scan_module_runs", ScanModuleRun, "created_at", "retention_scan_history_days"),
     ("alerts", Alert, "created_at", "retention_alert_days"),
     ("scan_history", ScanHistory, "started_at", "retention_scan_history_days"),
     ("audit_logs", AuditLog, "created_at", "retention_audit_log_days"),
