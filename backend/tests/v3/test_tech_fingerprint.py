@@ -273,7 +273,7 @@ class TestAssetTechnologiesAPI:
         asset_a = Asset(organization_id=org_a.id, name="asset-a")
         db.add(asset_a)
         db.flush()
-        domain_a = Domain(organization_id=1, asset_id=asset_a.id, domain="a.example.com")
+        domain_a = Domain(organization_id=org_a.id, asset_id=asset_a.id, domain="a.example.com")
         db.add(domain_a)
         db.flush()
         sub_a = Subdomain(domain_id=domain_a.id, subdomain="www.a.example.com")
