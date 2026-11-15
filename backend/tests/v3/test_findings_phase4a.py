@@ -228,3 +228,60 @@ class TestMigrationSchema:
         fks = inspector.get_foreign_keys("findings")
         fk_names = {fk["name"] for fk in fks}
         assert "fk_findings_assigned_to" in fk_names or any("assigned_to" in str(fk) for fk in fks)
+
+
+class TestMigrationUpDownUp:
+    def test_migration_roundtrip(self, monkeypatch, tmp_path):
+        import os
+        import subprocess
+        import shutil
+        from pathlib import Path
+
+        db_url = "postgresql://sentinel:sentinelpass@localhost:5432/scratch_migration_test"
+        env = dict(os.environ)
+        env["DATABASE_URL"] = db_url
+
+        backend_root = Path(__file__).resolve().parents[2]
+        alembic_ini = str(tmp_path / "alembic.ini")
+        shutil.copy(backend_root / "alembic.ini", alembic_ini)
+        ini_text = Path(alembic_ini).read_text()
+        ini_text = ini_text.replace("script_location = migrations", f"script_location = {backend_root}/migrations")
+        ini_text = ini_text.replace("sqlalchemy.url =", f"sqlalchemy.url = {db_url}")
+        ini_text = ini_text.replace("prepend_sys_path = .", f"prepend_sys_path = {backend_root}")
+        Path(alembic_ini).write_text(ini_text)
+        env["PYTHONPATH"] = str(backend_root)
+
+        import psycopg2
+        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn.autocommit = True
+        try:
+            conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_test;")
+            conn.cursor().execute("CREATE DATABASE scratch_migration_test OWNER sentinel;")
+        finally:
+            conn.close()
+
+        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn.autocommit = True
+        try:
+            conn.cursor().execute("GRANT ALL ON DATABASE scratch_migration_test TO sentinel;")
+        finally:
+            conn.close()
+
+        def run(cmd):
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+            assert result.returncode == 0, f"Failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
+
+        # Upgrade to head
+        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+        # Downgrade one step
+        run(["alembic", "-c", alembic_ini, "downgrade", "-1"])
+        # Upgrade again
+        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+
+        # Cleanup
+        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn.autocommit = True
+        try:
+            conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_test;")
+        finally:
+            conn.close()
