@@ -31,7 +31,7 @@ def _assert_safe_test_db(url: str) -> None:
 
     parsed = urlparse(url)
     db_name = (parsed.path or "").lstrip("/").split("?")[0]
-    allowed = db_name.startswith("scratch_") or db_name.startswith("test_")
+    allowed = db_name.startswith(("scratch_", "test_"))
     if not allowed:
         raise RuntimeError(
             f"Refusing to run tests against database {db_name!r}: "
