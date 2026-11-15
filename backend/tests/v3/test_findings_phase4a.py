@@ -222,5 +222,3 @@ class TestMigrationSchema:
         fks = inspector.get_foreign_keys("findings")
         fk_names = {fk["name"] for fk in fks}
         assert "fk_findings_assigned_to" in fk_names or any("assigned_to" in str(fk) for fk in fks)
-PYEOF
-echo "Done"
