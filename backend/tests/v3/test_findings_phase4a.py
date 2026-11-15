@@ -17,7 +17,7 @@ class TestGrepNoDirectFindingInserts:
         }
         # Also allow alerting_service.py:421 and api/v1/alerting.py:385
         allowed_alert = {
-            "services/alerting_service.py",
+            "services/alerts/alerting_service.py",
             "app/api/v1/alerting.py",
         }
         violations = []
@@ -34,11 +34,17 @@ class TestGrepNoDirectFindingInserts:
 
 
 class TestUpsertHelper:
-    def test_insert(self, db):
+    def test_insert(self, db, org_factory):
         from services.findings.upsert import upsert_finding
         from models.finding import Finding
+        from models.asset import Asset
 
-        f = upsert_finding(db, org_id=1, asset_id=1, dedupe_key="test:key1", title="Test", severity="high")
+        org, _ = org_factory("ins-org", "insuser", "ins@example.com")
+        asset = Asset(organization_id=org.id, name="ins-asset")
+        db.add(asset)
+        db.flush()
+
+        f = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:key1", title="Test", severity="high")
         db.commit()
         assert f is not None
         assert f.title == "Test"
