@@ -157,7 +157,7 @@ class TestRegistryUnavailablePhases:
         # and header also registered. ssl failed import; fingerprint has no module.
         assert {e.phase.value for e in port_mods} == {"port"}
         assert ssl_mods == []
-        assert fresh_registry.unavailable_phases() == ["ssl", "fingerprint"]
+        assert fresh_registry.unavailable_phases() == ["ssl", "fingerprint", "exposed_services"]
         assert "scanner_modules.ssl_scan" in fresh_registry.failed_imports
         failures = [
             r for r in caplog.records
@@ -187,7 +187,7 @@ class TestRegistryUnavailablePhases:
         with caplog.at_level(logging.WARNING, logger=REGISTRY_LOGGER):
             phases = fresh_registry.warmup()
 
-        assert phases == ["email_security", "ssl", "header", "fingerprint"]
+        assert phases == ["email_security", "ssl", "header", "fingerprint", "exposed_services"]
         warnings = [
             r for r in caplog.records
             if "unavailable" in r.getMessage().lower()
