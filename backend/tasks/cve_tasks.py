@@ -81,6 +81,13 @@ def enrich_asset_findings(self, asset_id: int) -> dict:
                     f"on {subdomain_name}:{port.port}"
                 )
                 dedupe_key = f"cve:{vuln['cve_id']}:{subdomain_name}:{port.port}"
+                from models.finding import Finding as _F
+                _existing = db.query(_F).filter(
+                    _F.organization_id == asset.organization_id,
+                    _F.asset_id == asset_id,
+                    _F.dedupe_key == dedupe_key,
+                ).first()
+                _is_new = _existing is None
                 finding = upsert_finding(
                     db,
                     org_id=asset.organization_id,
@@ -100,7 +107,7 @@ def enrich_asset_findings(self, asset_id: int) -> dict:
                     source_module="cve_enrichment",
                     target_host=subdomain_name,
                 )
-                if finding is not None:
+                if finding is not None and _is_new:
                     new_findings.append(finding)
 
         db.flush()
