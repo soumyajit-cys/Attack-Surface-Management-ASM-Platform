@@ -494,6 +494,20 @@ class TestTakeoverModule:
 
 
 class TestDataProvenance:
+    @pytest.fixture(autouse=True)
+    def _fresh_registry(self):
+        import sys
+        from app.scanning.registry import registry
+        for name in [n for n in sys.modules if n == "scanner_modules" or n.startswith("scanner_modules.")]:
+            del sys.modules[name]
+        registry._entries.clear()
+        registry._discovered = False
+        yield
+        for name in [n for n in sys.modules if n == "scanner_modules" or n.startswith("scanner_modules.")]:
+            del sys.modules[name]
+        registry._entries.clear()
+        registry._discovered = False
+
     def test_no_not_vulnerable_entry_produces_finding(self):
         """Reads the data file and asserts that no 'Not vulnerable' entry
         is loaded into FINGERPRINTS (so it can never produce a finding)."""
