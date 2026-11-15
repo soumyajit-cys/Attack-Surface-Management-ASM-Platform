@@ -25,8 +25,23 @@ from utils.redis_client import get_redis
 from workers.celery_app import celery
 
 
+def _assert_safe_test_db(url: str) -> None:
+    """Refuse to run unless the DB name looks like a scratch/test DB."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    db_name = (parsed.path or "").lstrip("/").split("?")[0]
+    allowed = db_name.startswith("scratch_") or db_name.startswith("test_")
+    if not allowed:
+        raise RuntimeError(
+            f"Refusing to run tests against database {db_name!r}: "
+            "name must start with 'scratch_' or 'test_'"
+        )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _setup_database():
+    _assert_safe_test_db(settings.database_url)
     engine = create_engine(
         settings.database_url,
         poolclass=NullPool,
