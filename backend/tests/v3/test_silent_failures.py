@@ -216,7 +216,7 @@ class TestScanSummaryIncludesUnavailablePhases:
         # SSL registered manually; DNS/PORT/HEADER/FINGERPRINT have no
         # modules on fresh_registry.
         assert summary["unavailable_phases"] == [
-            "email_security", "port", "header", "fingerprint"]
+            "email_security", "port", "header", "fingerprint", "exposed_services"]
         # the rest of the summary shape is unchanged
         assert summary["ports_open"] == 0
         assert summary["nuclei_skipped"] is True
@@ -244,7 +244,7 @@ class TestScanDetailSurfacesUnavailablePhases:
         # Only PORT is mounted; EMAIL_SECURITY (email_security),
         # FINGERPRINT, SSL, HEADER are unavailable.
         assert body["unavailable_phases"] == [
-            "email_security", "ssl", "header", "fingerprint"]
+            "email_security", "ssl", "header", "fingerprint", "exposed_services"]
 
     def test_scan_detail_api_reports_no_unavailable_when_all_mounted(
             self, client, scan_detail, monkeypatch):
@@ -259,6 +259,7 @@ class TestScanDetailSurfacesUnavailablePhases:
             for phase in (
                 ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
                 ScanPhase.EMAIL_SECURITY, ScanPhase.FINGERPRINT,
+                ScanPhase.EXPOSED_SERVICES,
             )
         }
         monkeypatch.setattr(registry, "_discovered", True)
