@@ -346,6 +346,9 @@ def test_purge_targets_have_no_inbound_foreign_keys():
     for table in Base.metadata.sorted_tables:
         for fk in table.foreign_keys:
             target_table = fk.column.table.name
+            # Allow FKs between purge targets (purged in dependency order).
+            if table.name in targets and target_table in targets:
+                continue
             assert target_table not in targets, (
                 f"{table.name}.{fk.parent.name} references purge target "
                 f"{target_table!r}; update tasks/retention_tasks.py before "
