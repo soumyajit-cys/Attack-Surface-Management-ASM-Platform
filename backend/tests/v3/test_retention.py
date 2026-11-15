@@ -342,7 +342,7 @@ def test_purge_targets_have_no_inbound_foreign_keys():
     violate 'never delete a referenced row' — fail loudly at test time."""
     from models import Base
 
-    targets = {"alerts", "audit_logs", "scan_history", "asset_snapshots"}
+    targets = {"alerts", "audit_logs", "scan_history", "asset_snapshots", "scan_module_runs"}
     for table in Base.metadata.sorted_tables:
         for fk in table.foreign_keys:
             target_table = fk.column.table.name
