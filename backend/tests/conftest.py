@@ -19,6 +19,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 from config import settings
+from tests.db_guard import assert_safe_test_db, assert_safe_test_redis
 from models import Base
 from utils.database import get_db
 from utils.redis_client import get_redis
@@ -41,7 +42,7 @@ def _assert_safe_test_db(url: str) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _setup_database():
-    _assert_safe_test_db(settings.database_url)
+    assert_safe_test_db(settings.database_url)
     engine = create_engine(
         settings.database_url,
         poolclass=NullPool,
@@ -60,11 +61,13 @@ def _setup_database():
 
 @pytest.fixture(autouse=True)
 def _clean_state():
+    assert_safe_test_redis(settings.redis_url if hasattr(settings, 'redis_url') else 'redis://localhost:6379/15')
     get_redis().flushdb()
     from utils.rate_limiter import reset_storage_dead
 
     reset_storage_dead()
     yield
+    assert_safe_test_redis(settings.redis_url if hasattr(settings, 'redis_url') else 'redis://localhost:6379/15')
     get_redis().flushdb()
     # Use a fresh session for cleanup to avoid session state issues
     engine = create_engine(settings.database_url, poolclass=NullPool)
