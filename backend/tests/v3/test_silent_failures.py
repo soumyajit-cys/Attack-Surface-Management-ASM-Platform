@@ -104,13 +104,13 @@ class TestRegistryUnavailablePhases:
         # modules on fresh_registry (auto-discovery doesn't register
         # on fresh_registry in test context).
         assert fresh_registry.unavailable_phases() == [
-            "email_security", "ssl", "header", "fingerprint"]
+            "email_security", "ssl", "header", "fingerprint", "exposed_services"]
 
     def test_empty_registry_lists_every_pipeline_phase(self, fresh_registry):
         # No modules registered on fresh_registry; all pipelined phases
         # are unavailable.
         assert fresh_registry.unavailable_phases() == [
-            "email_security", "port", "ssl", "header", "fingerprint"]
+            "email_security", "port", "ssl", "header", "fingerprint", "exposed_services"]
 
     def test_all_registered_means_no_unavailable(self, fresh_registry):
         from app.scanning.registry import ScannerEntry, ScanPhase
@@ -121,6 +121,7 @@ class TestRegistryUnavailablePhases:
         for phase in (
             ScanPhase.PORT, ScanPhase.SSL, ScanPhase.HEADER,
             ScanPhase.EMAIL_SECURITY, ScanPhase.FINGERPRINT,
+            ScanPhase.EXPOSED_SERVICES,
         ):
             fresh_registry.register(
                 ScannerEntry(name=phase.value, phase=phase, run=noop))
