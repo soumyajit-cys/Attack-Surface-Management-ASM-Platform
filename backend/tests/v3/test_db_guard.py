@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.conftest import _assert_safe_test_db
+from tests.db_guard import assert_safe_test_db, assert_safe_test_redis
 
 
 class TestDbGuard:

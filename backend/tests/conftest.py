@@ -61,13 +61,13 @@ def _setup_database():
 
 @pytest.fixture(autouse=True)
 def _clean_state():
-    assert_safe_test_redis(settings.redis_url if hasattr(settings, 'redis_url') else 'redis://localhost:6379/15')
+    assert_safe_test_redis(os.environ.get("REDIS_URL", "redis://localhost:6379/15"))
     get_redis().flushdb()
     from utils.rate_limiter import reset_storage_dead
 
     reset_storage_dead()
     yield
-    assert_safe_test_redis(settings.redis_url if hasattr(settings, 'redis_url') else 'redis://localhost:6379/15')
+    assert_safe_test_redis(os.environ.get("REDIS_URL", "redis://localhost:6379/15"))
     get_redis().flushdb()
     # Use a fresh session for cleanup to avoid session state issues
     engine = create_engine(settings.database_url, poolclass=NullPool)
