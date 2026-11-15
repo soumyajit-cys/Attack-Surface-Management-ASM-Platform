@@ -279,6 +279,13 @@ Settings field without documenting it fails `make check`.
 | `TECH_FINGERPRINT_MAX_HOSTS_PER_SCAN` | `100` | No | Max subdomains checked for tech fingerprinting per scan; exceeded hosts are truncated. |
 | `TECH_FINGERPRINT_MAX_REDIRECTS` | `3` | No | Max HTTP redirects followed during tech fingerprinting. |
 | `TECH_FINGERPRINT_MAX_BODY_BYTES` | `65536` | No | Max response body bytes read during tech fingerprinting. |
+| `EXPOSED_SERVICES_ENABLED` | `true` | No | Enable the exposed services scanner module. |
+| `EXPOSED_SERVICES_TIMEOUT_SECONDS` | `10.0` | No | HTTP request timeout per probe for exposed services (seconds). |
+| `EXPOSED_SERVICES_MAX_CONCURRENCY` | `10` | No | Max concurrent exposed services probes per scan. |
+| `EXPOSED_SERVICES_MAX_HOSTS_PER_SCAN` | `100` | No | Max hosts checked for exposed services per scan. |
+| `EXPOSED_SERVICES_MAX_PORTS_PER_HOST` | `20` | No | Max ports checked per host for exposed services. |
+| `EXPOSED_SERVICES_MAX_BODY_BYTES` | `65536` | No | Max response body bytes read during exposed services probing. |
+| `EXPOSED_SERVICES_ALLOW_PG_SSLREQUEST` | `false` | No | Allow PostgreSQL SSLRequest probe (pending approval). |
 | (tech fingerprint → risk) | 🔜 planned | — | Mapping detected versions to risk via existing OSV/KEV enrichment is not yet wired; banner-derived versions have confidence ≤0.6 with distro-backport caveat. |
 | `REQUIRE_DOMAIN_VERIFICATION` | `True` | No | Block scans of unverified domains (local-dev escape hatch only) |
 | `VERIFICATION_EXPIRY_DAYS` | `90` | No | Days a verification stays valid |
