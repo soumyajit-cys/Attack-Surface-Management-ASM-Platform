@@ -22,7 +22,7 @@ def upsert_finding(
     asset_id: int,
     dedupe_key: str,
     **fields: Any,
-) -> Finding:
+) -> tuple[Finding, bool]:
     """Insert or update a finding by (org_id, asset_id, dedupe_key).
 
     On insert: sets all provided fields + first_seen_at = now.
