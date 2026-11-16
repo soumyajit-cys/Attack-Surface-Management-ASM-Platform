@@ -741,7 +741,7 @@ def _generate_and_persist_findings(
         if not dedupe_key:
             dedupe_key = legacy_dedupe_key(finding["title"])
 
-        f = upsert_finding(
+        f, created = upsert_finding(
             db,
             org_id=scan.organization_id,
             asset_id=asset_id,
