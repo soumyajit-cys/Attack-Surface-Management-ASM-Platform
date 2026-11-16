@@ -156,19 +156,14 @@ def upgrade() -> None:
     op.alter_column("findings", "first_seen_at", nullable=False)
 
     # 7. Add unique index. CONCURRENTLY avoids a write lock on findings
-    # in production; falls back to standard (brief lock) if not supported.
-    try:
-        with op.get_context().autocommit_block():
-            op.execute(
-                "CREATE UNIQUE INDEX CONCURRENTLY uq_findings_org_asset_dedupe "
-                "ON findings (organization_id, asset_id, dedupe_key)"
-            )
-    except Exception:
-        op.create_index(
-            "uq_findings_org_asset_dedupe",
-            "findings",
-            ["organization_id", "asset_id", "dedupe_key"],
-            unique=True,
+    # in production.  If a previous attempt left an INVALID index, drop it
+    # first.  No fallback: fail loudly so a broken index is never silently
+    # ignored.
+    op.execute("DROP INDEX CONCURRENTLY IF EXISTS uq_findings_org_asset_dedupe")
+    with op.get_context().autocommit_block():
+        op.execute(
+            "CREATE UNIQUE INDEX CONCURRENTLY uq_findings_org_asset_dedupe "
+            "ON findings (organization_id, asset_id, dedupe_key)"
         )
 
     # 8. Add (organization_id, status), (organization_id, assigned_to), due_date indexes.
