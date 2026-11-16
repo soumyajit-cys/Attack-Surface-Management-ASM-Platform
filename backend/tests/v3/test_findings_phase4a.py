@@ -44,11 +44,12 @@ class TestUpsertHelper:
         db.add(asset)
         db.flush()
 
-        f = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:key1", title="Test", severity="high")
+        f, created = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:key1", title="Test", severity="high")
         db.commit()
         assert f is not None
         assert f.title == "Test"
         assert f.severity == "high"
+        assert created is True
 
     def test_update_preserves_workflow_state(self, db, org_factory):
         from services.findings.upsert import upsert_finding
@@ -61,7 +62,7 @@ class TestUpsertHelper:
         db.add(asset)
         db.flush()
 
-        f1 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:wf", title="WF", severity="high", status="open")
+        f1, _ = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:wf", title="WF", severity="high", status="open")
         db.commit()
         # Set workflow state
         f1.status = "accepted_risk"
@@ -69,7 +70,7 @@ class TestUpsertHelper:
         db.commit()
 
         # Upsert again (scan-driven update)
-        f2 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:wf", title="WF", severity="medium")
+        f2, _ = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:wf", title="WF", severity="medium")
         db.commit()
         db.expire_all()
         f3 = db.query(Finding).filter(Finding.id == f2.id).first()
@@ -108,12 +109,12 @@ class TestUpsertHelper:
         db.add(asset)
         db.flush()
 
-        f1 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:eu", title="EU", severity="high")
+        f1, _ = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:eu", title="EU", severity="high")
         db.commit()
         orig_updated = f1.updated_at
 
         # Empty update (no fields) should not error
-        f2 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:eu")
+        f2, _ = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:eu")
         db.commit()
         assert f2 is not None
 
@@ -128,11 +129,11 @@ class TestUpsertHelper:
         db.add(asset)
         db.flush()
 
-        f1 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:ls", title="LS", severity="high")
+        f1, _ = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:ls", title="LS", severity="high")
         db.commit()
         first_last_seen = f1.last_seen_at
 
-        f2 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:ls", title="LS", severity="high")
+        f2, _ = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:ls", title="LS", severity="high")
         db.commit()
         db.expire_all()
         f3 = db.query(Finding).filter(Finding.dedupe_key == "test:ls").first()
@@ -147,7 +148,7 @@ class TestUpsertHelper:
         db.add(asset)
         db.flush()
 
-        f = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:fi", title="FI", severity="high")
+        f, _ = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:fi", title="FI", severity="high")
         assert f is not None
         assert f.id is not None
 
