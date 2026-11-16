@@ -159,8 +159,8 @@ def upgrade() -> None:
     # in production.  If a previous attempt left an INVALID index, drop it
     # first.  No fallback: fail loudly so a broken index is never silently
     # ignored.
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS uq_findings_org_asset_dedupe")
     with op.get_context().autocommit_block():
+        op.execute("DROP INDEX CONCURRENTLY IF EXISTS uq_findings_org_asset_dedupe")
         op.execute(
             "CREATE UNIQUE INDEX CONCURRENTLY uq_findings_org_asset_dedupe "
             "ON findings (organization_id, asset_id, dedupe_key)"
