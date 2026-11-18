@@ -78,14 +78,14 @@ def upsert_finding(
         sql = text(
             f"INSERT INTO findings ({col_list}) VALUES ({col_placeholders}) "
             f"ON CONFLICT (organization_id, asset_id, dedupe_key) DO UPDATE SET {set_clause} "
-            f"RETURNING id, (xmax = 0) AS created"
+            f"RETURNING id, xmax"
         )
     else:
         params = dict(values)
         sql = text(
             f"INSERT INTO findings ({col_list}) VALUES ({col_placeholders}) "
             f"ON CONFLICT (organization_id, asset_id, dedupe_key) DO NOTHING "
-            f"RETURNING id, (xmax = 0) AS created"
+            f"RETURNING id, xmax"
         )
 
     result = db.execute(sql, params)
@@ -105,8 +105,8 @@ def upsert_finding(
         )
         created = False
     else:
-        finding_id, created_flag = row
-        created = bool(created_flag)
+        finding_id, xmax_val = row
+        created = (xmax_val == 0)
         finding = db.query(Finding).filter(Finding.id == finding_id).first()
 
     if finding is not None:
