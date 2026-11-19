@@ -35,6 +35,7 @@ import dns.exception
 import dns.resolver
 
 from app.core.config import settings
+from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
 from app.core.ssrf import PinnedResolutionMissing
 from app.scanning.context import ScanContext
 from app.scanning.registry import scanner_module, ScanPhase
@@ -375,6 +376,9 @@ async def subdomain_takeover_module(ctx: ScanContext) -> dict:
             hosts_truncated,
             MAX_HOSTS_PER_SCAN,
         )
+
+    outcome = "truncated" if truncated else "ok"
+    SCANNER_MODULE_RUNS_TOTAL.labels(module="subdomain_takeover", outcome=outcome).inc()
 
     return {
         "host": ctx.domain,
