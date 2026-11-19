@@ -60,7 +60,11 @@ def upsert_finding(
     update_set = {}
     for key in ("title", "severity", "category", "description", "recommendation", "confidence", "source_module", "target_host", "cve_ids", "cvss_score"):
         if fields.get(key) is not None:
-            update_set[key] = fields[key]
+            if key == "cve_ids":
+                import json as _json
+                update_set[key] = _json.dumps(fields[key])
+            else:
+                update_set[key] = fields[key]
     update_set["last_seen_at"] = fields.get("last_seen_at", now)
     if fields.get("last_seen_scan_id") is not None:
         update_set["last_seen_scan_id"] = fields["last_seen_scan_id"]
@@ -92,7 +96,6 @@ def upsert_finding(
     try:
         result = db.execute(sql, params)
         row = result.fetchone()
-        print('DEBUG row:', row)
         db.flush()
         if row is None:
             # Conflict occurred, do-nothing
@@ -110,8 +113,7 @@ def upsert_finding(
             finding_id, created_flag = row
             created = bool(created_flag) if created_flag is not None else False
             finding = db.query(Finding).filter(Finding.id == finding_id).first()
-    except Exception as e:
-        print('DEBUG EXCEPT:', type(e).__name__, str(e)[:100])
+    except Exception:
         # Fallback for type issues: use SQLAlchemy insert
         db.rollback()
         stmt = pg_insert(Finding).values(**values)
