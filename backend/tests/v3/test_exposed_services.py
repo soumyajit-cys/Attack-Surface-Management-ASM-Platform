@@ -17,16 +17,16 @@ from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
 
 @pytest.fixture(autouse=True)
 def _fresh_registry():
-    import sys
-    for name in [n for n in sys.modules if n == "scanner_modules" or n.startswith("scanner_modules.")]:
-        del sys.modules[name]
-    registry._entries.clear()
-    registry._discovered = False
+    from app.scanning.registry import registry
+    old_entries = dict(registry._entries)
+    old_discovered = registry._discovered
+    old_failed = dict(registry._failed_imports)
     yield
-    for name in [n for n in sys.modules if n == "scanner_modules" or n.startswith("scanner_modules.")]:
-        del sys.modules[name]
     registry._entries.clear()
-    registry._discovered = False
+    registry._entries.update(old_entries)
+    registry._discovered = old_discovered
+    registry._failed_imports.clear()
+    registry._failed_imports.update(old_failed)
 
 
 def _make_ctx(domain="example.com", subdomains=None, open_ports=None):
