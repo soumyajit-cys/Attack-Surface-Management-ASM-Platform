@@ -92,6 +92,7 @@ def upsert_finding(
     try:
         result = db.execute(sql, params)
         row = result.fetchone()
+        print('DEBUG row:', row)
         db.flush()
         if row is None:
             # Conflict occurred, do-nothing
