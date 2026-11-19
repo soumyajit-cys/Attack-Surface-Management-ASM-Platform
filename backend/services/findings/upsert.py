@@ -110,7 +110,8 @@ def upsert_finding(
             finding_id, created_flag = row
             created = bool(created_flag) if created_flag is not None else False
             finding = db.query(Finding).filter(Finding.id == finding_id).first()
-    except Exception:
+    except Exception as e:
+        print('DEBUG EXCEPT:', e)
         # Fallback for type issues: use SQLAlchemy insert
         db.rollback()
         stmt = pg_insert(Finding).values(**values)
