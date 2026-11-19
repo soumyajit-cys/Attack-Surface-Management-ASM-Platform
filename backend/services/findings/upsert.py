@@ -107,7 +107,7 @@ def upsert_finding(
             created = False
         else:
             finding_id, created_flag = row
-            created = bool(created_flag)
+            created = (int(created_flag) == 0) if created_flag is not None else False
             finding = db.query(Finding).filter(Finding.id == finding_id).first()
     except Exception:
         # Fallback for type issues: use SQLAlchemy insert
