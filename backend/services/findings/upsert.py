@@ -68,11 +68,11 @@ def upsert_finding(
 
     # Build column lists for raw SQL.
     col_names = list(values.keys())
-    col_placeholders = ", ".join(f":{c}::json" if c == "cve_ids" else f":{c}" for c in col_names)
+    col_placeholders = ", ".join(f"CAST(:{c} AS json)" if c == "cve_ids" else f":{c}" for c in col_names)
     col_list = ", ".join(col_names)
 
     if update_set:
-        set_clause = ", ".join(f"{k} = :upd_{k}::json" if k == "cve_ids" else f"{k} = :upd_{k}" for k in update_set)
+        set_clause = ", ".join(f"{k} = CAST(:upd_{k} AS json)" if k == "cve_ids" else f"{k} = :upd_{k}" for k in update_set)
         params = dict(values)
         for k, v in update_set.items():
             params[f"upd_{k}"] = v
@@ -111,7 +111,6 @@ def upsert_finding(
             created = bool(created_flag) if created_flag is not None else False
             finding = db.query(Finding).filter(Finding.id == finding_id).first()
     except Exception as e:
-        print('DEBUG EXCEPT:', e)
         # Fallback for type issues: use SQLAlchemy insert
         db.rollback()
         stmt = pg_insert(Finding).values(**values)
