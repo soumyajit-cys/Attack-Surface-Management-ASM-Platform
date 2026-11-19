@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
 from app.scanning.context import ScanContext
 from app.scanning.registry import scanner_module, ScanPhase
 from utils.egress import fetch_url_validated, fetch_url_validated_sync
@@ -231,6 +232,8 @@ async def exposed_services_module(ctx: ScanContext) -> dict:
     await asyncio.gather(*tasks, return_exceptions=True)
 
     truncated = hosts_truncated > 0
+    outcome = "truncated" if truncated else "ok"
+    SCANNER_MODULE_RUNS_TOTAL.labels(module="exposed_services", outcome=outcome).inc()
     return {
         "host": ctx.domain,
         "findings": findings,
