@@ -68,7 +68,7 @@ def upsert_finding(
     col_list = ", ".join(col_names)
 
     if update_set:
-        set_clause = ", ".join(f"{k} = :upd_{k}" for k in update_set.keys())
+        set_clause = ", ".join(f"{k} = :upd_{k}" for k in update_set)
         params = dict(values)
         for k, v in update_set.items():
             params[f"upd_{k}"] = v
