@@ -22,7 +22,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 import re
 
-_DOMAIN_RE = re.compile(r"\\b([a-zA-Z0-9][a-zA-Z0-9.-]*\\.[a-zA-Z]{2,})\\b")
+_DOMAIN_RE = re.compile(r"\b([a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,})\b")
 
 
 def upgrade() -> None:
