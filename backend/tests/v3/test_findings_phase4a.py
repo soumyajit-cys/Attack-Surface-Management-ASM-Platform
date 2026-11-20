@@ -290,11 +290,11 @@ class TestMigrationUpDownUp:
 
 class TestUpsertDbError:
     def test_db_error_propagates_no_rollback(self, db, org_factory):
-        """A DB error propagates and does not roll back unrelated staged rows."""
+        """A DB error propagates and does not roll back unrelated rows staged in the same session."""
         from services.findings.upsert import upsert_finding
         from models.finding import Finding
         from models.asset import Asset
-        from sqlalchemy.exc import IntegrityError
+        import pytest
 
         org, _ = org_factory("dbe-org", "dbeuser", "dbe@example.com")
         asset = Asset(organization_id=org.id, name="dbe-asset")
@@ -313,15 +313,13 @@ class TestUpsertDbError:
         db.add(unrelated)
         db.flush()
 
-        # Trigger a failing upsert: violate NOT NULL on title by passing None
-        # Actually, trigger IntegrityError by using a non-existent org_id
-        try:
-            upsert_finding(db, org_id=99999, asset_id=asset.id, dedupe_key="fail:key", title="Fail", severity="high")
-        except Exception:
-            pass  # Expected to fail
+        # Trigger a failing upsert using a savepoint so the transaction isn't aborted
+        with pytest.raises(Exception):
+            with db.begin_nested():
+                upsert_finding(db, org_id=org.id, asset_id=99999, dedupe_key="fail:key", title="Fail", severity="high")
 
         # The unrelated row should still be staged (not rolled back)
-        # Check by querying in the same session
+        db.expire_all()
         count = db.query(Finding).filter(Finding.dedupe_key == "unrelated:key").count()
         assert count == 1, "Unrelated staged row was rolled back"
 
