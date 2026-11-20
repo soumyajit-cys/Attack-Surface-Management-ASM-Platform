@@ -13,10 +13,21 @@ from app.scanning.registry import ScanPhase, registry
 @pytest.fixture(autouse=True)
 def _fresh_registry():
     from app.scanning.registry import registry
+    import sys
     old_entries = dict(registry._entries)
     old_discovered = registry._discovered
     old_failed = dict(registry._failed_imports)
+    # Evict scanner_modules so they re-register on next import
+    _evicted = [n for n in list(sys.modules) if n == "scanner_modules" or n.startswith("scanner_modules.")]
+    for n in _evicted:
+        del sys.modules[n]
+    registry._entries.clear()
+    registry._discovered = False
     yield
+    # Restore
+    for n in _evicted:
+        if n in sys.modules:
+            del sys.modules[n]
     registry._entries.clear()
     registry._entries.update(old_entries)
     registry._discovered = old_discovered

@@ -496,11 +496,20 @@ class TestTakeoverModule:
 class TestDataProvenance:
     @pytest.fixture(autouse=True)
     def _fresh_registry(self):
+        import sys
         from app.scanning.registry import registry
         old_entries = dict(registry._entries)
         old_discovered = registry._discovered
         old_failed = dict(registry._failed_imports)
+        _evicted = [n for n in list(sys.modules) if n == "scanner_modules" or n.startswith("scanner_modules.")]
+        for n in _evicted:
+            del sys.modules[n]
+        registry._entries.clear()
+        registry._discovered = False
         yield
+        for n in _evicted:
+            if n in sys.modules:
+                del sys.modules[n]
         registry._entries.clear()
         registry._entries.update(old_entries)
         registry._discovered = old_discovered
