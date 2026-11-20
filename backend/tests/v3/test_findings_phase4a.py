@@ -418,7 +418,7 @@ class TestUpsertDbError:
             results = []
             errors = []
 
-            def worker():
+            def worker(barrier=barrier, i=i):
                 try:
                     s = Session()
                     barrier.wait(timeout=5)
