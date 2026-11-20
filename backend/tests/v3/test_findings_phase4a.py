@@ -314,7 +314,8 @@ class TestUpsertDbError:
         db.flush()
 
         # Trigger a failing upsert using a savepoint so the transaction isn't aborted
-        with pytest.raises(Exception):
+        from sqlalchemy.exc import IntegrityError
+        with pytest.raises(IntegrityError):
             with db.begin_nested():
                 upsert_finding(db, org_id=org.id, asset_id=99999, dedupe_key="fail:key", title="Fail", severity="high")
 
