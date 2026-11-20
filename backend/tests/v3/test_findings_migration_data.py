@@ -32,9 +32,12 @@ class TestFindingsMigrationData:
         env["PYTHONPATH"] = str(backend_root)
 
         # Create fresh DB
+        import time
         conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
         conn.autocommit = True
         try:
+            conn.cursor().execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'scratch_migration_data_test' AND pid <> pg_backend_pid();")
+            time.sleep(1)
             conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_data_test;")
             conn.cursor().execute("CREATE DATABASE scratch_migration_data_test OWNER sentinel;")
         finally:
@@ -128,9 +131,12 @@ class TestFindingsMigrationData:
         self._run(["alembic", "-c", alembic_ini, "upgrade", "head"], env)
 
         # Cleanup
+        import time
         conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
         conn.autocommit = True
         try:
+            conn.cursor().execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'scratch_migration_data_test' AND pid <> pg_backend_pid();")
+            time.sleep(1)
             conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_data_test;")
         finally:
             conn.close()
