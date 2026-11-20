@@ -78,7 +78,11 @@ class Finding(Base):
 
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
-    last_seen_scan_id = Column(Integer, nullable=True)
+    last_seen_scan_id = Column(
+        Integer,
+        ForeignKey("scan_history.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     version = Column(Integer, server_default="1", nullable=False)
 

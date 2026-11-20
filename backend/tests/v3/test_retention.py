@@ -346,13 +346,16 @@ def test_purge_targets_have_no_inbound_foreign_keys():
     for table in Base.metadata.sorted_tables:
         for fk in table.foreign_keys:
             target_table = fk.column.table.name
-            # Allow FKs between purge targets (purged in dependency order).
-            if table.name in targets and target_table in targets:
+            if target_table not in targets:
                 continue
-            assert target_table not in targets, (
+            # Exempt FKs declared ON DELETE SET NULL or CASCADE: the DB
+            # handles cleanup automatically when the referenced row is purged.
+            if fk.ondelete in ("SET NULL", "CASCADE"):
+                continue
+            assert False, (
                 f"{table.name}.{fk.parent.name} references purge target "
-                f"{target_table!r}; update tasks/retention_tasks.py before "
-                "adding the dependency"
+                f"{target_table!r} without ON DELETE SET NULL/CASCADE; "
+                "update tasks/retention_tasks.py before adding the dependency"
             )
 
 
@@ -364,3 +367,51 @@ def test_beat_schedule_entry_registered():
     assert entry["task"] == "tasks.retention.purge_expired_rows"
     assert "tasks.retention_tasks" in celery.conf.include
     assert celery.conf.task_routes.get("tasks.retention.*") == {"queue": "celery"}
+
+
+class TestRetentionLastSeenScanId:
+    def test_purge_nullifies_last_seen_scan_id(self, db, org_factory):
+        """Seed a finding with last_seen_scan_id on an old scan, run purge,
+        assert scan deleted, finding survives, last_seen_scan_id is NULL."""
+        from models.scan_history import ScanHistory
+        from models.finding import Finding
+        from datetime import datetime, timezone, timedelta
+
+        org, _ = org_factory("ret-org", "retuser", "ret@example.com")
+        from models.asset import Asset
+        asset = Asset(organization_id=org.id, name="ret-asset")
+        db.add(asset)
+        db.flush()
+
+        old_scan = ScanHistory(
+            organization_id=org.id,
+            target="example.com",
+            status="completed",
+            started_at=datetime.now(timezone.utc) - timedelta(days=100),
+        )
+        db.add(old_scan)
+        db.flush()
+
+        finding = Finding(
+            organization_id=org.id,
+            asset_id=asset.id,
+            dedupe_key="test:retention",
+            title="Test finding",
+            severity="low",
+            first_seen_at=datetime.now(timezone.utc) - timedelta(days=100),
+            last_seen_scan_id=old_scan.id,
+        )
+        db.add(finding)
+        db.commit()
+
+        # Run purge
+        from tasks.retention_tasks import purge_expired_rows
+        purge_expired_rows(dry_run=False)
+
+        db.expire_all()
+        # Scan should be deleted
+        assert db.query(ScanHistory).filter(ScanHistory.id == old_scan.id).first() is None
+        # Finding should survive
+        f = db.query(Finding).filter(Finding.id == finding.id).first()
+        assert f is not None
+        assert f.last_seen_scan_id is None
