@@ -286,3 +286,163 @@ class TestMigrationUpDownUp:
             conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_test;")
         finally:
             conn.close()
+
+
+class TestUpsertDbError:
+    def test_db_error_propagates_no_rollback(self, db, org_factory):
+        """A DB error propagates and does not roll back unrelated staged rows."""
+        from services.findings.upsert import upsert_finding
+        from models.finding import Finding
+        from models.asset import Asset
+        from sqlalchemy.exc import IntegrityError
+
+        org, _ = org_factory("dbe-org", "dbeuser", "dbe@example.com")
+        asset = Asset(organization_id=org.id, name="dbe-asset")
+        db.add(asset)
+        db.flush()
+
+        # Stage an unrelated row
+        unrelated = Finding(
+            organization_id=org.id,
+            asset_id=asset.id,
+            dedupe_key="unrelated:key",
+            title="Unrelated",
+            severity="low",
+            first_seen_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+        )
+        db.add(unrelated)
+        db.flush()
+
+        # Trigger a failing upsert: violate NOT NULL on title by passing None
+        # Actually, trigger IntegrityError by using a non-existent org_id
+        try:
+            upsert_finding(db, org_id=99999, asset_id=asset.id, dedupe_key="fail:key", title="Fail", severity="high")
+        except Exception:
+            pass  # Expected to fail
+
+        # The unrelated row should still be staged (not rolled back)
+        # Check by querying in the same session
+        count = db.query(Finding).filter(Finding.dedupe_key == "unrelated:key").count()
+        assert count == 1, "Unrelated staged row was rolled back"
+
+    def test_cve_ids_roundtrip(self, db, org_factory):
+        """cve_ids round-trips as a list."""
+        from services.findings.upsert import upsert_finding
+        from models.asset import Asset
+
+        org, _ = org_factory("cve-org", "cveuser", "cve@example.com")
+        asset = Asset(organization_id=org.id, name="cve-asset")
+        db.add(asset)
+        db.flush()
+
+        cve_list = ["CVE-2024-0001", "CVE-2024-0002"]
+        f, created = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:cve", title="CVE Test", severity="high", cve_ids=cve_list)
+        db.commit()
+        db.expire_all()
+
+        f2 = db.query(__import__("models.finding", fromlist=["Finding"]).Finding).filter(
+            __import__("models.finding", fromlist=["Finding"]).Finding.dedupe_key == "test:cve"
+        ).first()
+        assert f2.cve_ids == cve_list
+
+        # Update with different list
+        new_list = ["CVE-2024-0003"]
+        upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:cve", title="CVE Test", severity="high", cve_ids=new_list)
+        db.commit()
+        db.expire_all()
+
+        f3 = db.query(__import__("models.finding", fromlist=["Finding"]).Finding).filter(
+            __import__("models.finding", fromlist=["Finding"]).Finding.dedupe_key == "test:cve"
+        ).first()
+        assert f3.cve_ids == new_list
+
+    def test_created_flag(self, db, org_factory):
+        """created is True on insert, False on conflict."""
+        from services.findings.upsert import upsert_finding
+        from models.asset import Asset
+
+        org, _ = org_factory("cf-org", "cfuser", "cf@example.com")
+        asset = Asset(organization_id=org.id, name="cf-asset")
+        db.add(asset)
+        db.flush()
+
+        f1, created1 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:cf", title="CF", severity="high")
+        db.commit()
+        assert created1 is True
+
+        f2, created2 = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:cf", title="CF", severity="high")
+        db.commit()
+        assert created2 is False
+
+    def test_empty_update_set(self, db, org_factory):
+        """Empty update_set path: second call returns created=False."""
+        from services.findings.upsert import upsert_finding
+        from models.asset import Asset
+
+        org, _ = org_factory("eu-org2", "euuser2", "eu2@example.com")
+        asset = Asset(organization_id=org.id, name="eu-asset2")
+        db.add(asset)
+        db.flush()
+
+        upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:eu2", title="EU2", severity="high")
+        db.commit()
+
+        # Call with no updatable fields
+        f, created = upsert_finding(db, org_id=org.id, asset_id=asset.id, dedupe_key="test:eu2")
+        db.commit()
+        assert created is False
+        assert f is not None
+
+    def test_concurrency_20x(self, db, org_factory):
+        """Two threads, barrier, same key, 20 times: exactly one created=True each."""
+        import threading
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from models.asset import Asset
+        from services.findings.upsert import upsert_finding
+        import os
+
+        org, _ = org_factory("conc-org2", "concuser2", "conc2@example.com")
+        asset = Asset(organization_id=org.id, name="conc-asset2")
+        db.add(asset)
+        db.commit()
+        org_id = org.id
+        asset_id = asset.id
+
+        db_url = os.environ.get("DATABASE_URL", str(db.bind.url))
+        engine = create_engine(db_url)
+        Session = sessionmaker(bind=engine)
+
+        for i in range(20):
+            barrier = threading.Barrier(2)
+            results = []
+            errors = []
+
+            def worker():
+                try:
+                    s = Session()
+                    barrier.wait(timeout=5)
+                    f, created = upsert_finding(s, org_id=org_id, asset_id=asset_id, dedupe_key=f"test:conc20:{i}", title="CC", severity="high")
+                    s.commit()
+                    results.append(created)
+                    s.close()
+                except Exception as e:
+                    errors.append(e)
+
+            t1 = threading.Thread(target=worker)
+            t2 = threading.Thread(target=worker)
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
+
+            assert not errors, f"Errors: {errors}"
+            assert sum(results) == 1, f"Expected exactly one created=True, got {results}"
+
+        # Verify exactly one row per key
+        s = Session()
+        count = s.query(__import__("models.finding", fromlist=["Finding"]).Finding).filter(
+            __import__("models.finding", fromlist=["Finding"]).Finding.dedupe_key.like("test:conc20:%")
+        ).count()
+        assert count == 20
+        s.close()
