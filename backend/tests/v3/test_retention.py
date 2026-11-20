@@ -387,7 +387,7 @@ class TestRetentionLastSeenScanId:
             organization_id=org.id,
             target="example.com",
             status="completed",
-            started_at=datetime.now(timezone.utc) - timedelta(days=100),
+            started_at=datetime.now(timezone.utc) - timedelta(days=200),
         )
         db.add(old_scan)
         db.flush()
@@ -398,11 +398,14 @@ class TestRetentionLastSeenScanId:
             dedupe_key="test:retention",
             title="Test finding",
             severity="low",
-            first_seen_at=datetime.now(timezone.utc) - timedelta(days=100),
+            first_seen_at=datetime.now(timezone.utc) - timedelta(days=200),
             last_seen_scan_id=old_scan.id,
         )
         db.add(finding)
         db.commit()
+
+        old_scan_id = old_scan.id
+        finding_id = finding.id
 
         # Run purge
         from tasks.retention_tasks import purge_expired_rows
@@ -410,8 +413,8 @@ class TestRetentionLastSeenScanId:
 
         db.expire_all()
         # Scan should be deleted
-        assert db.query(ScanHistory).filter(ScanHistory.id == old_scan.id).first() is None
+        assert db.query(ScanHistory).filter(ScanHistory.id == old_scan_id).count() == 0
         # Finding should survive
-        f = db.query(Finding).filter(Finding.id == finding.id).first()
+        f = db.query(Finding).filter(Finding.id == finding_id).first()
         assert f is not None
         assert f.last_seen_scan_id is None
