@@ -32,5 +32,3 @@ def _fresh_registry():
     registry._discovered = saved_discovered
     registry._failed_imports.clear()
     registry._failed_imports.update(saved_failed)
-PYEOF
-echo "Done"
