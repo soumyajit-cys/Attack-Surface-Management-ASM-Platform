@@ -50,7 +50,7 @@ class TestSubdomainTakeoverMetrics:
         before = counter._value.get()
 
         def fake_resolve(qname, rdtype, lifetime):
-            raise Exception("no dns")
+            raise RuntimeError("no dns")
         monkeypatch.setattr("dns.resolver.resolve", fake_resolve)
 
         ctx = _make_ctx(subdomains=["host.example.com"])
@@ -65,7 +65,7 @@ class TestSubdomainTakeoverMetrics:
         before = counter._value.get()
 
         def fake_resolve(qname, rdtype, lifetime):
-            raise Exception("no dns")
+            raise RuntimeError("no dns")
         monkeypatch.setattr("dns.resolver.resolve", fake_resolve)
 
         ctx = _make_ctx(subdomains=["host.example.com"])
