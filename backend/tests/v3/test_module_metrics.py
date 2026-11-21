@@ -113,7 +113,7 @@ class TestSslScanMetrics:
 
         async def fake_analyze(host):
             return {"host": host, "tls_version": "TLSv1.3", "cipher": "TLS_AES_256_GCM_SHA384", "expired": False, "self_signed": False, "expires_at": None}
-        monkeypatch.setattr("services.scanner.ssl_scanner.analyze_ssl", fake_analyze)
+        monkeypatch.setattr("scanner_modules.ssl_scan.analyze_ssl", fake_analyze)
 
         counter = SCANNER_MODULE_RUNS_TOTAL.labels(module="ssl_scan", outcome="ok")
         before = counter._value.get()
@@ -128,7 +128,7 @@ class TestSslScanMetrics:
 
         async def fake_analyze(host):
             raise RuntimeError("boom")
-        monkeypatch.setattr("services.scanner.ssl_scanner.analyze_ssl", fake_analyze)
+        monkeypatch.setattr("scanner_modules.ssl_scan.analyze_ssl", fake_analyze)
 
         counter = SCANNER_MODULE_RUNS_TOTAL.labels(module="ssl_scan", outcome="error")
         before = counter._value.get()
@@ -147,7 +147,12 @@ class TestEmailSecurityMetrics:
         import scanner_modules.email_security as es
 
         def fake_resolve(qname, rdtype, lifetime):
-            raise Exception("no dns")
+            if rdtype == "MX":
+                raise __import__("dns.resolver", fromlist=["NoAnswer"]).NoAnswer()
+            if rdtype == "TXT":
+                raise __import__("dns.resolver", fromlist=["NoAnswer"]).NoAnswer()
+            raise __import__("dns.resolver", fromlist=["NoAnswer"]).NoAnswer()
+
         monkeypatch.setattr("dns.resolver.resolve", fake_resolve)
 
         counter = SCANNER_MODULE_RUNS_TOTAL.labels(module="email_security", outcome="ok")
