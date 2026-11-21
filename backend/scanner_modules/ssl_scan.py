@@ -11,12 +11,16 @@ from metrics.prometheus import SCANNER_MODULE_RUNS_TOTAL
 @scanner_module("ssl_scan", phase="ssl", order=2)
 async def ssl_scan_module(ctx: ScanContext) -> dict:
     """SSL/TLS assessment against the pinned IP."""
-    ssl_data = await analyze_ssl(ctx.pinned_ip)
-    assessment = assess_ssl_risk(ssl_data)
-    SCANNER_MODULE_RUNS_TOTAL.labels(module="ssl_scan", outcome="ok").inc()
-    return {
-        "host": ctx.domain,
-        "ssl": ssl_data,
-        "risk_level": assessment["risk_level"],
-        "findings": assessment.get("findings", []),
-    }
+    try:
+        ssl_data = await analyze_ssl(ctx.pinned_ip)
+        assessment = assess_ssl_risk(ssl_data)
+        SCANNER_MODULE_RUNS_TOTAL.labels(module="ssl_scan", outcome="ok").inc()
+        return {
+            "host": ctx.domain,
+            "ssl": ssl_data,
+            "risk_level": assessment["risk_level"],
+            "findings": assessment.get("findings", []),
+        }
+    except Exception:
+        SCANNER_MODULE_RUNS_TOTAL.labels(module="ssl_scan", outcome="error").inc()
+        raise
