@@ -13,6 +13,7 @@ PG_SU_PASSWORD ?= postgres
 # Fresh scratch database for `make check`'s pytest run (created and dropped
 # every run; never a development or production database).
 CHECK_DB_URL = postgresql://sentinel:sentinelpass@localhost:5432/scratch_check
+TEST_ADMIN_DATABASE_URL ?= postgresql://postgres:postgres@localhost:5432/postgres
 
 setup: ## first-time env bootstrap (idempotent, never overwrites .env)
 	bash scripts/bootstrap.sh
@@ -64,7 +65,7 @@ check: ## CI gate mirror, in order (run before every push): text integrity, work
 	DATABASE_URL=$(CHECK_DB_URL) bash scripts/db_guard.sh
 	PGPASSWORD=$(PG_SU_PASSWORD) psql -h localhost -U $(PG_SU_USER) -c "DROP DATABASE IF EXISTS scratch_check;" -c "CREATE DATABASE scratch_check;"
 	PGPASSWORD=$(PG_SU_PASSWORD) psql -h localhost -U $(PG_SU_USER) -d scratch_check -c "GRANT ALL ON SCHEMA public TO sentinel;"
-	cd backend && DATABASE_URL=$(CHECK_DB_URL) REDIS_URL=redis://localhost:6379/15 JWT_SECRET=test-secret-key-for-ci SECRETS_ENCRYPTION_KEY=65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8= venv/bin/python -m pytest tests/ -q -p no:warnings
+	cd backend && DATABASE_URL=$(CHECK_DB_URL) TEST_ADMIN_DATABASE_URL=$(TEST_ADMIN_DATABASE_URL) REDIS_URL=redis://localhost:6379/15 JWT_SECRET=test-secret-key-for-ci SECRETS_ENCRYPTION_KEY=65oXmy07q8CjkFHoNljDp294eAbZDmRN4bJd1Ax3lo8= venv/bin/python -m pytest tests/ -q -p no:warnings
 	PGPASSWORD=$(PG_SU_PASSWORD) psql -h localhost -U $(PG_SU_USER) -c "DROP DATABASE IF EXISTS scratch_check;"
 	cd frontend && npx tsc --noEmit
 	cd frontend && npx eslint src --ext .ts,.tsx
