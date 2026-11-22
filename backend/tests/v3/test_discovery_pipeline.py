@@ -319,7 +319,7 @@ class TestSubdomainDedupeMigration:
 
     def test_dedupe_before_unique_constraint(self, monkeypatch, tmp_path):
         import os
-import sys
+        import sys
 
         db_url = os.environ.get(
             "SCRATCH_DB_URL",
