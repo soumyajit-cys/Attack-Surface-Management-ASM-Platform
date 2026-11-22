@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+import sys
 import time
 
 import pytest
