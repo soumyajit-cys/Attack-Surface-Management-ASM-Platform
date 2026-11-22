@@ -389,6 +389,8 @@ class TestSubdomainDedupeMigration:
         # Apply all migrations up to (but not including) the unique constraint.
         self._run(
             [
+                sys.executable,
+                "-m",
                 "alembic",
                 "-c",
                 alembic_ini,
