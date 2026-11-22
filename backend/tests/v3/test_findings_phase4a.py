@@ -234,7 +234,7 @@ class TestMigrationSchema:
 class TestMigrationUpDownUp:
     def test_migration_roundtrip(self, monkeypatch, tmp_path):
         import os
-import sys
+        import sys
         import subprocess
         import shutil
         from pathlib import Path
