@@ -382,6 +382,7 @@ class TestRealConcurrency:
         sub_id = sub.id
 
         import os
+import sys
         db_url = os.environ.get("DATABASE_URL", str(db.bind.url))
         engine = create_engine(db_url)
         Session = sessionmaker(bind=engine)
@@ -526,11 +527,11 @@ class TestMigrationUpDownUp:
             assert result.returncode == 0, f"Failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
 
         # Upgrade to head
-        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+        run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"])
         # Downgrade one step
-        run(["alembic", "-c", alembic_ini, "downgrade", "-1"])
+        run([sys.executable, "-m", "alembic", "-c", alembic_ini, "downgrade", "-1"])
         # Upgrade again
-        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+        run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"])
 
         # Cleanup
         conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")

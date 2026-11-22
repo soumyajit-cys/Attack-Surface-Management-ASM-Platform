@@ -319,6 +319,7 @@ class TestSubdomainDedupeMigration:
 
     def test_dedupe_before_unique_constraint(self, monkeypatch, tmp_path):
         import os
+import sys
 
         db_url = os.environ.get(
             "SCRATCH_DB_URL",
@@ -456,7 +457,7 @@ class TestSubdomainDedupeMigration:
         # min first_seen, max last_seen, repoint subdomain_ips to id=10,
         # delete id=11.
         self._run(
-            ["alembic", "-c", alembic_ini, "upgrade", "f6e5d4c3b2a1"],
+            [sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "f6e5d4c3b2a1"],
             env,
         )
 
@@ -487,11 +488,11 @@ class TestSubdomainDedupeMigration:
 
         # Downgrade then upgrade again (idempotency).
         self._run(
-            ["alembic", "-c", alembic_ini, "downgrade", "a1b2c3d4e5f6"],
+            [sys.executable, "-m", "alembic", "-c", alembic_ini, "downgrade", "a1b2c3d4e5f6"],
             env,
         )
         self._run(
-            ["alembic", "-c", alembic_ini, "upgrade", "f6e5d4c3b2a1"],
+            [sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "f6e5d4c3b2a1"],
             env,
         )
 
@@ -783,7 +784,7 @@ class TestCrtShBackfillMigration:
 
         # Apply migrations up to discovery_meta (before the backfill).
         self._run(
-            ["alembic", "-c", alembic_ini, "upgrade", "7a8b9c0d1e2f"],
+            [sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "7a8b9c0d1e2f"],
             env,
         )
 
@@ -813,7 +814,7 @@ class TestCrtShBackfillMigration:
 
         # Upgrade to the backfill migration.
         self._run(
-            ["alembic", "-c", alembic_ini, "upgrade", "c3a7f1e9b2d4"],
+            [sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "c3a7f1e9b2d4"],
             env,
         )
 
@@ -838,7 +839,7 @@ class TestCrtShBackfillMigration:
 
         # Downgrade.
         self._run(
-            ["alembic", "-c", alembic_ini, "downgrade", "7a8b9c0d1e2f"],
+            [sys.executable, "-m", "alembic", "-c", alembic_ini, "downgrade", "7a8b9c0d1e2f"],
             env,
         )
 
@@ -859,7 +860,7 @@ class TestCrtShBackfillMigration:
 
         # Upgrade again (idempotency).
         self._run(
-            ["alembic", "-c", alembic_ini, "upgrade", "c3a7f1e9b2d4"],
+            [sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "c3a7f1e9b2d4"],
             env,
         )
 

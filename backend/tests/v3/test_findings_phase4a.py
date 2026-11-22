@@ -234,6 +234,7 @@ class TestMigrationSchema:
 class TestMigrationUpDownUp:
     def test_migration_roundtrip(self, monkeypatch, tmp_path):
         import os
+import sys
         import subprocess
         import shutil
         from pathlib import Path
@@ -273,11 +274,11 @@ class TestMigrationUpDownUp:
             assert result.returncode == 0, f"Failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
 
         # Upgrade to head
-        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+        run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"])
         # Downgrade one step
-        run(["alembic", "-c", alembic_ini, "downgrade", "-1"])
+        run([sys.executable, "-m", "alembic", "-c", alembic_ini, "downgrade", "-1"])
         # Upgrade again
-        run(["alembic", "-c", alembic_ini, "upgrade", "head"])
+        run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"])
 
         # Cleanup
         conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")

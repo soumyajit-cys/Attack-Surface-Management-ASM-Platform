@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import sys
 import subprocess
 import shutil
 from pathlib import Path
@@ -51,7 +52,7 @@ class TestFindingsMigrationData:
             conn.close()
 
         # Upgrade to revision before e7f8a9b0c1d2
-        self._run(["alembic", "-c", alembic_ini, "upgrade", "b2c3d4e5f6a7"], env)
+        self._run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "b2c3d4e5f6a7"], env)
 
         # Seed data
         import sqlalchemy as sa
@@ -80,7 +81,7 @@ class TestFindingsMigrationData:
             c.execute(text("INSERT INTO findings (id, organization_id, asset_id, title, severity, created_at, updated_at) VALUES (12, 1, 1, 'Legacy Title', 'low', '2026-01-01', '2026-01-01')"))
 
         # Upgrade to head
-        self._run(["alembic", "-c", alembic_ini, "upgrade", "head"], env)
+        self._run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"], env)
 
         # Assertions
         with engine.connect() as c:
@@ -127,8 +128,8 @@ class TestFindingsMigrationData:
             assert rows[1] is not None
 
         # Downgrade + upgrade
-        self._run(["alembic", "-c", alembic_ini, "downgrade", "-1"], env)
-        self._run(["alembic", "-c", alembic_ini, "upgrade", "head"], env)
+        self._run([sys.executable, "-m", "alembic", "-c", alembic_ini, "downgrade", "-1"], env)
+        self._run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"], env)
 
         # Cleanup
         import time
