@@ -382,7 +382,7 @@ class TestRealConcurrency:
         sub_id = sub.id
 
         import os
-import sys
+        import sys
         db_url = os.environ.get("DATABASE_URL", str(db.bind.url))
         engine = create_engine(db_url)
         Session = sessionmaker(bind=engine)
