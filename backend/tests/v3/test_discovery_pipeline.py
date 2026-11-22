@@ -7,6 +7,7 @@ probing of unpinned/unverified targets.
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
+import sys
 from unittest.mock import patch
 
 import pytest
