@@ -2,13 +2,17 @@
 
 import hashlib
 import os
-import sys
 import subprocess
 import shutil
+import sys
+import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import psycopg2
 import pytest
+
+from tests.db_guard import assert_safe_test_db
 
 
 class TestFindingsMigrationData:
@@ -18,7 +22,26 @@ class TestFindingsMigrationData:
         assert result.returncode == 0, f"Failed: {' '.join(cmd)}\n{result.stderr}\n{result.stdout}"
 
     def test_migration_data(self, monkeypatch, tmp_path):
-        db_url = "postgresql://sentinel:sentinelpass@localhost:5432/scratch_migration_data_test"
+        admin_url = os.environ.get("TEST_ADMIN_DATABASE_URL")
+        if not admin_url:
+            pytest.fail("TEST_ADMIN_DATABASE_URL is not set")
+
+        app_url = os.environ.get("DATABASE_URL")
+        if not app_url:
+            pytest.fail("DATABASE_URL is not set")
+
+        # Derive scratch DB name
+        parsed = urlparse(app_url)
+        db_name = "scratch_migration_data_test"
+        assert db_name.startswith("scratch_")
+        assert_safe_test_db(f"postgresql://sentinel:sentinelpass@{parsed.hostname or '127.0.0.1'}/{db_name}")
+
+        # Build admin URL with IP literal
+        admin_parsed = urlparse(admin_url)
+        host = admin_parsed.hostname or "127.0.0.1"
+        admin_db_url = admin_url.replace(admin_parsed.hostname, host) if admin_parsed.hostname else admin_url
+
+        db_url = f"postgresql://sentinel:sentinelpass@{host}/{db_name}"
         env = dict(os.environ)
         env["DATABASE_URL"] = db_url
 
@@ -32,22 +55,27 @@ class TestFindingsMigrationData:
         Path(alembic_ini).write_text(ini_text)
         env["PYTHONPATH"] = str(backend_root)
 
-        # Create fresh DB
-        import time
-        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
-        conn.autocommit = True
-        try:
-            conn.cursor().execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'scratch_migration_data_test' AND pid <> pg_backend_pid();")
-            time.sleep(1)
-            conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_data_test;")
-            conn.cursor().execute("CREATE DATABASE scratch_migration_data_test OWNER sentinel;")
-        finally:
-            conn.close()
+        # Create fresh DB with retry
+        for attempt in range(5):
+            try:
+                conn = psycopg2.connect(f"postgresql://postgres:postgres@{host}:5432/postgres")
+                conn.autocommit = True
+                try:
+                    conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}' AND pid <> pg_backend_pid();")
+                    conn.cursor().execute(f"DROP DATABASE IF EXISTS {db_name};")
+                    conn.cursor().execute(f"CREATE DATABASE {db_name} OWNER sentinel;")
+                finally:
+                    conn.close()
+                break
+            except Exception:
+                time.sleep(1)
+        else:
+            raise RuntimeError(f"Could not create {db_name}")
 
-        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn = psycopg2.connect(f"postgresql://postgres:postgres@{host}:5432/postgres")
         conn.autocommit = True
         try:
-            conn.cursor().execute("GRANT ALL ON DATABASE scratch_migration_data_test TO sentinel;")
+            conn.cursor().execute(f"GRANT ALL ON DATABASE {db_name} TO sentinel;")
         finally:
             conn.close()
 
@@ -132,12 +160,14 @@ class TestFindingsMigrationData:
         self._run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"], env)
 
         # Cleanup
-        import time
-        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn = psycopg2.connect(f"postgresql://postgres:postgres@{host}:5432/postgres")
         conn.autocommit = True
         try:
-            conn.cursor().execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'scratch_migration_data_test' AND pid <> pg_backend_pid();")
+            conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}' AND pid <> pg_backend_pid();")
+            import time
             time.sleep(1)
-            conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_data_test;")
+            conn.cursor().execute(f"DROP DATABASE IF EXISTS {db_name};")
         finally:
             conn.close()
+PYEOF
+echo "Done"
