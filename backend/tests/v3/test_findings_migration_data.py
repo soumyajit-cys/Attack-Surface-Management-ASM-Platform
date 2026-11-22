@@ -169,5 +169,3 @@ class TestFindingsMigrationData:
             conn.cursor().execute(f"DROP DATABASE IF EXISTS {db_name};")
         finally:
             conn.close()
-PYEOF
-echo "Done"
