@@ -61,3 +61,4 @@ by `scripts/bootstrap.sh`).
    (the owner pushes).
 5. Anything that copies data out of the codebase must not leave the build:
    use `FIXTURE` data (see `scripts/seed_demo.py` for the pattern).
+TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
