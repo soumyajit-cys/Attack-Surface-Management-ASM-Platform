@@ -178,8 +178,12 @@ class TestFindingsMigrationData:
         conn = psycopg2.connect(admin_conn_str)
         conn.autocommit = True
         try:
-            conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{scratch_db_name}' AND pid <> pg_backend_pid();")
-            time.sleep(1)
-            conn.cursor().execute(f"DROP DATABASE IF EXISTS {scratch_db_name};")
+            for _ in range(10):
+                try:
+                    conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{scratch_db_name}' AND pid <> pg_backend_pid();")
+                    conn.cursor().execute(f"DROP DATABASE IF EXISTS {scratch_db_name};")
+                    break
+                except Exception:
+                    time.sleep(0.5)
         finally:
             conn.close()
