@@ -179,7 +179,6 @@ class TestFindingsMigrationData:
         conn.autocommit = True
         try:
             conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{scratch_db_name}' AND pid <> pg_backend_pid();")
-            import time
             time.sleep(1)
             conn.cursor().execute(f"DROP DATABASE IF EXISTS {scratch_db_name};")
         finally:
