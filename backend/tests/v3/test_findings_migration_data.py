@@ -5,7 +5,6 @@ import os
 import subprocess
 import shutil
 import sys
-import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -82,7 +81,7 @@ class TestFindingsMigrationData:
                     conn.close()
                 break
             except Exception:
-                time.sleep(0.5)
+                pass
         else:
             raise RuntimeError(f"Could not create {scratch_db_name}")
 
@@ -184,6 +183,6 @@ class TestFindingsMigrationData:
                     conn.cursor().execute(f"DROP DATABASE IF EXISTS {scratch_db_name};")
                     break
                 except Exception:
-                    time.sleep(0.5)
+                    pass
         finally:
             conn.close()
