@@ -254,7 +254,7 @@ class TestMigrationUpDownUp:
         env["PYTHONPATH"] = str(backend_root)
 
         import psycopg2
-        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn = psycopg2.connect(os.environ.get("TEST_ADMIN_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"))
         conn.autocommit = True
         try:
             conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_test;")
@@ -262,7 +262,7 @@ class TestMigrationUpDownUp:
         finally:
             conn.close()
 
-        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn = psycopg2.connect(os.environ.get("TEST_ADMIN_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"))
         conn.autocommit = True
         try:
             conn.cursor().execute("GRANT ALL ON DATABASE scratch_migration_test TO sentinel;")
@@ -281,7 +281,7 @@ class TestMigrationUpDownUp:
         run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"])
 
         # Cleanup
-        conn = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/postgres")
+        conn = psycopg2.connect(os.environ.get("TEST_ADMIN_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"))
         conn.autocommit = True
         try:
             conn.cursor().execute("DROP DATABASE IF EXISTS scratch_migration_test;")
