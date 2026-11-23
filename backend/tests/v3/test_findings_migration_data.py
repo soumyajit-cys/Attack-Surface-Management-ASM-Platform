@@ -30,52 +30,67 @@ class TestFindingsMigrationData:
         if not app_url:
             pytest.fail("DATABASE_URL is not set")
 
-        # Derive scratch DB name
-        parsed = urlparse(app_url)
-        db_name = "scratch_migration_data_test"
-        assert db_name.startswith("scratch_")
-        assert_safe_test_db(f"postgresql://sentinel:sentinelpass@{parsed.hostname or '127.0.0.1'}/{db_name}")
-
-        # Build admin URL with IP literal
+        # Parse admin URL
         admin_parsed = urlparse(admin_url)
-        host = admin_parsed.hostname or "127.0.0.1"
-        admin_db_url = admin_url.replace(admin_parsed.hostname, host) if admin_parsed.hostname else admin_url
+        admin_host = admin_parsed.hostname or "127.0.0.1"
+        admin_port = admin_parsed.port or 5432
+        admin_user = admin_parsed.username or "postgres"
+        admin_password = admin_parsed.password or ""
+        admin_dbname = admin_parsed.path.lstrip("/") or "postgres"
 
-        db_url = f"postgresql://sentinel:sentinelpass@{host}/{db_name}"
+        # Parse app URL
+        app_parsed = urlparse(app_url)
+        app_host = app_parsed.hostname or "127.0.0.1"
+        app_port = app_parsed.port or 5432
+        app_user = app_parsed.username or "sentinel"
+        app_password = app_parsed.password or ""
+        app_dbname = app_parsed.path.lstrip("/") or "scratch_check"
+
+        # Scratch DB name
+        scratch_db_name = "scratch_migration_data_test"
+        assert scratch_db_name.startswith("scratch_")
+        assert_safe_test_db(f"postgresql://{app_user}:{app_password}@{app_host}:{app_port}/{scratch_db_name}")
+
+        # Build admin connection string (use IP literal)
+        admin_conn_str = f"postgresql://{admin_user}:{admin_password}@{admin_host}:{admin_port}/{admin_dbname}"
+        app_conn_str = f"postgresql://{app_user}:{app_password}@{app_host}:{app_port}/{scratch_db_name}"
+
         env = dict(os.environ)
-        env["DATABASE_URL"] = db_url
+        env["DATABASE_URL"] = app_conn_str
 
         backend_root = Path(__file__).resolve().parents[2]
         alembic_ini = str(tmp_path / "alembic.ini")
         shutil.copy(backend_root / "alembic.ini", alembic_ini)
         ini_text = Path(alembic_ini).read_text()
         ini_text = ini_text.replace("script_location = migrations", f"script_location = {backend_root}/migrations")
-        ini_text = ini_text.replace("sqlalchemy.url =", f"sqlalchemy.url = {db_url}")
+        ini_text = ini_text.replace("sqlalchemy.url =", f"sqlalchemy.url = {app_conn_str}")
         ini_text = ini_text.replace("prepend_sys_path = .", f"prepend_sys_path = {backend_root}")
         Path(alembic_ini).write_text(ini_text)
         env["PYTHONPATH"] = str(backend_root)
 
         # Create fresh DB with retry
-        for attempt in range(5):
+        for attempt in range(10):
             try:
-                conn = psycopg2.connect(f"postgresql://postgres:postgres@{host}:5432/postgres")
+                conn = psycopg2.connect(admin_conn_str)
                 conn.autocommit = True
                 try:
-                    conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}' AND pid <> pg_backend_pid();")
-                    conn.cursor().execute(f"DROP DATABASE IF EXISTS {db_name};")
-                    conn.cursor().execute(f"CREATE DATABASE {db_name} OWNER sentinel;")
+                    cur = conn.cursor()
+                    cur.execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{scratch_db_name}' AND pid <> pg_backend_pid();")
+                    cur.execute(f"DROP DATABASE IF EXISTS {scratch_db_name};")
+                    cur.execute(f"CREATE DATABASE {scratch_db_name} OWNER {app_user};")
                 finally:
                     conn.close()
                 break
             except Exception:
-                time.sleep(1)
+                time.sleep(0.5)
         else:
-            raise RuntimeError(f"Could not create {db_name}")
+            raise RuntimeError(f"Could not create {scratch_db_name}")
 
-        conn = psycopg2.connect(f"postgresql://postgres:postgres@{host}:5432/postgres")
+        # Grant access
+        conn = psycopg2.connect(admin_conn_str)
         conn.autocommit = True
         try:
-            conn.cursor().execute(f"GRANT ALL ON DATABASE {db_name} TO sentinel;")
+            conn.cursor().execute(f"GRANT ALL ON DATABASE {scratch_db_name} TO {app_user};")
         finally:
             conn.close()
 
@@ -85,7 +100,7 @@ class TestFindingsMigrationData:
         # Seed data
         import sqlalchemy as sa
         from sqlalchemy import create_engine, text
-        engine = create_engine(db_url)
+        engine = create_engine(app_conn_str)
         with engine.begin() as c:
             c.execute(text("INSERT INTO organizations (id, name, require_2fa) VALUES (1, 'org', false)"))
             c.execute(text("INSERT INTO assets (id, organization_id, name, criticality, exposure) VALUES (1, 1, 'asset', 'dev', 'internet')"))
@@ -160,11 +175,12 @@ class TestFindingsMigrationData:
         self._run([sys.executable, "-m", "alembic", "-c", alembic_ini, "upgrade", "head"], env)
 
         # Cleanup
-        conn = psycopg2.connect(f"postgresql://postgres:postgres@{host}:5432/postgres")
+        conn = psycopg2.connect(admin_conn_str)
         conn.autocommit = True
         try:
-            conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_name}' AND pid <> pg_backend_pid();")
+            conn.cursor().execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{scratch_db_name}' AND pid <> pg_backend_pid();")
+            import time
             time.sleep(1)
-            conn.cursor().execute(f"DROP DATABASE IF EXISTS {db_name};")
+            conn.cursor().execute(f"DROP DATABASE IF EXISTS {scratch_db_name};")
         finally:
             conn.close()
