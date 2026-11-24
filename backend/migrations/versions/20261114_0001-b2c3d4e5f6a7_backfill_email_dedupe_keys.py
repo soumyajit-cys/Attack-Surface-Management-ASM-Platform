@@ -31,50 +31,10 @@ _DOMAIN_RE = re.compile(r"\b([a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,})\b")
 
 
 def upgrade() -> None:
-    conn = op.get_bind()
-
-    # Get all email_security findings with old-style dedupe keys.
-    rows = conn.execute(
-        sa.text(
-            "SELECT f.id, f.dedupe_key, f.title, f.description, f.asset_id "
-            "FROM findings f "
-            "WHERE f.dedupe_key LIKE 'email_security:%' "
-            "  AND f.dedupe_key NOT LIKE 'email_security:%:%'"
-        )
-    ).fetchall()
-
-    for row in rows:
-        finding_id, old_key, title, description, asset_id = row
-
-        # Get the domains registered to this asset's org.
-        domain_rows = conn.execute(
-            sa.text(
-                "SELECT d.domain FROM domains d "
-                "JOIN assets a ON a.id = d.asset_id "
-                "WHERE a.id = :aid"
-            ),
-            {"aid": asset_id},
-        ).fetchall()
-        registered = {r[0] for r in domain_rows}
-
-        domain = None
-        if len(registered) == 1:
-            domain = next(iter(registered))
-        elif len(registered) > 1:
-            # Accept a text token only when it exactly equals a registered domain.
-            text = (title or "") + " " + (description or "")
-            for m in _DOMAIN_RE.finditer(text):
-                candidate = m.group(1)
-                if candidate in registered:
-                    domain = candidate
-                    break
-
-        if domain:
-            new_key = f"{old_key}:{domain}"
-            conn.execute(
-                sa.text("UPDATE findings SET dedupe_key = :new_key WHERE id = :fid"),
-                {"new_key": new_key, "fid": finding_id},
-            )
+    # Backfill moved to f1a2b3c4d5e6 (new revision). This migration is now
+    # a no-op to avoid running the backfill twice on databases that already
+    # applied the old version.
+    pass
 
 
 def downgrade() -> None:
