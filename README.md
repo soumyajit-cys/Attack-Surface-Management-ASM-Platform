@@ -186,7 +186,7 @@ npm run dev                           # http://localhost:5173
 Register via the UI or API (`email` must be a valid address; nothing is sent
 anywhere without SMTP configured):
 
-```bash
+;;;bash
 curl -s -X POST http://localhost:8000/api/v1/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"username":"demo","email":"demo@example.com","password":"Str0ng-pass-2026","organization":"Local Demo"}'
