@@ -112,7 +112,7 @@ flowchart TD
 
 ## Repository layout
 
-```
+...
 .
 ├── backend/
 │   ├── api/…                    # legacy HTTP routes (kept for compatibility)
