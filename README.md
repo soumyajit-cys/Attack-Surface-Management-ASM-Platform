@@ -213,7 +213,7 @@ from `scripts/seed_demo.py`'s FIXTURE objects.
 ```bash
 make setup      # generates JWT_SECRET + POSTGRES_PASSWORD + REDIS_PASSWORD (never printed)
 make up         # runs postgres/redis/backend/worker/beat/frontend/nginx; all health-checked
-```
+;;
 
 ## Configuration
 
