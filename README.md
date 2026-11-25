@@ -97,6 +97,8 @@ flowchart TD
 
 ## Tech stack
 
+
+
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 18, TypeScript 5.9, Vite 5, Tailwind CSS 3, Recharts 2, d3 7, Axios (per-route chunks, ≤ ~360 kB each, ≤ ~250 kB initial) |
