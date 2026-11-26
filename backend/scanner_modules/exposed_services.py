@@ -196,7 +196,7 @@ async def exposed_services_module(ctx: ScanContext) -> dict:
                     continue
 
                 # HTTP admin panels
-                if port_num in (80, 443, 8080, 8443, 9090):
+                if port_num in (80, 443, 3000, 8080, 8443, 9090):
                     scheme = "https" if port_num in (443, 8443) else "http"
                     # Baseline: random nonexistent path
                     import uuid
@@ -209,21 +209,40 @@ async def exposed_services_module(ctx: ScanContext) -> dict:
                         admin_url = f"{scheme}://{subdomain}:{port_num}{admin_path}"
                         admin_result = _http_probe(admin_url)
                         admin_status = admin_result.get("status_code")
+                        admin_body = admin_result.get("body", "")
                         # Only report if admin path differs from baseline (not soft-404)
                         if admin_status == 200 and admin_status != baseline_status:
+                            # Product-specific signature matching
+                            sig_id = "admin_panel"
+                            service_name = "http_admin"
+                            severity = "medium"
+                            confidence = 0.7
+                            matched_literal = ""
+                            for sig in SIGNATURES:
+                                if sig.get("probe_type") != "http":
+                                    continue
+                                ident = sig.get("identifying_string")
+                                if ident and ident in admin_body:
+                                    sig_id = sig["service"]
+                                    service_name = sig["service"]
+                                    severity = sig.get("severity", "medium")
+                                    confidence = sig.get("confidence", 0.7)
+                                    matched_literal = ident
+                                    break
+
                             findings.append({
                                 "provider": f"admin_panel_{admin_path.strip('/')}",
                                 "category": "exposed_service",
-                                "severity": "medium",
-                                "confidence": 0.7,
+                                "severity": severity,
+                                "confidence": confidence,
                                 "matched_pattern": f"admin path {admin_path} returned 200",
-                                "matched_text": "",
+                                "matched_text": matched_literal,
                                 "version": None,
-                                "dedupe_key": f"exposed_services:admin_panel:{subdomain}:{port_num}:{admin_path}",
+                                "dedupe_key": f"exposed_services:{sig_id}:{subdomain}:{port_num}:{admin_path}",
                                 "host": subdomain,
                                 "port": port_num,
-                                "service": "http_admin",
-                                "signature_id": "admin_panel",
+                                "service": service_name,
+                                "signature_id": sig_id,
                                 "status_code": admin_status,
                             })
                     continue

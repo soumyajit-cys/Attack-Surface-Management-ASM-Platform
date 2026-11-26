@@ -167,7 +167,7 @@ class TestExposedServicesModule:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) == 0
 
     def test_admin_path_differs_from_baseline_finding(self):
@@ -185,7 +185,7 @@ class TestExposedServicesModule:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) >= 1
             assert admin_findings[0]["severity"] == "medium"
 
@@ -333,7 +333,7 @@ class TestSoft404CatchAll:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) == 0
 
     def test_admin_differs_from_baseline_finding(self):
@@ -348,7 +348,7 @@ class TestSoft404CatchAll:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) >= 1
             assert admin_findings[0]["severity"] == "medium"
 
@@ -362,7 +362,7 @@ class TestSoft404CatchAll:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) == 0
 
     def test_network_error_no_finding(self):
@@ -375,7 +375,7 @@ class TestSoft404CatchAll:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) == 0
 
     def test_different_status_codes_no_finding(self):
@@ -390,7 +390,7 @@ class TestSoft404CatchAll:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) == 0
 
     def test_similar_body_different_status(self):
@@ -405,7 +405,7 @@ class TestSoft404CatchAll:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) == 0
 
 
@@ -477,7 +477,7 @@ class TestPerProductSignatureFixtures:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) >= 1
 
     def test_phpmyadmin_negative(self):
@@ -489,7 +489,7 @@ class TestPerProductSignatureFixtures:
         with patch.object(es, "_http_probe", fake_probe):
             ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
             result = asyncio.run(es.exposed_services_module(ctx))
-            admin_findings = [f for f in result["findings"] if f.get("service") == "http_admin"]
+            admin_findings = [f for f in result["findings"] if f.get("service") in ("http_admin", "phpmyadmin", "tomcat_manager", "wordpress_login", "jenkins", "grafana", "kibana", "portainer", "webmin", "solr", "rabbitmq_mgmt")]
             assert len(admin_findings) == 0
 
     def test_mysql_negative_no_banner(self):
@@ -505,3 +505,147 @@ class TestPerProductSignatureFixtures:
         result = asyncio.run(es.exposed_services_module(ctx))
         memcached_findings = [f for f in result["findings"] if f.get("service") == "memcached"]
         assert len(memcached_findings) == 0
+
+
+class TestProductSpecificDetection:
+    """Product-specific detection for Tomcat, WordPress, Jenkins, Grafana."""
+
+    def test_tomcat_manager_positive(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "manager" in url:
+                return {"status_code": 200, "headers": {}, "body": "Tomcat Web Application Manager", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 8080, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            findings = [f for f in result["findings"] if f.get("signature_id") == "tomcat_manager"]
+            assert len(findings) >= 1
+            assert findings[0]["severity"] == "medium"
+            assert findings[0]["confidence"] == 0.7
+
+    def test_tomcat_manager_negative(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "manager" in url:
+                return {"status_code": 200, "headers": {}, "body": "Generic Java App", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 8080, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            tomcat_findings = [f for f in result["findings"] if f.get("signature_id") == "tomcat_manager"]
+            assert len(tomcat_findings) == 0
+
+    def test_wordpress_login_positive(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "wp-admin" in url or "wp-login" in url:
+                return {"status_code": 200, "headers": {}, "body": "wp-login.php", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            wp_findings = [f for f in result["findings"] if f.get("signature_id") == "wordpress_login"]
+            assert len(wp_findings) >= 1
+
+    def test_wordpress_login_negative(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "wp-admin" in url:
+                return {"status_code": 200, "headers": {}, "body": "Generic CMS", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 80, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            wp_findings = [f for f in result["findings"] if f.get("signature_id") == "wordpress_login"]
+            assert len(wp_findings) == 0
+
+    def test_jenkins_positive(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "admin" in url or "manager" in url:
+                return {"status_code": 200, "headers": {}, "body": "Jenkins Dashboard", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 8080, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            jenkins_findings = [f for f in result["findings"] if f.get("signature_id") == "jenkins"]
+            assert len(jenkins_findings) >= 1
+            assert jenkins_findings[0]["severity"] == "high"
+
+    def test_jenkins_negative(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "admin" in url:
+                return {"status_code": 200, "headers": {}, "body": "Generic Java App", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 8080, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            jenkins_findings = [f for f in result["findings"] if f.get("signature_id") == "jenkins"]
+            assert len(jenkins_findings) == 0
+
+    def test_grafana_positive(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "admin" in url or "manager" in url:
+                return {"status_code": 200, "headers": {}, "body": "Grafana Dashboard", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 3000, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            grafana_findings = [f for f in result["findings"] if f.get("signature_id") == "grafana"]
+            assert len(grafana_findings) >= 1
+
+    def test_grafana_negative(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            if "admin" in url:
+                return {"status_code": 200, "headers": {}, "body": "Generic Dashboard", "error": None}
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 3000, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            grafana_findings = [f for f in result["findings"] if f.get("signature_id") == "grafana"]
+            assert len(grafana_findings) == 0
+
+    def test_elasticsearch_positive(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            return {"status_code": 200, "headers": {}, "body": '{"cluster_name": "test"}', "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 9200, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            es_findings = [f for f in result["findings"] if f.get("service") == "elasticsearch"]
+            assert len(es_findings) >= 1
+            assert es_findings[0]["severity"] == "high"
+
+    def test_elasticsearch_negative(self):
+        import scanner_modules.exposed_services as es
+
+        def fake_probe(url):
+            return {"status_code": 404, "headers": {}, "body": "not found", "error": None}
+
+        with patch.object(es, "_http_probe", fake_probe):
+            ctx = _make_ctx(subdomains=["host.example.com"], open_ports={"host.example.com": [{"port": 9200, "status": "open", "banner": ""}]})
+            result = asyncio.run(es.exposed_services_module(ctx))
+            es_findings = [f for f in result["findings"] if f.get("service") == "elasticsearch" and f.get("signature_id") == "elasticsearch_exposed"]
+            assert len(es_findings) == 0
