@@ -210,8 +210,15 @@ async def exposed_services_module(ctx: ScanContext) -> dict:
                         admin_result = _http_probe(admin_url)
                         admin_status = admin_result.get("status_code")
                         admin_body = admin_result.get("body", "")
-                        # Only report if admin path differs from baseline (not soft-404)
-                        if admin_status == 200 and admin_status != baseline_status:
+                        # Soft-404 detection: compare status AND body.
+                        # A catch-all returns the same response for any path.
+                        # If the admin body matches the baseline body, it's
+                        # a soft-404 regardless of status code.
+                        baseline_body = baseline_result.get("body", "")
+                        is_soft_404 = (admin_body == baseline_body and len(admin_body) > 0)
+                        # Only report if admin returns 200, differs from baseline,
+                        # and is not a soft-404 (same body as baseline).
+                        if admin_status == 200 and admin_status != baseline_status and not is_soft_404:
                             # Product-specific signature matching
                             sig_id = "admin_panel"
                             service_name = "http_admin"
@@ -221,8 +228,11 @@ async def exposed_services_module(ctx: ScanContext) -> dict:
                             for sig in SIGNATURES:
                                 if sig.get("probe_type") != "http":
                                     continue
+                                # Enforce port constraint
+                                if port_num not in sig.get("ports", []):
+                                    continue
                                 ident = sig.get("identifying_string")
-                                if ident and ident in admin_body:
+                                if ident and ident.lower() in admin_body.lower():
                                     sig_id = sig["service"]
                                     service_name = sig["service"]
                                     severity = sig.get("severity", "medium")
