@@ -52,6 +52,31 @@ TIMEOUT = settings.exposed_services_timeout_seconds
 # Admin paths to probe (compared against random baseline)
 ADMIN_PATHS = ["/", "/admin", "/manager", "/phpmyadmin", "/wp-admin"]
 
+
+def _normalize_body(body: str) -> str:
+    """Normalize response body for soft-404 comparison.
+
+    Collapses whitespace runs and strips leading/trailing whitespace
+    so that trivial formatting differences do not cause false negatives.
+    """
+    import re as _re
+
+    return _re.sub(r"\\s+", " ", (body or "").strip()).lower()
+
+
+def _is_soft_404(baseline_status, baseline_body, admin_status, admin_body):
+    """Conservative soft-404 detection.
+
+    Returns True only when the admin response is a catch-all: same
+    normalized body as the baseline AND both non-empty.  Different
+    status codes or different bodies → not a soft-404.
+    """
+    if not admin_body or not baseline_body:
+        return False
+    if admin_status != baseline_status:
+        return False
+    return _normalize_body(admin_body) == _normalize_body(baseline_body)
+
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
@@ -215,7 +240,7 @@ async def exposed_services_module(ctx: ScanContext) -> dict:
                         # If the admin body matches the baseline body, it's
                         # a soft-404 regardless of status code.
                         baseline_body = baseline_result.get("body", "")
-                        is_soft_404 = (admin_body == baseline_body and len(admin_body) > 0)
+                        is_soft_404 = _is_soft_404(baseline_status, baseline_body, admin_status, admin_body)
                         # Only report if admin returns 200, differs from baseline,
                         # and is not a soft-404 (same body as baseline).
                         if admin_status == 200 and admin_status != baseline_status and not is_soft_404:
