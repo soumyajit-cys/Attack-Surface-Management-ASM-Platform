@@ -649,3 +649,42 @@ class TestProductSpecificDetection:
             result = asyncio.run(es.exposed_services_module(ctx))
             es_findings = [f for f in result["findings"] if f.get("service") == "elasticsearch" and f.get("signature_id") == "elasticsearch_exposed"]
             assert len(es_findings) == 0
+
+
+class TestSoft404Hardened:
+    """Hardened soft-404 detection tests."""
+
+    def test_normalize_body_collapses_whitespace(self):
+        import scanner_modules.exposed_services as es
+        assert es._normalize_body("  hello   world  ") == "hello world"
+        assert es._normalize_body("a\n\nb\t\tc") == "a b c"
+        assert es._normalize_body("") == ""
+
+    def test_is_soft_404_identical_bodies(self):
+        import scanner_modules.exposed_services as es
+        assert es._is_soft_404(200, "generic page", 200, "generic page") is True
+
+    def test_is_soft_404_different_bodies(self):
+        import scanner_modules.exposed_services as es
+        assert es._is_soft_404(404, "not found", 200, "admin panel") is False
+
+    def test_is_soft_404_empty_responses(self):
+        import scanner_modules.exposed_services as es
+        assert es._is_soft_404(200, "", 200, "") is False
+
+    def test_is_soft_404_different_status_same_body(self):
+        import scanner_modules.exposed_services as es
+        # Same body but different status → soft-404 (body matches)
+        assert es._is_soft_404(404, "generic", 200, "generic") is True
+
+    def test_is_soft_404_whitespace_differences(self):
+        import scanner_modules.exposed_services as es
+        assert es._is_soft_404(200, "hello   world", 200, "hello world") is True
+
+    def test_genuine_endpoint_not_soft_404(self):
+        import scanner_modules.exposed_services as es
+        assert es._is_soft_404(404, "not found", 200, "phpMyAdmin login") is False
+
+    def test_network_error_not_soft_404(self):
+        import scanner_modules.exposed_services as es
+        assert es._is_soft_404(None, "", 200, "admin") is False

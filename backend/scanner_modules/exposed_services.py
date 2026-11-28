@@ -61,7 +61,7 @@ def _normalize_body(body: str) -> str:
     """
     import re as _re
 
-    return _re.sub(r"\\s+", " ", (body or "").strip()).lower()
+    return _re.sub(r"\s+", " ", (body or "").strip()).lower()
 
 
 def _is_soft_404(baseline_status, baseline_body, admin_status, admin_body):
@@ -73,8 +73,8 @@ def _is_soft_404(baseline_status, baseline_body, admin_status, admin_body):
     """
     if not admin_body or not baseline_body:
         return False
-    if admin_status != baseline_status:
-        return False
+    # Body similarity is the primary signal: if the normalized bodies
+    # match, the server is returning a catch-all regardless of status.
     return _normalize_body(admin_body) == _normalize_body(baseline_body)
 
 # ── Helpers ───────────────────────────────────────────────────────────
